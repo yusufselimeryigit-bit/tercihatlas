@@ -4,7 +4,7 @@
 
 // Will be set automatically after Cloudflare Worker deployment.
 // On localhost/127.0.0.1, same-origin dev-server.mjs is used automatically.
-export const DEFAULT_WORKER_URL = '';
+export const DEFAULT_WORKER_URL = 'https://tercihatlas-api.yusuf-kriptobot.workers.dev';
 
 const API_URL_STORAGE_KEY = 'tercihatlas_api_url';
 
