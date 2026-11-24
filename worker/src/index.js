@@ -7,11 +7,18 @@ function corsHeaders(request) {
   const origin = request.headers.get('Origin') || '*';
   return {
     'Access-Control-Allow-Origin': origin,
-    'Access-Control-Allow-Methods': 'GET, PUT, OPTIONS',
+    'Access-Control-Allow-Methods': 'GET, POST, PUT, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type, X-Sync-Key',
     'Access-Control-Max-Age': '86400',
     Vary: 'Origin',
   };
+}
+
+function generateShareId() {
+  const alphabet = 'abcdefghjkmnpqrstuvwxyz23456789';
+  const bytes = new Uint8Array(8);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (b) => alphabet[b % alphabet.length]).join('');
 }
 
 function jsonResponse(request, data, status = 200, extraHeaders = {}) {
@@ -167,6 +174,46 @@ export default {
           await env.TERCIH_KV.put(kvKey, serialized);
           return jsonResponse(request, { ok: true, syncedAt: new Date().toISOString() });
         }
+      }
+
+      // 6. Read-Only Shareable Snapshot (POST /api/share, GET /api/share/:id)
+      if (path === '/api/share' && request.method === 'POST') {
+        if (!env.TERCIH_KV) {
+          return jsonResponse(request, { error: 'Bulut depolama (KV) yapılandırılmadı.' }, 503);
+        }
+        let body;
+        try {
+          body = await request.json();
+        } catch {
+          return jsonResponse(request, { error: 'Geçersiz JSON.' }, 400);
+        }
+        const safePayload = {
+          title: String(body.title || 'YKS 2027 Tercih Listesi').slice(0, 120),
+          ownerName: String(body.ownerName || '').slice(0, 80),
+          targetRank: body.targetRank || null,
+          programs: Array.isArray(body.programs) ? body.programs.slice(0, 60) : [],
+          abroadPrograms: Array.isArray(body.abroadPrograms) ? body.abroadPrograms.slice(0, 40) : [],
+          sharedAt: new Date().toISOString(),
+        };
+        const serialized = JSON.stringify(safePayload);
+        if (serialized.length > MAX_SYNC_BYTES) {
+          return jsonResponse(request, { error: 'Paylaşım boyutu sınırı aşıldı.' }, 413);
+        }
+        const id = generateShareId();
+        await env.TERCIH_KV.put(`share:v1:${id}`, serialized, { expirationTtl: 60 * 60 * 24 * 180 });
+        return jsonResponse(request, { ok: true, id, sharedAt: safePayload.sharedAt });
+      }
+
+      const shareMatch = path.match(/^\/api\/share\/([a-z0-9]{6,16})$/);
+      if (shareMatch && request.method === 'GET') {
+        if (!env.TERCIH_KV) {
+          return jsonResponse(request, { error: 'Bulut depolama (KV) yapılandırılmadı.' }, 503);
+        }
+        const data = await env.TERCIH_KV.get(`share:v1:${shareMatch[1]}`, { type: 'json' });
+        if (!data) {
+          return jsonResponse(request, { error: 'Paylaşım linki bulunamadı veya süresi doldu.' }, 404);
+        }
+        return jsonResponse(request, { ok: true, data });
       }
 
       return jsonResponse(request, { error: 'Uç nokta bulunamadı.' }, 404);

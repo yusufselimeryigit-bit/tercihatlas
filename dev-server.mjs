@@ -35,7 +35,7 @@ const programCache = new Map();
 function corsHeaders(req) {
   return {
     'Access-Control-Allow-Origin': req.headers.origin || '*',
-    'Access-Control-Allow-Methods': 'GET, PUT, OPTIONS',
+    'Access-Control-Allow-Methods': 'GET, POST, PUT, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type, X-Sync-Key',
   };
 }
@@ -145,6 +145,25 @@ const server = http.createServer(async (req, res) => {
         const syncedAt = new Date().toISOString();
         await fs.writeFile(filePath, JSON.stringify({ ...parsed, syncedAt }, null, 2), 'utf-8');
         return sendJson(req, res, 200, { ok: true, syncedAt });
+      }
+    }
+
+    if (pathname === '/api/share' && req.method === 'POST') {
+      await fs.mkdir(SYNC_DIR, { recursive: true });
+      const parsed = JSON.parse(await readBody(req));
+      const id = crypto.randomBytes(4).toString('hex');
+      const payload = { ...parsed, sharedAt: new Date().toISOString() };
+      await fs.writeFile(path.join(SYNC_DIR, `share-${id}.json`), JSON.stringify(payload, null, 2), 'utf-8');
+      return sendJson(req, res, 200, { ok: true, id, sharedAt: payload.sharedAt });
+    }
+
+    const shareMatch = pathname.match(/^\/api\/share\/([a-z0-9]{6,16})$/);
+    if (shareMatch && req.method === 'GET') {
+      try {
+        const raw = await fs.readFile(path.join(SYNC_DIR, `share-${shareMatch[1]}.json`), 'utf-8');
+        return sendJson(req, res, 200, { ok: true, data: JSON.parse(raw) });
+      } catch {
+        return sendJson(req, res, 404, { error: 'Paylaşım bulunamadı.' });
       }
     }
 

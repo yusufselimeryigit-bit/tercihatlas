@@ -98,3 +98,14 @@ export async function pushCloudSync(syncKey, statePayload) {
     body: JSON.stringify(statePayload),
   });
 }
+
+export async function createShareSnapshot(payload) {
+  return apiRequest('/api/share', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function fetchShareSnapshot(shareId) {
+  return apiRequest(`/api/share/${encodeURIComponent(shareId)}`, { method: 'GET' });
+}

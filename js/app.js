@@ -25,6 +25,8 @@ import {
   searchProgramsFromApi,
   pullCloudSync,
   pushCloudSync,
+  createShareSnapshot,
+  fetchShareSnapshot,
 } from './api.js';
 import { renderSparkline, renderDetailTrendChart, renderRankSpectrum } from './charts.js';
 import {
@@ -34,6 +36,13 @@ import {
   openPrintableReport,
 } from './analytics.js';
 import { ABROAD_PRESETS, createAbroadRecord, renderAbroadView } from './abroad.js';
+import { parseExamPdfFile } from './pdf-parser.js';
+import {
+  renderTurkeyCampusMap,
+  renderCostCalculator,
+  renderTimelineView,
+  downloadTimelineIcs,
+} from './map-cost.js';
 
 const STATE_KEY = 'tercihatlas_state_v1';
 const SYNC_KEY_STORAGE = 'tercihatlas_sync_key';
@@ -65,14 +74,29 @@ const DEFAULT_MY_NETS = {
   ydt: null,
 };
 
+const DEFAULT_COST_SETTINGS = {
+  eurTry: 39,
+  monthlyIstanbul: 22000,
+  monthlyMetro: 17000,
+  monthlyOther: 13000,
+  monthsPerYear: 9,
+};
+
 const DEFAULT_STATE = {
-  version: 2,
+  version: 3,
+  studentName: 'Yusuf Selim Eryiğit',
+  activeScenarioId: 'plan-a',
+  scenarios: [
+    { id: 'plan-a', name: 'Plan A (Ana Liste)', targetRank: 15000, programs: [], compareCodes: [] },
+  ],
   targetRank: 15000,
   updatedAt: null,
   programs: [],
   compareCodes: [],
   myNets: structuredClone(DEFAULT_MY_NETS),
+  examHistory: [],
   abroadPrograms: [],
+  costSettings: structuredClone(DEFAULT_COST_SETTINGS),
 };
 
 // Uniform SF Symbols-style inline SVGs
@@ -85,8 +109,10 @@ const SF = {
   refresh: `<svg class="sf-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>`,
   external: `<svg class="sf-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17 17 7"/><path d="M7 7h10v10"/></svg>`,
   copy: `<svg class="sf-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2.5"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>`,
+  share: `<svg class="sf-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v7a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7"/><path d="m16 6-4-4-4 4"/><path d="M12 2v13"/></svg>`,
   note: `<svg class="sf-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h4"/></svg>`,
   print: `<svg class="sf-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V3h12v6"/><rect x="4" y="9" width="16" height="8" rx="2"/><path d="M8 14h8v7H8z"/></svg>`,
+  upload: `<svg class="sf-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m17 8-5-5-5 5"/><path d="M12 3v12"/></svg>`,
   grip: `<svg class="sf-icon" width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="6" r="1.7"/><circle cx="15" cy="6" r="1.7"/><circle cx="9" cy="12" r="1.7"/><circle cx="15" cy="12" r="1.7"/><circle cx="9" cy="18" r="1.7"/><circle cx="15" cy="18" r="1.7"/></svg>`,
   starFilled: (size = 13) =>
     `<svg class="sf-icon" width="${size}" height="${size}" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.4l2.92 5.92 6.53.95-4.72 4.6 1.11 6.5L12 17.3l-5.84 3.07 1.11-6.5-4.72-4.6 6.53-.95L12 2.4z"/></svg>`,
@@ -105,6 +131,10 @@ const SF = {
 const ui = {
   region: 'TR',
   tab: 'preferences',
+  analysisSubTab: 'overview', // 'overview' | 'map' | 'simulator' | 'cost' | 'timeline'
+  selectedMapCity: null,
+  simTytBoost: 0,
+  simAytBoost: 0,
   viewMode: localStorage.getItem('tercihatlas_view_mode') || 'cards',
   search: '',
   filterRisk: 'all',
@@ -119,21 +149,25 @@ const ui = {
   syncMessage: 'Yerel',
   lastSyncedAt: null,
   dragCode: null,
+  osymCopiedCodes: new Set(),
+  lastShareUrl: '',
+  readOnlyShare: null, // { title, ownerName, sharedAt } when viewing ?share=...
 };
 
 let state = loadLocalState();
 let syncTimer = null;
 
 // ============================================================================
-// Persistence & Cloud Sync
+// State Normalization & Multi-Scenario Engine
 // ============================================================================
 function normalizeState(parsed) {
-  return {
+  const base = {
     ...structuredClone(DEFAULT_STATE),
-    ...parsed,
-    programs: Array.isArray(parsed?.programs) ? parsed.programs : [],
-    compareCodes: Array.isArray(parsed?.compareCodes) ? parsed.compareCodes : [],
+    ...(parsed || {}),
+    studentName: parsed?.studentName || 'Yusuf Selim Eryiğit',
     abroadPrograms: Array.isArray(parsed?.abroadPrograms) ? parsed.abroadPrograms : [],
+    examHistory: Array.isArray(parsed?.examHistory) ? parsed.examHistory : [],
+    costSettings: { ...structuredClone(DEFAULT_COST_SETTINGS), ...(parsed?.costSettings || {}) },
     myNets: {
       ...structuredClone(DEFAULT_MY_NETS),
       ...(parsed?.myNets || {}),
@@ -141,15 +175,117 @@ function normalizeState(parsed) {
       ayt: { ...structuredClone(DEFAULT_MY_NETS.ayt), ...(parsed?.myNets?.ayt || {}) },
     },
   };
+
+  // Migrate legacy flat state into scenarios seamlessly
+  if (!Array.isArray(parsed?.scenarios) || !parsed.scenarios.length) {
+    base.scenarios = [
+      {
+        id: 'plan-a',
+        name: 'Plan A (Ana Liste)',
+        targetRank: parsed?.targetRank ?? 15000,
+        programs: Array.isArray(parsed?.programs) ? parsed.programs : [],
+        compareCodes: Array.isArray(parsed?.compareCodes) ? parsed.compareCodes : [],
+      },
+    ];
+    base.activeScenarioId = 'plan-a';
+  } else {
+    base.scenarios = parsed.scenarios.map((sc, i) => ({
+      id: sc.id || `plan-${i + 1}`,
+      name: sc.name || `Plan ${i + 1}`,
+      targetRank: sc.targetRank ?? 15000,
+      programs: Array.isArray(sc.programs) ? sc.programs : [],
+      compareCodes: Array.isArray(sc.compareCodes) ? sc.compareCodes : [],
+    }));
+    if (!base.scenarios.some((s) => s.id === base.activeScenarioId)) {
+      base.activeScenarioId = base.scenarios[0].id;
+    }
+  }
+
+  // Mirror active scenario onto top-level pointers for clean compatibility
+  const active = base.scenarios.find((s) => s.id === base.activeScenarioId) || base.scenarios[0];
+  base.programs = active.programs;
+  base.compareCodes = active.compareCodes;
+  base.targetRank = active.targetRank;
+  return base;
 }
 
+function getActiveScenario() {
+  return state.scenarios.find((s) => s.id === state.activeScenarioId) || state.scenarios[0];
+}
+
+function syncActiveScenarioPointers() {
+  const sc = getActiveScenario();
+  if (!sc) return;
+  sc.programs = state.programs;
+  sc.compareCodes = state.compareCodes;
+  sc.targetRank = state.targetRank;
+}
+
+function switchScenario(id) {
+  syncActiveScenarioPointers();
+  const target = state.scenarios.find((s) => s.id === id);
+  if (!target) return;
+  state.activeScenarioId = target.id;
+  state.programs = target.programs;
+  state.compareCodes = target.compareCodes;
+  state.targetRank = target.targetRank;
+  ui.selectedMapCity = null;
+  saveState();
+  renderAll();
+}
+
+function createScenario({ duplicateCurrent = false } = {}) {
+  const defaultName = duplicateCurrent
+    ? `${getActiveScenario().name} (Kopya)`
+    : `Plan ${String.fromCharCode(65 + (state.scenarios.length % 26))}`;
+  const name = window.prompt('Yeni senaryo adı:', defaultName);
+  if (!name || !name.trim()) return;
+  syncActiveScenarioPointers();
+  const cur = getActiveScenario();
+  const id = `sc-${Date.now()}`;
+  const next = {
+    id,
+    name: name.trim(),
+    targetRank: cur.targetRank,
+    programs: duplicateCurrent ? structuredClone(cur.programs) : [],
+    compareCodes: duplicateCurrent ? [...cur.compareCodes] : [],
+  };
+  state.scenarios.push(next);
+  switchScenario(id);
+  showToast(`"${next.name}" senaryosu oluşturuldu.`, 'success');
+}
+
+function renameActiveScenario() {
+  const cur = getActiveScenario();
+  const name = window.prompt('Senaryo adını güncelle:', cur.name);
+  if (!name || !name.trim()) return;
+  cur.name = name.trim();
+  saveState();
+  renderAll();
+}
+
+function deleteActiveScenario() {
+  if (state.scenarios.length <= 1) {
+    showToast('En az bir senaryo kalmalıdır.', 'error');
+    return;
+  }
+  const cur = getActiveScenario();
+  if (!window.confirm(`"${cur.name}" senaryosunu silmek istediğine emin misin?`)) return;
+  state.scenarios = state.scenarios.filter((s) => s.id !== cur.id);
+  switchScenario(state.scenarios[0].id);
+  showToast(`"${cur.name}" silindi.`);
+}
+
+// ============================================================================
+// Persistence & Cloud Sync
+// ============================================================================
 function loadLocalState() {
   try {
     const raw = localStorage.getItem(STATE_KEY);
-    if (!raw) return structuredClone(DEFAULT_STATE);
+    if (!raw) return normalizeState(null);
     return normalizeState(JSON.parse(raw));
   } catch {
-    return structuredClone(DEFAULT_STATE);
+    return normalizeState(null);
   }
 }
 
@@ -158,6 +294,8 @@ function getSyncKey() {
 }
 
 function saveState({ triggerCloud = true } = {}) {
+  if (ui.readOnlyShare) return; // Never overwrite local/cloud state in read-only share mode
+  syncActiveScenarioPointers();
   state.updatedAt = new Date().toISOString();
   localStorage.setItem(STATE_KEY, JSON.stringify(state));
   if (triggerCloud && getSyncKey() && hasConfiguredApi()) {
@@ -179,18 +317,18 @@ function updateSyncIndicator(status, label) {
 function scheduleCloudPush() {
   clearTimeout(syncTimer);
   updateSyncIndicator('syncing', 'Eşitleniyor');
-  syncTimer = setTimeout(() => {
-    syncPushNow({ silent: true });
-  }, 1100);
+  syncTimer = setTimeout(() => syncPushNow({ silent: true }), 1100);
 }
 
 async function syncPushNow({ silent = false } = {}) {
+  if (ui.readOnlyShare) return false;
   const key = getSyncKey();
   if (!key || !hasConfiguredApi()) {
     updateSyncIndicator('local', 'Yerel');
     return false;
   }
   try {
+    syncActiveScenarioPointers();
     updateSyncIndicator('syncing', 'Eşitleniyor');
     const res = await pushCloudSync(key, state);
     ui.lastSyncedAt = res.syncedAt || new Date().toISOString();
@@ -205,6 +343,7 @@ async function syncPushNow({ silent = false } = {}) {
 }
 
 async function syncPullOnStartup({ forceOverwrite = false, silent = true } = {}) {
+  if (ui.readOnlyShare) return;
   const key = getSyncKey();
   if (!key || !hasConfiguredApi()) {
     updateSyncIndicator('local', 'Yerel');
@@ -440,6 +579,27 @@ function removeProgram(code) {
 // ============================================================================
 // Rendering: Main Shell & Tabs
 // ============================================================================
+function renderShareBanner() {
+  const host = document.getElementById('shareBannerHost');
+  if (!host) return;
+  if (!ui.readOnlyShare) {
+    host.innerHTML = '';
+    return;
+  }
+  host.innerHTML = `<div style="padding:0 24px;"><div class="share-banner">
+    <span>Salt-Okunur Paylaşım Görünümü · <strong>${escapeHtml(ui.readOnlyShare.title)}</strong>${ui.readOnlyShare.ownerName ? ` (${escapeHtml(ui.readOnlyShare.ownerName)})` : ''}</span>
+    <button class="btn btn-primary btn-sm" id="exitShareModeBtn">Kendi Listeme Dön</button>
+  </div></div>`;
+
+  document.getElementById('exitShareModeBtn')?.addEventListener('click', () => {
+    const cleanUrl = window.location.origin + window.location.pathname;
+    window.history.replaceState({}, '', cleanUrl);
+    ui.readOnlyShare = null;
+    state = loadLocalState();
+    renderAll();
+  });
+}
+
 function updateHeaderBadges() {
   const prefBadge = document.getElementById('prefCountBadge');
   const cmpBadge = document.getElementById('compareCountBadge');
@@ -458,6 +618,7 @@ function updateHeaderBadges() {
 }
 
 function renderAll() {
+  renderShareBanner();
   updateHeaderBadges();
   const root = document.getElementById('mainRoot');
   if (!root) return;
@@ -482,6 +643,24 @@ function renderAll() {
 
   root.innerHTML = renderPreferencesView();
   bindPreferencesEvents();
+}
+
+function renderScenarioBar() {
+  if (ui.readOnlyShare) return '';
+  return `<div class="scenario-bar" aria-label="Tercih senaryoları">
+    ${state.scenarios
+      .map(
+        (sc) => `<button class="scenario-pill ${sc.id === state.activeScenarioId ? 'active' : ''}" data-switch-scenario="${escapeHtml(sc.id)}">
+          <span>${escapeHtml(sc.name)}</span>
+          <span class="tabular" style="opacity:0.75;font-size:11px;">(${sc.programs.length})</span>
+        </button>`,
+      )
+      .join('')}
+    <button class="scenario-pill" id="newScenarioBtn" title="Yeni boş senaryo oluştur">${SF.plus} Yeni Plan</button>
+    <button class="scenario-pill" id="dupScenarioBtn" title="Aktif planı kopyala">${SF.copy} Kopyala</button>
+    <button class="scenario-pill" id="renameScenarioBtn" title="Aktif planı yeniden adlandır">Adlandır</button>
+    ${state.scenarios.length > 1 ? `<button class="scenario-pill" id="delScenarioBtn" style="color:var(--rose);" title="Aktif planı sil">${SF.trash}</button>` : ''}
+  </div>`;
 }
 
 function renderKpiStrip() {
@@ -537,7 +716,7 @@ function renderKpiStrip() {
       </div>
       <div>
         <input id="targetRankInput" class="target-rank-input tabular" type="number" min="1" max="3000000" step="500"
-          value="${state.targetRank || ''}" placeholder="15000" aria-label="Hedef sıralama" />
+          value="${state.targetRank || ''}" placeholder="15000" aria-label="Hedef sıralama" ${ui.readOnlyShare ? 'disabled' : ''} />
       </div>
       <div class="kpi-sub">Otomatik Hayal / Hedef / Güvenli etiketi</div>
     </div>
@@ -552,19 +731,21 @@ function renderPreferencesView() {
     <div>
       <div class="page-eyebrow">YKS 2027 · Türkiye</div>
       <h1 class="page-title">Tercihlerim</h1>
-      <p class="page-subtitle">Canlı YÖK Atlas arama, 2027 tahmini sıralama bandı ve net kıyaslaması</p>
+      <p class="page-subtitle">Canlı YÖK Atlas arama, çoklu senaryo, 2027 tahminleri ve dershane PDF net kıyaslaması</p>
     </div>
     ${state.programs.length
       ? `<div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="btn btn-sm" id="openOsymBtn">${SF.share} ÖSYM / Paylaş</button>
           <button class="btn btn-sm" id="printReportBtn">${SF.print} PDF / Yazdır</button>
         </div>`
       : ''}
   </div>`;
 
+  const scenarioHtml = renderScenarioBar();
   const kpiHtml = renderKpiStrip();
 
   if (state.programs.length === 0) {
-    return `${headerHtml}${kpiHtml}
+    return `${headerHtml}${scenarioHtml}${kpiHtml}
     <section class="apple-hero">
       <div class="apple-hero-content">
         <img src="icon.svg" alt="TercihAtlas" class="apple-hero-icon" />
@@ -645,7 +826,7 @@ function renderPreferencesView() {
   </section>`;
 
   if (!filtered.length) {
-    return `${headerHtml}${kpiHtml}${toolbarHtml}<div class="empty-state" style="padding:40px 24px;">
+    return `${headerHtml}${scenarioHtml}${kpiHtml}${toolbarHtml}<div class="empty-state" style="padding:40px 24px;">
       <h2>Eşleşen program bulunamadı</h2>
       <p>Arama kelimesini veya seçili filtreyi temizleyerek tüm tercihlerini görebilirsin.</p>
       <button class="btn" id="clearFiltersBtn">Filtreleri Temizle</button>
@@ -653,11 +834,11 @@ function renderPreferencesView() {
   }
 
   const contentHtml = ui.viewMode === 'table' ? renderTableView(filtered) : renderCardsView(filtered);
-  return `${headerHtml}${kpiHtml}${toolbarHtml}${contentHtml}`;
+  return `${headerHtml}${scenarioHtml}${kpiHtml}${toolbarHtml}${contentHtml}`;
 }
 
 function renderCardsView(programs) {
-  const manualMode = ui.sortBy === 'manual' && !ui.search && ui.filterRisk === 'all' && ui.filterScoreType === 'all';
+  const manualMode = !ui.readOnlyShare && ui.sortBy === 'manual' && !ui.search && ui.filterRisk === 'all' && ui.filterScoreType === 'all';
   return `<section class="cards-grid" id="programList">
     ${programs
       .map((p) => {
@@ -743,7 +924,7 @@ function renderCardsView(programs) {
 }
 
 function renderTableView(programs) {
-  const manualMode = ui.sortBy === 'manual' && !ui.search && ui.filterRisk === 'all' && ui.filterScoreType === 'all';
+  const manualMode = !ui.readOnlyShare && ui.sortBy === 'manual' && !ui.search && ui.filterRisk === 'all' && ui.filterScoreType === 'all';
   return `<section class="table-wrap">
     <table class="prog-table">
       <thead>
@@ -962,30 +1143,128 @@ function renderCompareView() {
 }
 
 // ============================================================================
-// Analysis View (Includes ÖSYM Preference Health Check!)
+// Analysis Hub (Genel & Sağlık | Harita | Net Simülatörü | Maliyet | Takvim)
 // ============================================================================
+function renderSimulatorPanel() {
+  const baseTarget = Number(state.targetRank) || 15000;
+  // Empirical YKS sensitivity: +1 TYT net improves rank by ~1.9%, +1 AYT net by ~4.4%
+  const factor = Math.pow(0.981, ui.simTytBoost) * Math.pow(0.956, ui.simAytBoost);
+  const simulatedRank = Math.max(1, Math.round(baseTarget * factor));
+  const improvedBy = baseTarget - simulatedRank;
+
+  const evaluated = state.programs.map((p) => {
+    const before = suggestRisk(p.latestRank, baseTarget);
+    const after = suggestRisk(p.latestRank, simulatedRank);
+    const upgraded = (before === 'hayal' && after !== 'hayal') || (before === 'hedef' && after === 'guvenli');
+    return { p, before, after, upgraded };
+  });
+
+  const unlockedCount = evaluated.filter((e) => e.upgraded).length;
+
+  return `
+    <div class="panel panel-full">
+      <div class="panel-title">
+        <span>"Ne Olursa?" Net & Sıralama Simülatörü</span>
+        <span class="pill pill-accent tabular">Tahmini Yeni Sıralaman: <strong>${formatRank(simulatedRank)}</strong>${improvedBy > 0 ? ` (+${formatRank(improvedBy)} sıra öne)` : ''}</span>
+      </div>
+
+      <div class="sim-grid">
+        <div class="sim-slider-card">
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <strong>TYT Net Artışı</strong>
+            <span class="pill pill-accent tabular">+${ui.simTytBoost} net</span>
+          </div>
+          <input id="simTytSlider" class="apple-slider" type="range" min="0" max="25" step="1" value="${ui.simTytBoost}" />
+          <span style="font-size:12px;color:var(--text-tertiary);">TYT'de her +1 net ortalama ~%1,9 sıralama avantajı sağlar.</span>
+        </div>
+
+        <div class="sim-slider-card">
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <strong>AYT Net Artışı</strong>
+            <span class="pill pill-risk-guvenli tabular">+${ui.simAytBoost} net</span>
+          </div>
+          <input id="simAytSlider" class="apple-slider" type="range" min="0" max="25" step="1" value="${ui.simAytBoost}" />
+          <span style="font-size:12px;color:var(--text-tertiary);">AYT'de her +1 net ortalama ~%4,4 sıralama avantajı sağlar (en yüksek kaldıraç).</span>
+        </div>
+      </div>
+
+      ${unlockedCount
+        ? `<div class="quota-alert-good" style="margin-bottom:14px;">Bu artışla listendeki <strong>${unlockedCount}</strong> bölüm bir üst güven bandına geçiyor!</div>`
+        : `<div style="font-size:13px;color:var(--text-secondary);margin-bottom:12px;">Sürgüleri sağa çekerek hangi <strong>Hayal</strong> bölümlerinin <strong>Hedef</strong>'e açıldığını canlı izle.</div>`}
+
+      <div class="sim-unlock-list">
+        ${evaluated
+          .map(
+            (e) => `<div class="sim-unlock-row ${e.upgraded ? 'upgraded' : ''}">
+              <div style="min-width:0;">
+                <strong style="font-size:13.5px;">${escapeHtml(e.p.department)}</strong>
+                <div style="font-size:12px;color:var(--text-secondary);">${escapeHtml(e.p.university)} · Son Sıra: <strong class="tabular">${formatRank(e.p.latestRank)}</strong></div>
+              </div>
+              <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">
+                <span class="pill pill-risk-${e.before}">${RISK_META[e.before].label}</span>
+                ${e.upgraded ? `<span style="font-weight:700;color:var(--green);">→</span><span class="pill pill-risk-${e.after}">${RISK_META[e.after].label}</span>` : ''}
+              </div>
+            </div>`,
+          )
+          .join('')}
+      </div>
+    </div>
+  `;
+}
+
 function renderAnalysisView() {
   const headerHtml = `<div class="page-header">
     <div>
-      <div class="page-eyebrow">ÖSYM Strateji & Denge</div>
+      <div class="page-eyebrow">Strateji · Harita · Simülatör · Maliyet · Takvim</div>
       <h1 class="page-title">Analiz</h1>
-      <p class="page-subtitle">Tercih listesi sağlık skoru, ölü tercih kontrolü ve sıralama haritası</p>
+      <p class="page-subtitle">ÖSYM sağlık kontrolü, Türkiye kampüs haritası, net simülatörü ve 4 yıllık bütçe</p>
     </div>
-    ${state.programs.length ? `<button class="btn btn-sm" id="analysisPrintBtn">${SF.print} PDF Raporu</button>` : ''}
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+      <div class="segmented" role="tablist" aria-label="Analiz alt sekmeleri">
+        ${[
+          ['overview', 'Sağlık & Özet'],
+          ['map', 'Harita'],
+          ['simulator', 'Net Simülatörü'],
+          ['cost', 'Maliyet'],
+          ['timeline', 'Takvim'],
+        ]
+          .map(
+            ([k, lbl]) =>
+              `<button class="seg-btn seg-btn-sm ${ui.analysisSubTab === k ? 'active' : ''}" data-analysis-sub="${k}">${lbl}</button>`,
+          )
+          .join('')}
+      </div>
+    </div>
   </div>`;
+
+  if (ui.analysisSubTab === 'timeline') {
+    return `${headerHtml}<section class="analysis-grid">${renderTimelineView(state.abroadPrograms)}</section>`;
+  }
+
+  if (ui.analysisSubTab === 'cost') {
+    return `${headerHtml}<section class="analysis-grid">${renderCostCalculator(state.programs, state.abroadPrograms, state.costSettings)}</section>`;
+  }
 
   if (!state.programs.length) {
     return `${headerHtml}<div class="empty-state">
       <h2>Analiz için program ekle</h2>
-      <p>Listene eklediğin bölümlerin ÖSYM sağlık kontrolü, sıralama haritası ve risk dengesi burada otomatik oluşur.</p>
+      <p>Listene eklediğin bölümlerin ÖSYM sağlık kontrolü, kampüs haritası ve net simülatörü burada otomatik oluşur.</p>
       <button class="btn btn-primary" id="analysisAddBtn">${SF.plus} Program Ekle</button>
     </div>`;
   }
 
+  if (ui.analysisSubTab === 'map') {
+    return `${headerHtml}<section class="analysis-grid">${renderTurkeyCampusMap(state.programs, ui.selectedMapCity)}</section>`;
+  }
+
+  if (ui.analysisSubTab === 'simulator') {
+    return `${headerHtml}<section class="analysis-grid">${renderSimulatorPanel()}</section>`;
+  }
+
   const health = analyzePreferenceHealth(state.programs, state.targetRank);
   const scoreTone = health.score >= 80 ? 'green' : health.score >= 60 ? 'amber' : 'rose';
-
   const total = state.programs.length;
+
   const countBy = (fn) => {
     const map = new Map();
     for (const p of state.programs) {
@@ -1017,7 +1296,6 @@ function renderAnalysisView() {
     </div>`;
 
   return `${headerHtml}<section class="analysis-grid">
-    <!-- ÖSYM Tercih Sağlık Kontrolü -->
     <div class="panel panel-full">
       <div class="health-panel-head">
         <div>
@@ -1080,7 +1358,7 @@ function renderAnalysisView() {
 }
 
 // ============================================================================
-// Large Centered Apple Sheet Window (Detail View)
+// Large Centered Apple Sheet Window (Program Detail View)
 // ============================================================================
 function openDrawer(code) {
   ui.drawerCode = code;
@@ -1150,17 +1428,16 @@ function renderDrawer() {
       </div>
       <div class="drawer-header-actions">
         <a class="btn btn-sm" href="${escapeHtml(p.yokAtlasUrl)}" target="_blank" rel="noopener">YÖK Atlas ${SF.external}</a>
-        <button class="btn btn-sm" id="drawerRefreshBtn">${SF.refresh} Güncelle</button>
+        ${!ui.readOnlyShare ? `<button class="btn btn-sm" id="drawerRefreshBtn">${SF.refresh} Güncelle</button>` : ''}
         <button class="btn btn-sm ${state.compareCodes.includes(p.code) ? 'btn-soft' : ''}" id="drawerCompareBtn">
           ${state.compareCodes.includes(p.code) ? `${SF.check} Kıyasla` : `${SF.plus} Kıyasla`}
         </button>
-        <button class="btn btn-sm btn-danger" id="drawerDeleteBtn" title="Listeden çıkar">${SF.trash}</button>
+        ${!ui.readOnlyShare ? `<button class="btn btn-sm btn-danger" id="drawerDeleteBtn" title="Listeden çıkar">${SF.trash}</button>` : ''}
         <button class="btn btn-ghost btn-icon btn-sm" id="closeDrawerBtn" aria-label="Kapat">${SF.close}</button>
       </div>
     </div>
 
     <div class="drawer-body">
-      <!-- Top Summary Metrics Strip -->
       <section class="detail-hero-metrics tabular">
         <div class="detail-metric-tile">
           <span>${escapeHtml(p.latestYear || 2026)} Taban Sıralama</span>
@@ -1180,9 +1457,7 @@ function renderDrawer() {
         </div>
       </section>
 
-      <!-- Spacious 2-Column Apple Bento Layout -->
       <div class="detail-two-col">
-        <!-- Left Column: Charts, 2027 Projection & Net Gap -->
         <div class="detail-col">
           <section class="drawer-section">
             <div class="section-heading">
@@ -1225,7 +1500,7 @@ function renderDrawer() {
             <div class="section-heading">
               <span>Son Yerleşen Ortalama Netleri</span>
               <div style="display:flex;align-items:center;gap:6px;">
-                <button class="mini-action active" id="drawerEditMyNetsBtn" style="height:26px;font-size:11.5px;">Netlerimle Kıyasla</button>
+                <button class="mini-action active" id="drawerEditMyNetsBtn" style="height:26px;font-size:11.5px;">Netlerim / PDF</button>
                 ${p.nets && p.nets.length > 1
                   ? `<div class="segmented">
                       ${p.nets
@@ -1271,7 +1546,6 @@ function renderDrawer() {
           </section>
         </div>
 
-        <!-- Right Column: Personal Evaluation, Research Checklist & Links, Staff & Conditions -->
         <div class="detail-col">
           <section class="drawer-section">
             <div class="section-heading"><span>Kişisel Değerlendirmen</span></div>
@@ -1330,7 +1604,6 @@ function renderDrawer() {
             </div>
           </section>
 
-          <!-- Research Checklist & Saved Resource Links -->
           <section class="drawer-section">
             <div class="section-heading">
               <span>Araştırma Kontrolü & Kaynaklar</span>
@@ -1572,9 +1845,7 @@ async function handleSpotlightAction() {
   const maxRank = document.getElementById('spotMaxRank')?.value || '';
 
   const codes = extractProgramCodes(raw);
-  if (codes.length > 0) {
-    return handleCodePreview(codes);
-  }
+  if (codes.length > 0) return handleCodePreview(codes);
   if (!raw && !puanTuru && !uniTuru && !maxRank) {
     document.getElementById('addModalFeedback').innerHTML = `<div class="error-banner">Bir bölüm/üniversite adı yaz (ör. <strong>İTÜ Bilgisayar</strong>) veya 9 haneli program kodu/linki yapıştır.</div>`;
     return;
@@ -1689,9 +1960,7 @@ async function handleCodePreview(codes) {
   btn.disabled = false;
   btn.textContent = 'Ara / Getir';
 
-  if (errors.length) {
-    feedback.innerHTML = `<div class="error-banner">${errors.map(escapeHtml).join('<br/>')}</div>`;
-  }
+  if (errors.length) feedback.innerHTML = `<div class="error-banner">${errors.map(escapeHtml).join('<br/>')}</div>`;
   if (!found.length) return;
 
   if (found.length === 1) {
@@ -1771,7 +2040,7 @@ async function handleCodePreview(codes) {
 }
 
 // ============================================================================
-// My Nets Modal ("Hedefe Kaç Net Kaldı?")
+// My Nets & Dershane TYT / AYT PDF Auto-Extractor Modal
 // ============================================================================
 function openMyNetsModal() {
   const overlay = document.getElementById('myNetsModalOverlay');
@@ -1798,11 +2067,58 @@ function renderMyNetsModal() {
     </div>`;
 
   body.innerHTML = `
-    <div class="info-banner">
-      Güncel deneme netlerini kaydet; tüm bölümlerin kartlarında ve detay penceresinde <strong>son yerleşene göre kaç net önde/geride olduğunu</strong> otomatik gör.
+    <!-- Dershane PDF Otomatik Net Okuyucu (TYT & AYT Ayrı) -->
+    <div style="display:flex;flex-direction:column;gap:10px;">
+      <div>
+        <label class="field-label" for="pdfStudentName">PDF'de Aranacak Ad Soyad (veya Öğrenci No)</label>
+        <input id="pdfStudentName" class="input" type="text" value="${escapeHtml(state.studentName || 'Yusuf Selim Eryiğit')}" placeholder="Yusuf Selim Eryiğit" />
+      </div>
+
+      <div class="pdf-upload-grid">
+        <label class="pdf-drop-card" id="tytPdfDrop">
+          ${SF.upload}
+          <strong>TYT Deneme PDF Yükle</strong>
+          <span>Dershane liste PDF'inden otomatik oku</span>
+          <input type="file" id="tytPdfInput" accept="application/pdf,.pdf" style="display:none;" />
+        </label>
+        <label class="pdf-drop-card" id="aytPdfDrop">
+          ${SF.upload}
+          <strong>AYT Deneme PDF Yükle</strong>
+          <span>Dershane liste PDF'inden otomatik oku</span>
+          <input type="file" id="aytPdfInput" accept="application/pdf,.pdf" style="display:none;" />
+        </label>
+      </div>
+
+      <div id="pdfParseStatus"></div>
     </div>
 
-    <form id="myNetsForm" style="display:flex;flex-direction:column;gap:16px;">
+    ${(state.examHistory || []).length
+      ? `<div>
+          <div class="section-heading" style="margin-bottom:7px;"><span>Yüklenen Denemeler (${state.examHistory.length})</span></div>
+          <div class="exam-history-list">
+            ${state.examHistory
+              .slice(0, 12)
+              .map(
+                (ex, idx) => `<div class="exam-history-row">
+                  <div style="min-width:0;">
+                    <span class="pill ${ex.examType === 'TYT' ? 'pill-accent' : 'pill-risk-guvenli'}" style="margin-right:6px;">${escapeHtml(ex.examType)}</span>
+                    <strong>${escapeHtml(ex.examName)}</strong>
+                    <div style="font-size:11.5px;color:var(--text-tertiary);margin-top:2px;">${escapeHtml(ex.examDate || ex.importedAt?.slice(0, 10) || '')} · Toplam: <strong class="tabular">${formatNet(ex.total)} net</strong></div>
+                  </div>
+                  <div style="display:flex;gap:5px;flex-shrink:0;">
+                    <button type="button" class="mini-action active" data-apply-exam="${idx}">Uygula</button>
+                    <button type="button" class="btn-ghost" data-del-exam="${idx}" title="Sil">${SF.close}</button>
+                  </div>
+                </div>`,
+              )
+              .join('')}
+          </div>
+        </div>`
+      : ''}
+
+    <hr style="border:none;border-top:0.5px solid var(--separator);margin:2px 0;" />
+
+    <form id="myNetsForm" style="display:flex;flex-direction:column;gap:14px;">
       <div>
         <label class="field-label" for="mn_obp">Tahmini OBP Puanın (300 – 500)</label>
         <input id="mn_obp" class="input tabular" type="number" step="0.5" min="250" max="500" ${valAttr(mn.obp)} placeholder="Örn: 475" style="max-width:200px;" />
@@ -1819,7 +2135,7 @@ function renderMyNetsModal() {
       </div>
 
       <div>
-        <div class="section-heading" style="margin-bottom:8px;"><span>AYT Sayısal & EA Netlerin</span></div>
+        <div class="section-heading" style="margin-bottom:8px;"><span>AYT & YDT Netlerin</span></div>
         <div class="nets-input-grid">
           ${field('mn_ayt_matematik', 'AYT Matematik', 40, mn.ayt?.matematik)}
           ${field('mn_ayt_fizik', 'AYT Fizik', 14, mn.ayt?.fizik)}
@@ -1839,6 +2155,88 @@ function renderMyNetsModal() {
     </form>
   `;
 
+  async function handlePdfUpload(file, examType) {
+    if (!file) return;
+    const statusEl = document.getElementById('pdfParseStatus');
+    const studentName = document.getElementById('pdfStudentName')?.value.trim() || 'Yusuf Selim Eryiğit';
+    state.studentName = studentName;
+
+    statusEl.innerHTML = `<div class="info-banner">${examType} PDF taranıyor ve <strong>${escapeHtml(studentName)}</strong> aranıyor...</div>`;
+    try {
+      const parsed = await parseExamPdfFile(file, { examType, studentName });
+      if (examType === 'TYT' && parsed.tyt) {
+        state.myNets.tyt = { ...state.myNets.tyt, ...parsed.tyt };
+      } else if (examType === 'AYT' && parsed.ayt) {
+        for (const [k, v] of Object.entries(parsed.ayt)) {
+          if (v !== null && v !== undefined) state.myNets.ayt[k] = v;
+        }
+      }
+
+      state.examHistory.unshift({
+        id: `ex-${Date.now()}`,
+        examType,
+        examName: parsed.examName,
+        examDate: parsed.examDate,
+        tyt: parsed.tyt || null,
+        ayt: parsed.ayt || null,
+        total: parsed.total,
+        importedAt: new Date().toISOString(),
+      });
+      if (state.examHistory.length > 40) state.examHistory.length = 40;
+
+      saveState();
+      renderMyNetsModal();
+      renderAll();
+      if (ui.drawerCode) renderDrawer();
+
+      const freshStatus = document.getElementById('pdfParseStatus');
+      if (freshStatus) {
+        const detail =
+          examType === 'TYT'
+            ? `Türkçe ${formatNet(parsed.tyt.turkce)} · Sosyal ${formatNet(parsed.tyt.sosyal)} · Mat ${formatNet(parsed.tyt.matematik)} · Fen ${formatNet(parsed.tyt.fen)} (Toplam ${formatNet(parsed.total)})`
+            : `Toplam ${formatNet(parsed.total)} AYT neti otomatik işlendi.`;
+        freshStatus.innerHTML = `<div class="quota-alert-good">✓ ${escapeHtml(studentName)} bulundu (${escapeHtml(parsed.examName)}) · ${escapeHtml(detail)}</div>`;
+      }
+      showToast(`${examType} netlerin PDF'den otomatik kaydedildi!`, 'success');
+    } catch (err) {
+      statusEl.innerHTML = `<div class="error-banner">${escapeHtml(err.message || 'PDF okunamadı.')}</div>`;
+    }
+  }
+
+  document.getElementById('tytPdfInput')?.addEventListener('change', (e) => {
+    handlePdfUpload(e.target.files?.[0], 'TYT');
+  });
+
+  document.getElementById('aytPdfInput')?.addEventListener('change', (e) => {
+    handlePdfUpload(e.target.files?.[0], 'AYT');
+  });
+
+  body.querySelectorAll('[data-apply-exam]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const ex = state.examHistory[Number(btn.dataset.applyExam)];
+      if (!ex) return;
+      if (ex.examType === 'TYT' && ex.tyt) state.myNets.tyt = { ...state.myNets.tyt, ...ex.tyt };
+      if (ex.examType === 'AYT' && ex.ayt) {
+        for (const [k, v] of Object.entries(ex.ayt)) {
+          if (v !== null && v !== undefined) state.myNets.ayt[k] = v;
+        }
+      }
+      saveState();
+      renderMyNetsModal();
+      renderAll();
+      if (ui.drawerCode) renderDrawer();
+      showToast(`${ex.examName} netleri aktif edildi.`, 'success');
+    });
+  });
+
+  body.querySelectorAll('[data-del-exam]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      state.examHistory.splice(Number(btn.dataset.delExam), 1);
+      saveState();
+      renderMyNetsModal();
+    });
+  });
+
   const readNum = (id) => {
     const raw = document.getElementById(id)?.value?.trim();
     if (raw === '' || raw === undefined) return null;
@@ -1848,6 +2246,7 @@ function renderMyNetsModal() {
 
   document.getElementById('myNetsForm')?.addEventListener('submit', (e) => {
     e.preventDefault();
+    state.studentName = document.getElementById('pdfStudentName')?.value.trim() || state.studentName;
     state.myNets = {
       obp: readNum('mn_obp'),
       tyt: {
@@ -1882,6 +2281,123 @@ function renderMyNetsModal() {
     renderAll();
     if (ui.drawerCode) renderDrawer();
     showToast('Netlerin temizlendi.');
+  });
+}
+
+// ============================================================================
+// ÖSYM AİS Copy Assistant & Read-Only Share Link Modal
+// ============================================================================
+function openOsymModal() {
+  const overlay = document.getElementById('osymModalOverlay');
+  renderOsymModal();
+  overlay.classList.add('open');
+  overlay.setAttribute('aria-hidden', 'false');
+}
+
+function closeOsymModal() {
+  const overlay = document.getElementById('osymModalOverlay');
+  overlay.classList.remove('open');
+  overlay.setAttribute('aria-hidden', 'true');
+}
+
+function renderOsymModal() {
+  const body = document.getElementById('osymModalBody');
+  const progs = state.programs.slice(0, 24);
+
+  body.innerHTML = `
+    <div style="display:flex;flex-direction:column;gap:10px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+        <div>
+          <strong style="font-size:14.5px;">Salt-Okunur Paylaşım Linki</strong>
+          <div style="font-size:12px;color:var(--text-tertiary);">Ailen veya rehber öğretmenin kişisel anahtarını görmeden sadece listeni inceleyebilir.</div>
+        </div>
+        <button class="btn btn-primary btn-sm" id="createShareLinkBtn">${SF.share} Link Üret</button>
+      </div>
+      ${ui.lastShareUrl
+        ? `<div style="display:flex;gap:8px;">
+            <input class="input mono" id="shareUrlOut" value="${escapeHtml(ui.lastShareUrl)}" readonly style="font-size:12px;" />
+            <button class="btn btn-sm" id="copyShareUrlBtn">Kopyala</button>
+          </div>`
+        : ''}
+    </div>
+
+    <hr style="border:none;border-top:0.5px solid var(--separator);margin:2px 0;" />
+
+    <div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
+        <div>
+          <strong style="font-size:14.5px;">ÖSYM AİS Sıralı Kopyalama Asistanı (${progs.length}/24)</strong>
+          <div style="font-size:12px;color:var(--text-tertiary);">Her kopyaladığın satır yeşil işaretlenir; tercih girerken sıra şaşmaz.</div>
+        </div>
+        <button class="btn btn-sm" id="copyAllOsymBtn">${SF.copy} Tüm Kodları Kopyala</button>
+      </div>
+
+      <div class="osym-list">
+        ${progs
+          .map((p, idx) => {
+            const done = ui.osymCopiedCodes.has(p.code);
+            return `<div class="osym-row ${done ? 'copied' : ''}">
+              <div style="display:flex;align-items:center;gap:10px;min-width:0;">
+                <span class="mono" style="font-weight:700;color:var(--text-tertiary);width:26px;">#${String(idx + 1).padStart(2, '0')}</span>
+                <div style="min-width:0;">
+                  <div style="font-weight:600;font-size:13px;">${escapeHtml(p.department)}</div>
+                  <div style="font-size:11.5px;color:var(--text-secondary);">${escapeHtml(p.university)} · <span class="mono" style="font-weight:650;">${escapeHtml(p.code)}</span></div>
+                </div>
+              </div>
+              <button class="btn btn-sm ${done ? 'btn-soft' : ''}" data-osym-copy="${escapeHtml(p.code)}">
+                ${done ? `${SF.check} Kopyalandı` : `${SF.copy} ${escapeHtml(p.code)}`}
+              </button>
+            </div>`;
+          })
+          .join('')}
+      </div>
+    </div>
+  `;
+
+  document.getElementById('createShareLinkBtn')?.addEventListener('click', async () => {
+    const btn = document.getElementById('createShareLinkBtn');
+    btn.disabled = true;
+    btn.textContent = 'Üretiliyor...';
+    try {
+      const sc = getActiveScenario();
+      const res = await createShareSnapshot({
+        title: sc?.name || 'YKS 2027 Tercih Listesi',
+        ownerName: state.studentName || '',
+        targetRank: state.targetRank,
+        programs: state.programs,
+        abroadPrograms: state.abroadPrograms,
+      });
+      const shareUrl = `${window.location.origin}${window.location.pathname}?share=${res.id}`;
+      ui.lastShareUrl = shareUrl;
+      navigator.clipboard?.writeText(shareUrl);
+      renderOsymModal();
+      showToast('Salt-okunur paylaşım linki üretildi ve kopyalandı!', 'success');
+    } catch (err) {
+      showToast(err.message || 'Paylaşım linki üretilemedi.', 'error');
+      btn.disabled = false;
+      btn.innerHTML = `${SF.share} Link Üret`;
+    }
+  });
+
+  document.getElementById('copyShareUrlBtn')?.addEventListener('click', () => {
+    navigator.clipboard?.writeText(ui.lastShareUrl);
+    showToast('Paylaşım linki kopyalandı.', 'success');
+  });
+
+  document.getElementById('copyAllOsymBtn')?.addEventListener('click', () => {
+    const text = progs.map((p, i) => `${i + 1}. ${p.code} — ${p.university} / ${p.department}`).join('\n');
+    navigator.clipboard?.writeText(text);
+    showToast(`${progs.length} tercih kodu panoya kopyalandı.`, 'success');
+  });
+
+  body.querySelectorAll('[data-osym-copy]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const code = btn.dataset.osymCopy;
+      navigator.clipboard?.writeText(code);
+      ui.osymCopiedCodes.add(code);
+      renderOsymModal();
+      showToast(`${code} kopyalandı.`, 'success');
+    });
   });
 }
 
@@ -2007,7 +2523,7 @@ function openAbroadModal(editId = null) {
 
   document.getElementById('abroadForm')?.addEventListener('submit', (e) => {
     e.preventDefault();
-    const payload = {
+    const rec = createAbroadRecord({
       id: existing?.id,
       country: document.getElementById('ab_country').value,
       city: document.getElementById('ab_city').value,
@@ -2024,8 +2540,7 @@ function openAbroadModal(editId = null) {
       status: existing?.status || 'researching',
       checklist: existing?.checklist,
       createdAt: existing?.createdAt,
-    };
-    const rec = createAbroadRecord(payload);
+    });
     if (existing) {
       const idx = state.abroadPrograms.findIndex((x) => x.id === existing.id);
       if (idx !== -1) state.abroadPrograms[idx] = rec;
@@ -2129,7 +2644,7 @@ function renderSyncModal() {
 
   body.innerHTML = `
     <div class="info-banner">
-      Aynı <strong>Kişisel Anahtarı</strong> Mac, iPhone ve iPad'de girdiğinde tercih listen, netlerin, yurt dışı hedeflerin ve notların otomatik eşitlenir.
+      Aynı <strong>Kişisel Anahtarı</strong> Mac, iPhone ve iPad'de girdiğinde tüm senaryoların, netlerin, deneme geçmişin ve yurt dışı hedeflerin otomatik eşitlenir.
     </div>
 
     <div>
@@ -2166,10 +2681,11 @@ function renderSyncModal() {
     <hr style="border:none;border-top:0.5px solid var(--separator);margin:2px 0;" />
 
     <div>
-      <label class="field-label">Dışa Aktar, PDF & Yedekleme</label>
+      <label class="field-label">Dışa Aktar, PDF, Takvim & Yedekleme</label>
       <div style="display:flex;gap:8px;flex-wrap:wrap;">
         <button class="btn btn-sm" id="exportPdfBtn">${SF.print} PDF Raporu</button>
-        <button class="btn btn-sm" id="exportCsvBtn">Excel / CSV İndir</button>
+        <button class="btn btn-sm" id="exportIcsModalBtn">Takvim (.ics)</button>
+        <button class="btn btn-sm" id="exportCsvBtn">Excel / CSV</button>
         <button class="btn btn-sm" id="exportJsonBtn">JSON Yedek</button>
         <label class="btn btn-sm" style="cursor:pointer;">
           Yedek Yükle
@@ -2224,6 +2740,11 @@ function renderSyncModal() {
     if (!openPrintableReport(state)) showToast('Tarayıcı açılır pencereyi engelledi.', 'error');
   });
 
+  document.getElementById('exportIcsModalBtn')?.addEventListener('click', () => {
+    downloadTimelineIcs(state.abroadPrograms);
+    showToast('Apple Takvim (.ics) dosyası indirildi.', 'success');
+  });
+
   document.getElementById('exportCsvBtn')?.addEventListener('click', () => {
     if (!state.programs.length) return showToast('Dışa aktarılacak program yok.', 'error');
     exportProgramsToCsv(state.programs);
@@ -2231,6 +2752,7 @@ function renderSyncModal() {
   });
 
   document.getElementById('exportJsonBtn')?.addEventListener('click', () => {
+    syncActiveScenarioPointers();
     const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -2246,7 +2768,6 @@ function renderSyncModal() {
     if (!file) return;
     try {
       const parsed = JSON.parse(await file.text());
-      if (!Array.isArray(parsed.programs)) throw new Error('Geçersiz yedek dosyası.');
       state = normalizeState(parsed);
       saveState();
       renderAll();
@@ -2262,6 +2783,15 @@ function renderSyncModal() {
 // Event Bindings
 // ============================================================================
 function bindPreferencesEvents() {
+  document.querySelectorAll('[data-switch-scenario]').forEach((btn) => {
+    btn.addEventListener('click', () => switchScenario(btn.dataset.switchScenario));
+  });
+  document.getElementById('newScenarioBtn')?.addEventListener('click', () => createScenario({ duplicateCurrent: false }));
+  document.getElementById('dupScenarioBtn')?.addEventListener('click', () => createScenario({ duplicateCurrent: true }));
+  document.getElementById('renameScenarioBtn')?.addEventListener('click', renameActiveScenario);
+  document.getElementById('delScenarioBtn')?.addEventListener('click', deleteActiveScenario);
+
+  document.getElementById('openOsymBtn')?.addEventListener('click', openOsymModal);
   document.getElementById('printReportBtn')?.addEventListener('click', () => {
     if (!openPrintableReport(state)) showToast('Tarayıcı açılır pencereyi engelledi.', 'error');
   });
@@ -2413,19 +2943,94 @@ function bindCompareEvents() {
 }
 
 function bindAnalysisEvents() {
-  document.getElementById('analysisAddBtn')?.addEventListener('click', () => openAddModal());
-  document.getElementById('analysisPrintBtn')?.addEventListener('click', () => {
-    if (!openPrintableReport(state)) showToast('Tarayıcı açılır pencereyi engelledi.', 'error');
+  document.querySelectorAll('[data-analysis-sub]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      ui.analysisSubTab = btn.dataset.analysisSub;
+      renderAll();
+    });
   });
+
+  document.getElementById('analysisAddBtn')?.addEventListener('click', () => openAddModal());
+
   document.querySelectorAll('[data-open-code]').forEach((btn) => {
     btn.addEventListener('click', () => openDrawer(btn.dataset.openCode));
+  });
+
+  // Map city click
+  document.querySelectorAll('[data-map-city]').forEach((pin) => {
+    pin.addEventListener('click', () => {
+      const city = pin.dataset.mapCity;
+      ui.selectedMapCity = ui.selectedMapCity === city ? null : city;
+      renderAll();
+    });
+  });
+  document.getElementById('clearMapCityBtn')?.addEventListener('click', () => {
+    ui.selectedMapCity = null;
+    renderAll();
+  });
+
+  // Net simulator sliders
+  document.getElementById('simTytSlider')?.addEventListener('input', (e) => {
+    ui.simTytBoost = Number(e.target.value);
+    renderAll();
+  });
+  document.getElementById('simAytSlider')?.addEventListener('input', (e) => {
+    ui.simAytBoost = Number(e.target.value);
+    renderAll();
+  });
+
+  // Cost settings live update
+  const bindCostInput = (id, key) => {
+    document.getElementById(id)?.addEventListener('change', (e) => {
+      const val = Number(e.target.value);
+      if (val > 0) {
+        state.costSettings[key] = val;
+        saveState();
+        renderAll();
+      }
+    });
+  };
+  bindCostInput('costIst', 'monthlyIstanbul');
+  bindCostInput('costMetro', 'monthlyMetro');
+  bindCostInput('costOther', 'monthlyOther');
+  bindCostInput('costEur', 'eurTry');
+
+  // Timeline ICS download
+  document.getElementById('exportIcsBtn')?.addEventListener('click', () => {
+    downloadTimelineIcs(state.abroadPrograms);
+    showToast('Apple Takvim (.ics) dosyası indirildi.', 'success');
   });
 }
 
 // ============================================================================
-// Bootstrap
+// Bootstrap & Read-Only Share Loader
 // ============================================================================
-function init() {
+async function loadSharedLinkIfPresent() {
+  const shareId = new URLSearchParams(window.location.search).get('share');
+  if (!shareId) return false;
+  try {
+    const res = await fetchShareSnapshot(shareId);
+    if (res?.data) {
+      ui.readOnlyShare = {
+        title: res.data.title || 'Paylaşılan Tercih Listesi',
+        ownerName: res.data.ownerName || '',
+        sharedAt: res.data.sharedAt,
+      };
+      state = normalizeState({
+        targetRank: res.data.targetRank,
+        programs: res.data.programs || [],
+        abroadPrograms: res.data.abroadPrograms || [],
+      });
+      renderAll();
+      return true;
+    }
+  } catch (err) {
+    showToast(err.message || 'Paylaşım linki yüklenemedi.', 'error');
+  }
+  return false;
+}
+
+async function init() {
   initTheme();
 
   document.getElementById('brandHome')?.addEventListener('click', (e) => {
@@ -2502,6 +3107,11 @@ function init() {
     if (e.target.id === 'abroadModalOverlay') closeAbroadModal();
   });
 
+  document.getElementById('closeOsymModalBtn')?.addEventListener('click', closeOsymModal);
+  document.getElementById('osymModalOverlay')?.addEventListener('click', (e) => {
+    if (e.target.id === 'osymModalOverlay') closeOsymModal();
+  });
+
   document.getElementById('openSyncBtn')?.addEventListener('click', openSyncModal);
   document.getElementById('closeSyncModalBtn')?.addEventListener('click', closeSyncModal);
   document.getElementById('syncModalOverlay')?.addEventListener('click', (e) => {
@@ -2519,6 +3129,7 @@ function init() {
       closeAddModal();
       closeMyNetsModal();
       closeAbroadModal();
+      closeOsymModal();
       closeSyncModal();
     }
   });
@@ -2528,7 +3139,10 @@ function init() {
   }
 
   renderAll();
-  syncPullOnStartup({ silent: true });
+  const loadedShare = await loadSharedLinkIfPresent();
+  if (!loadedShare) {
+    syncPullOnStartup({ silent: true });
+  }
 }
 
 init();

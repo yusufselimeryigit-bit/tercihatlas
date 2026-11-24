@@ -1,15 +1,17 @@
-const CACHE_NAME = 'tercihatlas-v5';
+const CACHE_NAME = 'tercihatlas-v6';
 const STATIC_ASSETS = [
   './',
   './index.html',
   './manifest.json',
   './icon.svg',
-  './css/styles.css?v=5',
-  './js/app.js?v=5',
+  './css/styles.css?v=6',
+  './js/app.js?v=6',
   './js/api.js',
   './js/analytics.js',
   './js/abroad.js',
   './js/charts.js',
+  './js/map-cost.js',
+  './js/pdf-parser.js',
   './js/utils.js',
 ];
 
@@ -31,7 +33,7 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
   if (event.request.method !== 'GET') return;
-  if (url.pathname.startsWith('/api/') || url.hostname.includes('workers.dev')) return;
+  if (url.pathname.startsWith('/api/') || url.hostname.includes('workers.dev') || url.hostname.includes('jsdelivr.net')) return;
 
   event.respondWith(
     fetch(event.request)

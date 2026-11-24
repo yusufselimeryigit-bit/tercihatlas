@@ -1798,7 +1798,7 @@ a { color: var(--accent); text-decoration: none; }
   .topbar-inner { grid-template-columns: 1fr auto; }
   #desktopNav { display: none; }
   .sync-label { display: none; }
-  .main { padding: 14px 14px 108px; }
+  .main { padding: 14px 14px 92px; }
   .page-title { font-size: 30px; }
   .apple-hero { padding: 36px 18px 28px; }
   .apple-hero h2 { font-size: 25px; }
@@ -1847,12 +1847,12 @@ a { color: var(--accent); text-decoration: none; }
 
   .modal-overlay.spotlight-overlay { padding-top: 16px; }
 
-  /* Floating iOS 26 Liquid Glass Bottom Tab Capsule */
+  /* Floating iOS 26 Liquid Glass Bottom Tab Capsule — hugs bottom cleanly in Safari & Home Screen PWA */
   .mobile-nav {
     position: fixed;
     left: 14px;
     right: 14px;
-    bottom: calc(12px + env(safe-area-inset-bottom));
+    bottom: 10px;
     z-index: 45;
     display: grid;
     grid-template-columns: repeat(4, 1fr);
@@ -1882,4 +1882,258 @@ a { color: var(--accent); text-decoration: none; }
     color: var(--accent);
     font-weight: 650;
   }
+}
+
+@media (max-width: 760px) and (display-mode: standalone) {
+  .mobile-nav {
+    bottom: max(12px, calc(env(safe-area-inset-bottom) - 18px));
+  }
+}
+
+/* ==========================================================================
+   Scenarios, PDF Uploader, Net Simulator, Turkey Map, Cost, Timeline, ÖSYM
+   ========================================================================== */
+.share-banner {
+  max-width: 1140px;
+  margin: 4px auto 0;
+  padding: 10px 20px;
+  border-radius: var(--r-pill);
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.scenario-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-bottom: 18px;
+}
+
+.scenario-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 13px;
+  border-radius: var(--r-pill);
+  font-size: 12.5px;
+  font-weight: 550;
+  color: var(--text-secondary);
+  background: var(--surface);
+  box-shadow: var(--shadow-card);
+  transition: all var(--ease);
+}
+
+.scenario-pill:hover { color: var(--text); }
+.scenario-pill.active { background: var(--accent); color: #FFFFFF; box-shadow: 0 3px 10px rgba(0, 113, 227, 0.28); }
+
+.pdf-upload-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.pdf-drop-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 16px 12px;
+  border-radius: var(--r-md);
+  background: var(--surface-secondary);
+  border: 1.5px dashed var(--separator);
+  text-align: center;
+  cursor: pointer;
+  transition: all var(--ease);
+}
+
+.pdf-drop-card:hover {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.pdf-drop-card strong { font-size: 13.5px; color: var(--text); }
+.pdf-drop-card span { font-size: 11.5px; color: var(--text-tertiary); }
+
+.exam-history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+.exam-history-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  background: var(--surface-secondary);
+  font-size: 12.5px;
+}
+
+/* Apple Sliders for What-If Simulator */
+.sim-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.sim-slider-card {
+  background: var(--surface-secondary);
+  border-radius: var(--r-md);
+  padding: 15px 17px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.apple-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--bg-grouped-hover);
+  outline: none;
+}
+
+.apple-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #FFFFFF;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.22), 0 0 0 0.5px rgba(0, 0, 0, 0.08);
+  cursor: pointer;
+  transition: transform 150ms var(--spring);
+}
+
+.apple-slider::-webkit-slider-thumb:hover { transform: scale(1.1); }
+
+.sim-unlock-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sim-unlock-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: var(--r-md);
+  background: var(--surface-secondary);
+}
+
+.sim-unlock-row.upgraded {
+  background: var(--green-soft);
+}
+
+/* Apple Maps-style Turkey Campus Map */
+.map-stage {
+  background: var(--surface-secondary);
+  border-radius: var(--r-md);
+  padding: 16px 12px;
+  overflow: hidden;
+}
+
+.turkey-land {
+  fill: var(--surface);
+  stroke: var(--separator);
+  stroke-width: 1.8;
+  stroke-linejoin: round;
+}
+
+.map-city-label {
+  fill: var(--text-secondary);
+  font-size: 9.5px;
+  font-weight: 700;
+  font-family: var(--font-sans);
+  letter-spacing: 0.02em;
+  pointer-events: none;
+}
+
+.map-pin:hover circle:nth-child(2) {
+  transform-box: fill-box;
+  transform-origin: center;
+  transform: scale(1.12);
+}
+
+/* Cost Calculator */
+.cost-controls {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+/* Timeline */
+.timeline-list {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-left: 20px;
+  border-left: 2px solid var(--separator-subtle);
+  margin-left: 8px;
+}
+
+.timeline-item { position: relative; }
+
+.timeline-dot {
+  position: absolute;
+  left: -27px;
+  top: 15px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2.5px solid var(--surface);
+  box-shadow: 0 0 0 1px var(--separator);
+}
+
+.timeline-card {
+  background: var(--surface-secondary);
+  border-radius: var(--r-md);
+  padding: 13px 16px;
+}
+
+/* ÖSYM AİS Copy Assistant */
+.osym-list {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  max-height: 360px;
+  overflow-y: auto;
+}
+
+.osym-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 13px;
+  border-radius: 12px;
+  background: var(--surface-secondary);
+}
+
+.osym-row.copied {
+  background: var(--green-soft);
+}
+
+@media (max-width: 760px) {
+  .pdf-upload-grid, .sim-grid, .cost-controls { grid-template-columns: 1fr; }
 }

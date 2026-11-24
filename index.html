@@ -11,7 +11,7 @@
   <link rel="icon" type="image/svg+xml" href="icon.svg" />
   <link rel="apple-touch-icon" href="icon.svg" />
   <link rel="manifest" href="manifest.json" />
-  <link rel="stylesheet" href="css/styles.css?v=5" />
+  <link rel="stylesheet" href="css/styles.css?v=6" />
 </head>
 <body>
   <!-- macOS Tahoe / iPadOS Floating Liquid Glass Navigation -->
@@ -61,6 +61,9 @@
       </div>
     </div>
   </header>
+
+  <!-- Read-Only Share Mode Banner Host -->
+  <div id="shareBannerHost"></div>
 
   <!-- Main Workspace -->
   <main class="main" id="mainRoot"></main>
@@ -177,9 +180,22 @@
     </div>
   </div>
 
+  <!-- ÖSYM AİS Copy Assistant & Share Link Modal -->
+  <div class="modal-overlay" id="osymModalOverlay" aria-hidden="true">
+    <div class="modal" style="width:min(620px, 100%);" role="dialog" aria-labelledby="osymModalTitle">
+      <div class="modal-header">
+        <h3 id="osymModalTitle">ÖSYM AİS Kopyalama & Paylaşım</h3>
+        <button class="btn btn-ghost btn-icon btn-sm" id="closeOsymModalBtn" aria-label="Kapat">
+          <svg class="sf-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <div class="modal-body" id="osymModalBody"></div>
+    </div>
+  </div>
+
   <!-- Floating Pill Toasts -->
   <div class="toast-container" id="toastContainer"></div>
 
-  <script type="module" src="js/app.js?v=5"></script>
+  <script type="module" src="js/app.js?v=6"></script>
 </body>
 </html>
