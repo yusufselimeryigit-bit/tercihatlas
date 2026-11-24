@@ -1,4 +1,4 @@
-import { fetchProgramFromYokAtlas, fetchUniversityLogo } from './yokatlas.js';
+import { fetchProgramFromYokAtlas, fetchUniversityLogo, searchProgramsFromYokAtlas } from './yokatlas.js';
 
 const CACHE_TTL_SECONDS = 60 * 60 * 12; // 12 hours
 const MAX_SYNC_BYTES = 1024 * 1024 * 2; // 2 MB guard
@@ -54,7 +54,25 @@ export default {
         });
       }
 
-      // 2. Program lookup from YÖK Atlas
+      // 2. Live YÖK Atlas natural-language & filtered search
+      if (path === '/api/search' && request.method === 'GET') {
+        const result = await searchProgramsFromYokAtlas(
+          {
+            q: url.searchParams.get('q') || '',
+            puanTuru: url.searchParams.get('puanTuru') || '',
+            universiteTuru: url.searchParams.get('uniTuru') || '',
+            minRank: url.searchParams.get('minRank') || '',
+            maxRank: url.searchParams.get('maxRank') || '',
+            size: url.searchParams.get('size') || '20',
+          },
+          env.TERCIH_KV || null,
+        );
+        return jsonResponse(request, result, 200, {
+          'Cache-Control': 'public, max-age=1800',
+        });
+      }
+
+      // 3. Program lookup from YÖK Atlas
       const programMatch = path.match(/^\/api\/program\/(\d{7,11})$/);
       if (programMatch && request.method === 'GET') {
         const code = programMatch[1];

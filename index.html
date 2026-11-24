@@ -11,7 +11,7 @@
   <link rel="icon" type="image/svg+xml" href="icon.svg" />
   <link rel="apple-touch-icon" href="icon.svg" />
   <link rel="manifest" href="manifest.json" />
-  <link rel="stylesheet" href="css/styles.css?v=4" />
+  <link rel="stylesheet" href="css/styles.css?v=5" />
 </head>
 <body>
   <!-- macOS Tahoe / iPadOS Floating Liquid Glass Navigation -->
@@ -34,10 +34,17 @@
           <span class="nav-count tabular" id="compareCountBadge">0</span>
         </button>
         <button class="nav-pill-btn" data-tab="analysis">Analiz</button>
-        <button class="nav-pill-btn" data-tab="abroad">Yurt Dışı</button>
+        <button class="nav-pill-btn" data-tab="abroad">
+          <span>Yurt Dışı</span>
+          <span class="nav-count tabular" id="abroadCountBadge">0</span>
+        </button>
       </nav>
 
       <div class="topbar-actions">
+        <button class="glass-icon-btn" id="openMyNetsBtn" title="Kendi TYT/AYT Netlerini Gir ve Bölümlerle Kıyasla">
+          <svg class="sf-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 19h16"/><path d="M7 15V9"/><path d="M12 15V5"/><path d="M17 15v-3"/></svg>
+          <span class="sync-label">Netlerim</span>
+        </button>
         <button class="glass-icon-btn" id="openSyncBtn" title="Bulut Eşitleme ve Yedekleme">
           <span class="status-dot" id="syncDot"></span>
           <span class="sync-label" id="syncLabel">Yerel</span>
@@ -78,17 +85,17 @@
     </button>
   </nav>
 
-  <!-- Floating macOS Tahoe Inspector / iOS 26 Bottom Sheet -->
+  <!-- Large Centered Apple Sheet Window (Desktop) / iOS 26 Bottom Sheet (Mobile) -->
   <div class="backdrop" id="drawerBackdrop"></div>
   <aside class="drawer" id="detailDrawer" aria-hidden="true">
     <div class="sheet-grabber" aria-hidden="true"></div>
     <div id="drawerContent" style="display:flex;flex-direction:column;flex:1;min-height:0;"></div>
   </aside>
 
-  <!-- macOS Spotlight Style Add Program Modal (⌘K) -->
+  <!-- macOS Spotlight Style Live YÖK Atlas Search & Code/Link Modal (⌘K) -->
   <div class="modal-overlay spotlight-overlay" id="addModalOverlay" aria-hidden="true">
-    <div class="modal" role="dialog" aria-labelledby="addModalLabel">
-      <span id="addModalLabel" class="sr-only">YÖK Atlas'tan Program Ekle</span>
+    <div class="modal" style="width:min(660px, 100%);" role="dialog" aria-labelledby="addModalLabel">
+      <span id="addModalLabel" class="sr-only">YÖK Atlas'ta Ara veya Program Kodu Ekle</span>
       <div class="spotlight-bar">
         <svg class="sf-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--text-tertiary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <circle cx="11" cy="11" r="7.5"/><path d="m20 20-3.8-3.8"/>
@@ -97,25 +104,63 @@
           id="programCodeInput"
           class="spotlight-input"
           rows="1"
-          placeholder="YÖK Atlas program kodu veya linki yapıştır..."
+          placeholder="Bölüm/üni ara (ör. İTÜ Bilgisayar) veya kod/link yapıştır..."
         ></textarea>
-        <button class="btn btn-primary btn-sm" id="fetchProgramBtn">Getir</button>
+        <button class="btn btn-primary btn-sm" id="fetchProgramBtn">Ara / Getir</button>
         <button class="btn btn-ghost btn-icon btn-sm" id="closeAddModalBtn" aria-label="Kapat">
           <svg class="sf-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
         </button>
       </div>
       <div class="spotlight-body">
-        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
-          <span style="font-size:12px;color:var(--text-tertiary);">9 haneli kod, YÖK Atlas URL'si veya birden fazla kod</span>
-          <div class="quick-code-chips" style="margin-top:0;justify-content:flex-start;">
-            <button class="quick-chip" type="button" data-sample-code="102210277">Boğaziçi Bilgisayar</button>
-            <button class="quick-chip" type="button" data-sample-code="108410336">ODTÜ Bilgisayar</button>
-            <button class="quick-chip" type="button" data-sample-code="203910275">Koç Ekonomi</button>
+        <div class="spotlight-filters">
+          <select id="spotPuanTuru" class="select toolbar-select" style="height:30px;font-size:12px;">
+            <option value="">Tüm Puan Türleri</option>
+            <option value="SAY">SAY</option>
+            <option value="EA">EA</option>
+            <option value="SÖZ">SÖZ</option>
+            <option value="DİL">DİL</option>
+          </select>
+          <select id="spotUniTuru" class="select toolbar-select" style="height:30px;font-size:12px;">
+            <option value="">Devlet + Vakıf</option>
+            <option value="DEVLET">Sadece Devlet</option>
+            <option value="VAKIF">Sadece Vakıf</option>
+          </select>
+          <input id="spotMaxRank" class="input tabular" type="number" min="1" step="1000" placeholder="Max sıralama (ör. 30000)" style="width:170px;height:30px;padding:0 11px;border-radius:999px;font-size:12px;" />
+          <div style="display:flex;gap:5px;margin-left:auto;flex-wrap:wrap;">
+            <button class="quick-chip" type="button" data-sample-query="İTÜ Bilgisayar">İTÜ Bilgisayar</button>
+            <button class="quick-chip" type="button" data-sample-query="Ankara Devlet Tıp">Ankara Tıp</button>
+            <button class="quick-chip" type="button" data-sample-query="İstanbul EA Ekonomi">İstanbul Ekonomi</button>
           </div>
         </div>
         <div id="addModalFeedback"></div>
         <div id="addModalPreview"></div>
       </div>
+    </div>
+  </div>
+
+  <!-- My Nets Modal ("Hedefe Kaç Net Kaldı?") -->
+  <div class="modal-overlay" id="myNetsModalOverlay" aria-hidden="true">
+    <div class="modal" style="width:min(600px, 100%);" role="dialog" aria-labelledby="myNetsTitle">
+      <div class="modal-header">
+        <h3 id="myNetsTitle">Benim Güncel Netlerim (YKS 2027)</h3>
+        <button class="btn btn-ghost btn-icon btn-sm" id="closeMyNetsBtn" aria-label="Kapat">
+          <svg class="sf-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <div class="modal-body" id="myNetsModalBody"></div>
+    </div>
+  </div>
+
+  <!-- Abroad Program Add / Edit Modal -->
+  <div class="modal-overlay" id="abroadModalOverlay" aria-hidden="true">
+    <div class="modal" style="width:min(620px, 100%);" role="dialog" aria-labelledby="abroadModalTitle">
+      <div class="modal-header">
+        <h3 id="abroadModalTitle">Yurt Dışı Program Ekle</h3>
+        <button class="btn btn-ghost btn-icon btn-sm" id="closeAbroadModalBtn" aria-label="Kapat">
+          <svg class="sf-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <div class="modal-body" id="abroadModalBody"></div>
     </div>
   </div>
 
@@ -135,6 +180,6 @@
   <!-- Floating Pill Toasts -->
   <div class="toast-container" id="toastContainer"></div>
 
-  <script type="module" src="js/app.js?v=4"></script>
+  <script type="module" src="js/app.js?v=5"></script>
 </body>
 </html>

@@ -22,21 +22,57 @@ import {
   getLogoUrl,
   checkApiHealth,
   fetchProgramFromApi,
+  searchProgramsFromApi,
   pullCloudSync,
   pushCloudSync,
 } from './api.js';
 import { renderSparkline, renderDetailTrendChart, renderRankSpectrum } from './charts.js';
+import {
+  compute2027Projection,
+  compareWithMyNets,
+  analyzePreferenceHealth,
+  openPrintableReport,
+} from './analytics.js';
+import { ABROAD_PRESETS, createAbroadRecord, renderAbroadView } from './abroad.js';
 
 const STATE_KEY = 'tercihatlas_state_v1';
 const SYNC_KEY_STORAGE = 'tercihatlas_sync_key';
 const THEME_STORAGE = 'tercihatlas_theme_v2';
 
+const PROGRAM_CHECKLIST_ITEMS = [
+  { key: 'mufredat', label: 'Ders Müfredatı' },
+  { key: 'kampusYurt', label: 'Kampüs & Yurt' },
+  { key: 'mezun', label: 'Mezun Yorumları' },
+  { key: 'erasmus', label: 'Erasmus & Staj' },
+];
+
+const DEFAULT_MY_NETS = {
+  obp: null,
+  tyt: { turkce: null, matematik: null, sosyal: null, fen: null },
+  ayt: {
+    matematik: null,
+    fizik: null,
+    kimya: null,
+    biyoloji: null,
+    edebiyat: null,
+    tarih1: null,
+    cografya1: null,
+    tarih2: null,
+    cografya2: null,
+    felsefe: null,
+    din: null,
+  },
+  ydt: null,
+};
+
 const DEFAULT_STATE = {
-  version: 1,
+  version: 2,
   targetRank: 15000,
   updatedAt: null,
   programs: [],
   compareCodes: [],
+  myNets: structuredClone(DEFAULT_MY_NETS),
+  abroadPrograms: [],
 };
 
 // Uniform SF Symbols-style inline SVGs
@@ -50,6 +86,7 @@ const SF = {
   external: `<svg class="sf-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17 17 7"/><path d="M7 7h10v10"/></svg>`,
   copy: `<svg class="sf-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2.5"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>`,
   note: `<svg class="sf-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h4"/></svg>`,
+  print: `<svg class="sf-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V3h12v6"/><rect x="4" y="9" width="16" height="8" rx="2"/><path d="M8 14h8v7H8z"/></svg>`,
   grip: `<svg class="sf-icon" width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="6" r="1.7"/><circle cx="15" cy="6" r="1.7"/><circle cx="9" cy="12" r="1.7"/><circle cx="15" cy="12" r="1.7"/><circle cx="9" cy="18" r="1.7"/><circle cx="15" cy="18" r="1.7"/></svg>`,
   starFilled: (size = 13) =>
     `<svg class="sf-icon" width="${size}" height="${size}" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.4l2.92 5.92 6.53.95-4.72 4.6 1.11 6.5L12 17.3l-5.84 3.07 1.11-6.5-4.72-4.6 6.53-.95L12 2.4z"/></svg>`,
@@ -73,6 +110,8 @@ const ui = {
   filterRisk: 'all',
   filterScoreType: 'all',
   sortBy: 'manual',
+  abroadFilter: 'ALL',
+  editingAbroadId: null,
   drawerCode: null,
   drawerChartMode: 'rank',
   drawerNetYear: null,
@@ -88,17 +127,27 @@ let syncTimer = null;
 // ============================================================================
 // Persistence & Cloud Sync
 // ============================================================================
+function normalizeState(parsed) {
+  return {
+    ...structuredClone(DEFAULT_STATE),
+    ...parsed,
+    programs: Array.isArray(parsed?.programs) ? parsed.programs : [],
+    compareCodes: Array.isArray(parsed?.compareCodes) ? parsed.compareCodes : [],
+    abroadPrograms: Array.isArray(parsed?.abroadPrograms) ? parsed.abroadPrograms : [],
+    myNets: {
+      ...structuredClone(DEFAULT_MY_NETS),
+      ...(parsed?.myNets || {}),
+      tyt: { ...structuredClone(DEFAULT_MY_NETS.tyt), ...(parsed?.myNets?.tyt || {}) },
+      ayt: { ...structuredClone(DEFAULT_MY_NETS.ayt), ...(parsed?.myNets?.ayt || {}) },
+    },
+  };
+}
+
 function loadLocalState() {
   try {
     const raw = localStorage.getItem(STATE_KEY);
     if (!raw) return structuredClone(DEFAULT_STATE);
-    const parsed = JSON.parse(raw);
-    return {
-      ...structuredClone(DEFAULT_STATE),
-      ...parsed,
-      programs: Array.isArray(parsed.programs) ? parsed.programs : [],
-      compareCodes: Array.isArray(parsed.compareCodes) ? parsed.compareCodes : [],
-    };
+    return normalizeState(JSON.parse(raw));
   } catch {
     return structuredClone(DEFAULT_STATE);
   }
@@ -167,13 +216,9 @@ async function syncPullOnStartup({ forceOverwrite = false, silent = true } = {})
     if (res.exists && res.data) {
       const cloudTime = new Date(res.data.updatedAt || res.data.syncedAt || 0).getTime();
       const localTime = new Date(state.updatedAt || 0).getTime();
-      if (forceOverwrite || cloudTime > localTime || state.programs.length === 0) {
-        state = {
-          ...structuredClone(DEFAULT_STATE),
-          ...res.data,
-          programs: Array.isArray(res.data.programs) ? res.data.programs : [],
-          compareCodes: Array.isArray(res.data.compareCodes) ? res.data.compareCodes : [],
-        };
+      const isLocalEmpty = state.programs.length === 0 && state.abroadPrograms.length === 0;
+      if (forceOverwrite || cloudTime > localTime || isLocalEmpty) {
+        state = normalizeState(res.data);
         localStorage.setItem(STATE_KEY, JSON.stringify(state));
         renderAll();
       } else if (localTime > cloudTime) {
@@ -195,7 +240,7 @@ async function syncPullOnStartup({ forceOverwrite = false, silent = true } = {})
 }
 
 // ============================================================================
-// Theme (Apple Light Default) & Floating Pill Toast
+// Theme & Floating Pill Toast
 // ============================================================================
 function initTheme() {
   const saved = localStorage.getItem(THEME_STORAGE);
@@ -240,9 +285,7 @@ function showToast(message, type = 'info') {
 function renderAvatar(program) {
   const logo = getLogoUrl(program.universityId);
   const initials = escapeHtml(getUniInitials(program.university));
-  if (!logo) {
-    return `<div class="uni-avatar">${initials}</div>`;
-  }
+  if (!logo) return `<div class="uni-avatar">${initials}</div>`;
   return `<div class="uni-avatar">
     <img src="${escapeHtml(logo)}" alt="${escapeHtml(program.university)}" loading="lazy"
       onerror="this.style.display='none';this.parentElement.textContent='${initials}'" />
@@ -271,6 +314,12 @@ function renderStarsInline(rating) {
   return html + '</span>';
 }
 
+function formatSignedNet(val) {
+  if (val === null || val === undefined) return '';
+  const sign = val > 0 ? '+' : '';
+  return `${sign}${formatNet(val)}`;
+}
+
 function getFilteredPrograms() {
   const q = ui.search.trim().toLocaleLowerCase('tr');
   let list = state.programs.map((p, idx) => ({ ...p, _order: idx + 1 }));
@@ -285,15 +334,11 @@ function getFilteredPrograms() {
   if (ui.filterRisk !== 'all') list = list.filter((p) => p.risk === ui.filterRisk);
   if (ui.filterScoreType !== 'all') list = list.filter((p) => p.scoreType === ui.filterScoreType);
 
-  if (ui.sortBy === 'rank-asc') {
-    list.sort((a, b) => (a.latestRank ?? 9e9) - (b.latestRank ?? 9e9));
-  } else if (ui.sortBy === 'rank-desc') {
-    list.sort((a, b) => (b.latestRank ?? -1) - (a.latestRank ?? -1));
-  } else if (ui.sortBy === 'rating-desc') {
-    list.sort((a, b) => (b.rating || 0) - (a.rating || 0));
-  } else if (ui.sortBy === 'trend-up') {
-    list.sort((a, b) => (b.rankTrendDelta ?? -9e9) - (a.rankTrendDelta ?? -9e9));
-  }
+  if (ui.sortBy === 'rank-asc') list.sort((a, b) => (a.latestRank ?? 9e9) - (b.latestRank ?? 9e9));
+  else if (ui.sortBy === 'rank-desc') list.sort((a, b) => (b.latestRank ?? -1) - (a.latestRank ?? -1));
+  else if (ui.sortBy === 'rating-desc') list.sort((a, b) => (b.rating || 0) - (a.rating || 0));
+  else if (ui.sortBy === 'trend-up') list.sort((a, b) => (b.rankTrendDelta ?? -9e9) - (a.rankTrendDelta ?? -9e9));
+
   return list;
 }
 
@@ -310,6 +355,8 @@ function addProgramToState(rawProgram, chosenRisk) {
       pros: prev.pros || [],
       cons: prev.cons || [],
       notes: prev.notes || '',
+      checklist: prev.checklist || {},
+      links: prev.links || [],
       addedAt: prev.addedAt || new Date().toISOString(),
     };
   } else {
@@ -320,6 +367,8 @@ function addProgramToState(rawProgram, chosenRisk) {
       pros: [],
       cons: [],
       notes: '',
+      checklist: { mufredat: false, kampusYurt: false, mezun: false, erasmus: false },
+      links: [],
       addedAt: new Date().toISOString(),
     });
   }
@@ -389,20 +438,20 @@ function removeProgram(code) {
 }
 
 // ============================================================================
-// Rendering: Main Shell & Apple Large Titles
+// Rendering: Main Shell & Tabs
 // ============================================================================
 function updateHeaderBadges() {
   const prefBadge = document.getElementById('prefCountBadge');
   const cmpBadge = document.getElementById('compareCountBadge');
+  const abroadBadge = document.getElementById('abroadCountBadge');
   if (prefBadge) prefBadge.textContent = String(state.programs.length);
   if (cmpBadge) cmpBadge.textContent = String(state.compareCodes.length);
+  if (abroadBadge) abroadBadge.textContent = String(state.abroadPrograms.length);
 
   const activeNavKey = ui.region === 'ABROAD' ? 'abroad' : ui.tab;
-
   document.querySelectorAll('#desktopNav .nav-pill-btn').forEach((btn) => {
     btn.classList.toggle('active', btn.dataset.tab === activeNavKey);
   });
-
   document.querySelectorAll('#mobileNav .mobile-nav-btn').forEach((btn) => {
     btn.classList.toggle('active', btn.dataset.mobileTab === activeNavKey);
   });
@@ -414,11 +463,8 @@ function renderAll() {
   if (!root) return;
 
   if (ui.region === 'ABROAD') {
-    root.innerHTML = renderAbroadPhase2();
-    document.getElementById('backToTrBtn')?.addEventListener('click', () => {
-      ui.region = 'TR';
-      renderAll();
-    });
+    root.innerHTML = renderAbroadView(state.abroadPrograms, ui.abroadFilter);
+    bindAbroadEvents();
     return;
   }
 
@@ -443,7 +489,6 @@ function renderKpiStrip() {
   const hayal = state.programs.filter((p) => p.risk === 'hayal').length;
   const hedef = state.programs.filter((p) => p.risk === 'hedef').length;
   const guvenli = state.programs.filter((p) => p.risk === 'guvenli').length;
-
   const pct = (n) => (total ? (n / total) * 100 : 0);
 
   const validRanks = state.programs.map((p) => p.latestRank).filter((r) => r && r > 0);
@@ -507,8 +552,13 @@ function renderPreferencesView() {
     <div>
       <div class="page-eyebrow">YKS 2027 · Türkiye</div>
       <h1 class="page-title">Tercihlerim</h1>
-      <p class="page-subtitle">Canlı YÖK Atlas verileri, 4 yıllık sıralama trendleri ve yerleşen netleri</p>
+      <p class="page-subtitle">Canlı YÖK Atlas arama, 2027 tahmini sıralama bandı ve net kıyaslaması</p>
     </div>
+    ${state.programs.length
+      ? `<div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="btn btn-sm" id="printReportBtn">${SF.print} PDF / Yazdır</button>
+        </div>`
+      : ''}
   </div>`;
 
   const kpiHtml = renderKpiStrip();
@@ -518,12 +568,12 @@ function renderPreferencesView() {
     <section class="apple-hero">
       <div class="apple-hero-content">
         <img src="icon.svg" alt="TercihAtlas" class="apple-hero-icon" />
-        <h2>Hayalindeki bölümü tek kodla ekle.</h2>
-        <p>YÖK Atlas'tan 9 haneli program kodunu veya sayfa linkini yapıştır; 4 yıllık taban sıralama, puan, kontenjan ve yerleşen netleri anında listene gelsin.</p>
+        <h2>Bölüm ara veya program kodunu yapıştır.</h2>
+        <p>"İTÜ Bilgisayar", "Ankara Devlet Tıp" gibi doğrudan YÖK Atlas'ta ara ya da 9 haneli program kodunu/linkini yapıştır.</p>
         <form class="hero-spotlight" id="heroSpotlightForm">
           <svg class="sf-icon" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--text-tertiary)" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7.5"/><path d="m20 20-3.8-3.8"/></svg>
-          <input id="heroCodeInput" type="text" placeholder="Program kodu veya YÖK Atlas linki yapıştır..." autocomplete="off" />
-          <button class="btn btn-primary btn-sm" type="submit">Getir</button>
+          <input id="heroCodeInput" type="text" placeholder="Örn: İTÜ Bilgisayar veya 102210277..." autocomplete="off" />
+          <button class="btn btn-primary btn-sm" type="submit">Ara / Getir</button>
         </form>
       </div>
       <div class="sample-tiles">
@@ -551,7 +601,7 @@ function renderPreferencesView() {
     <div class="toolbar-left">
       <div class="search-box">
         <svg class="sf-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7.5"/><path d="m20 20-3.8-3.8"/></svg>
-        <input id="searchInput" class="input" type="search" value="${escapeHtml(ui.search)}" placeholder="Ara..." />
+        <input id="searchInput" class="input" type="search" value="${escapeHtml(ui.search)}" placeholder="Listemde ara..." />
       </div>
 
       <div class="filter-pills">
@@ -612,12 +662,22 @@ function renderCardsView(programs) {
     ${programs
       .map((p) => {
         const net0 = p.nets?.[0];
+        const gap = compareWithMyNets(p, state.myNets);
+        const proj = compute2027Projection(p);
         const isCompared = state.compareCodes.includes(p.code);
         const riskMeta = RISK_META[p.risk] || RISK_META.hedef;
         const metaParts = [p.scoreType, p.city, p.language, p.scholarship, p.accreditation].filter(Boolean);
         const netSummary = net0
           ? `TYT ${formatNet(net0.tytTotal)} · ${p.scoreType === 'DİL' ? `YDT ${formatNet(net0.ydt)}` : `AYT ${formatNet(net0.aytTotal)}`} net`
           : 'Net verisi yok';
+
+        let netGapChip = '';
+        if (gap && (gap.tytDiff !== null || gap.aytDiff !== null)) {
+          const totalGap = (gap.tytDiff || 0) + (gap.aytDiff || 0);
+          netGapChip = `<span class="${totalGap >= 0 ? 'net-delta-pos' : 'net-delta-neg'} tabular" title="Kendi netlerinle son yerleşen farkı">Sen: ${formatSignedNet(totalGap)} net</span>`;
+        }
+
+        const checkDone = PROGRAM_CHECKLIST_ITEMS.filter((it) => p.checklist?.[it.key]).length;
 
         return `<article class="prog-card" data-code="${escapeHtml(p.code)}" draggable="${manualMode ? 'true' : 'false'}">
           <div class="card-top">
@@ -644,8 +704,8 @@ function renderCardsView(programs) {
                 <span class="metric-val tabular">${formatRank(p.latestRank)}</span>
               </div>
               <div class="metric-item">
-                <span class="metric-label">Taban Puan</span>
-                <span class="metric-val-sub tabular">${formatScore(p.latestScore)}</span>
+                <span class="metric-label">2027 Tahmini</span>
+                <span class="metric-val-sub tabular" style="color:var(--accent)">${proj ? `${formatRank(proj.low)}–${formatRank(proj.high)}` : '—'}</span>
               </div>
               <div class="metric-item">
                 <span class="metric-label">Kontenjan</span>
@@ -661,8 +721,10 @@ function renderCardsView(programs) {
           <div class="card-footer">
             <div class="card-footer-left">
               <span class="tabular" style="font-weight:500;">${escapeHtml(netSummary)}</span>
+              ${netGapChip}
               ${renderStarsInline(p.rating)}
-              ${p.notes ? `<span style="display:inline-flex;align-items:center;gap:4px;color:var(--text-tertiary);" title="Kişisel not var">${SF.note} Not</span>` : ''}
+              ${checkDone ? `<span style="font-size:11.5px;color:var(--green);font-weight:600;">${checkDone}/4</span>` : ''}
+              ${p.notes ? `<span style="display:inline-flex;align-items:center;gap:4px;color:var(--text-tertiary);" title="Kişisel not var">${SF.note}</span>` : ''}
             </div>
             <div class="card-footer-actions" data-stop-card="1">
               ${manualMode
@@ -690,8 +752,8 @@ function renderTableView(programs) {
           <th>Üniversite & Bölüm</th>
           <th>Detay</th>
           <th>Kategori</th>
-          <th>Sıralama</th>
-          <th>Taban Puan</th>
+          <th>Son Sıra</th>
+          <th>2027 Tahmini</th>
           <th>4 Yıl Trend</th>
           <th>Kontenjan</th>
           <th>Ort. Net</th>
@@ -702,6 +764,7 @@ function renderTableView(programs) {
         ${programs
           .map((p) => {
             const net0 = p.nets?.[0];
+            const proj = compute2027Projection(p);
             const isCompared = state.compareCodes.includes(p.code);
             const riskMeta = RISK_META[p.risk] || RISK_META.hedef;
             return `<tr data-code="${escapeHtml(p.code)}" draggable="${manualMode ? 'true' : 'false'}">
@@ -719,11 +782,9 @@ function renderTableView(programs) {
                 <div>${escapeHtml(p.city)} · ${escapeHtml(p.scoreType)}</div>
                 <div style="font-size:12px;color:var(--text-tertiary);">${escapeHtml(p.language)} · ${escapeHtml(p.scholarship)}</div>
               </td>
-              <td>
-                <span class="pill pill-risk-${escapeHtml(p.risk || 'hedef')}">${escapeHtml(riskMeta.label)}</span>
-              </td>
+              <td><span class="pill pill-risk-${escapeHtml(p.risk || 'hedef')}">${escapeHtml(riskMeta.label)}</span></td>
               <td class="tabular" style="font-weight:700;">${formatRank(p.latestRank)}</td>
-              <td class="tabular">${formatScore(p.latestScore)}</td>
+              <td class="tabular" style="color:var(--accent);font-weight:600;">${proj ? `${formatRank(proj.low)}–${formatRank(proj.high)}` : '—'}</td>
               <td>${renderSparkline(p.history, { width: 76, height: 24 })}</td>
               <td class="tabular">${p.quota ?? '—'}</td>
               <td class="tabular" style="font-size:12px;color:var(--text-secondary);">
@@ -754,8 +815,9 @@ function renderCompareView() {
 
   const headerHtml = `<div class="page-header">
     <div>
+      <div class="page-eyebrow">Yan Yana Karar Paneli</div>
       <h1 class="page-title">Karşılaştır</h1>
-      <p class="page-subtitle">En fazla 4 bölümü sıralama, netler ve kişisel notlarınla yan yana incele</p>
+      <p class="page-subtitle">En fazla 4 bölümü 2027 tahmini, net farkın ve kişisel notlarınla kıyasla</p>
     </div>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
       ${available.length && selected.length < 4
@@ -800,12 +862,21 @@ function renderCompareView() {
         `<span class="pill pill-risk-${escapeHtml(p.risk || 'hedef')}">${escapeHtml(RISK_META[p.risk]?.label || 'Hedef')}</span> <span class="pill">${escapeHtml(p.scoreType)}</span>`,
     },
     {
-      label: 'Taban Sıralama',
+      label: 'Son Taban Sıralama',
       render: (p) =>
         `<span class="tabular ${p.latestRank === bestRank ? 'compare-best' : ''}" style="font-family:var(--font-display);font-size:17px;font-weight:700;">${formatRank(p.latestRank)}</span>`,
     },
     {
-      label: 'Taban Puan',
+      label: '2027 Tahmini Bandı',
+      render: (p) => {
+        const proj = compute2027Projection(p);
+        return proj
+          ? `<div class="tabular" style="font-weight:650;color:var(--accent)">${formatRank(proj.low)} – ${formatRank(proj.high)}</div><div style="font-size:11.5px;color:var(--text-tertiary);">${escapeHtml(proj.summary)}</div>`
+          : '—';
+      },
+    },
+    {
+      label: 'Son Taban Puan',
       render: (p) => `<span class="tabular ${p.latestScore === bestScore ? 'compare-best' : ''}">${formatScore(p.latestScore)}</span>`,
     },
     {
@@ -814,12 +885,19 @@ function renderCompareView() {
     },
     { label: 'Kontenjan / Yerleşen', render: (p) => `<span class="tabular">${p.quota ?? '—'} / ${p.placed ?? '—'}</span>` },
     {
-      label: 'Ort. TYT / AYT Net',
+      label: 'Ort. Net & Senin Farkın',
       render: (p) => {
         const n = p.nets?.[0];
         if (!n) return '—';
+        const gap = compareWithMyNets(p, state.myNets);
         const second = p.scoreType === 'DİL' ? `YDT <strong>${formatNet(n.ydt)}</strong>` : `AYT <strong>${formatNet(n.aytTotal)}</strong>`;
-        return `<div class="tabular">TYT <strong>${formatNet(n.tytTotal)}</strong> · ${second}<div style="font-size:12px;color:var(--text-tertiary);margin-top:2px;">OBP ${formatScore(n.obp)} (${n.year})</div></div>`;
+        const gapHtml = gap
+          ? `<div style="margin-top:4px;display:flex;gap:5px;flex-wrap:wrap;">
+              ${gap.tytDiff !== null ? `<span class="${gap.tytDiff >= 0 ? 'net-delta-pos' : 'net-delta-neg'}">TYT ${formatSignedNet(gap.tytDiff)}</span>` : ''}
+              ${gap.aytDiff !== null ? `<span class="${gap.aytDiff >= 0 ? 'net-delta-pos' : 'net-delta-neg'}">${gap.isDil ? 'YDT' : 'AYT'} ${formatSignedNet(gap.aytDiff)}</span>` : ''}
+            </div>`
+          : '';
+        return `<div class="tabular">TYT <strong>${formatNet(n.tytTotal)}</strong> · ${second}<div style="font-size:12px;color:var(--text-tertiary);margin-top:2px;">OBP ${formatScore(n.obp)} (${n.year})</div>${gapHtml}</div>`;
       },
     },
     {
@@ -884,23 +962,28 @@ function renderCompareView() {
 }
 
 // ============================================================================
-// Analysis View
+// Analysis View (Includes ÖSYM Preference Health Check!)
 // ============================================================================
 function renderAnalysisView() {
   const headerHtml = `<div class="page-header">
     <div>
+      <div class="page-eyebrow">ÖSYM Strateji & Denge</div>
       <h1 class="page-title">Analiz</h1>
-      <p class="page-subtitle">Tercih listendeki sıralama dengesi, şehirler ve üniversite dağılımı</p>
+      <p class="page-subtitle">Tercih listesi sağlık skoru, ölü tercih kontrolü ve sıralama haritası</p>
     </div>
+    ${state.programs.length ? `<button class="btn btn-sm" id="analysisPrintBtn">${SF.print} PDF Raporu</button>` : ''}
   </div>`;
 
   if (!state.programs.length) {
     return `${headerHtml}<div class="empty-state">
       <h2>Analiz için program ekle</h2>
-      <p>Listene eklediğin bölümlerin sıralama haritası, risk dengesi ve şehir dağılımı burada otomatik oluşur.</p>
+      <p>Listene eklediğin bölümlerin ÖSYM sağlık kontrolü, sıralama haritası ve risk dengesi burada otomatik oluşur.</p>
       <button class="btn btn-primary" id="analysisAddBtn">${SF.plus} Program Ekle</button>
     </div>`;
   }
+
+  const health = analyzePreferenceHealth(state.programs, state.targetRank);
+  const scoreTone = health.score >= 80 ? 'green' : health.score >= 60 ? 'amber' : 'rose';
 
   const total = state.programs.length;
   const countBy = (fn) => {
@@ -934,6 +1017,29 @@ function renderAnalysisView() {
     </div>`;
 
   return `${headerHtml}<section class="analysis-grid">
+    <!-- ÖSYM Tercih Sağlık Kontrolü -->
+    <div class="panel panel-full">
+      <div class="health-panel-head">
+        <div>
+          <h3 class="panel-title" style="margin:0;">ÖSYM Tercih Listesi Sağlık Kontrolü</h3>
+          <div style="font-size:13px;color:var(--text-secondary);margin-top:3px;">Sıralama akışı, ölü tercih riski, güvenli bant genişliği ve kontenjan değişimleri otomatik denetlenir.</div>
+        </div>
+        <div class="health-score-badge tabular" style="background:var(--${scoreTone}-soft);color:var(--${scoreTone});">
+          ${health.score}<span style="font-size:13px;font-weight:500;opacity:0.8;">/ 100</span>
+        </div>
+      </div>
+      <div class="health-alerts">
+        ${health.alerts
+          .map(
+            (a) => `<div class="health-alert ${a.level}">
+              <strong>${escapeHtml(a.title)}</strong>
+              <span>${escapeHtml(a.detail)}</span>
+            </div>`,
+          )
+          .join('')}
+      </div>
+    </div>
+
     <div class="panel panel-full">
       <h3 class="panel-title">
         <span>Sıralama Haritası</span>
@@ -974,60 +1080,7 @@ function renderAnalysisView() {
 }
 
 // ============================================================================
-// Foreign Universities Phase 2 View
-// ============================================================================
-function renderAbroadPhase2() {
-  return `<section>
-    <div class="page-header">
-      <div>
-        <h1 class="page-title">Yurt Dışı</h1>
-        <p class="page-subtitle">Almanya ve İtalya başvuruları için hazır Faz 2 modülü</p>
-      </div>
-      <button class="btn btn-primary" id="backToTrBtn">Türkiye Listeme Dön</button>
-    </div>
-
-    <div class="panel">
-      <span class="pill pill-accent" style="margin-bottom:10px;">Mimari Hazır</span>
-      <h2 style="font-family:var(--font-display);margin:0;font-size:20px;font-weight:700;letter-spacing:-0.025em;">Tek Çatı Altında TR + Avrupa Başvuruları</h2>
-      <p style="margin:8px 0 0;color:var(--text-secondary);max-width:660px;font-size:14.5px;line-height:1.55;">
-        TercihAtlas veri modeli en baştan ülke bazlı tasarlandı. Türkiye (YKS 2027) listeni oluşturduktan sonra Almanya ve İtalya üniversitelerini de aynı arayüze ve bulut senkronizasyonuna ekleyeceğiz.
-      </p>
-    </div>
-
-    <div class="abroad-grid">
-      <div class="abroad-card">
-        <div style="display:flex;align-items:center;justify-content:space-between;">
-          <h3>Almanya · Lisans & Studienkolleg</h3>
-          <span class="pill">Faz 2</span>
-        </div>
-        <p>TUM, RWTH Aachen, KIT ve TU Berlin başvuruları için planlanan takip kartları:</p>
-        <div style="display:flex;flex-wrap:wrap;gap:6px;">
-          <span class="pill">NC & YKS Şartı</span>
-          <span class="pill">TestDaF / Goethe C1</span>
-          <span class="pill">Uni-Assist Takvimi</span>
-          <span class="pill">Dönem Harcı & Bloke Hesap</span>
-        </div>
-      </div>
-
-      <div class="abroad-card">
-        <div style="display:flex;align-items:center;justify-content:space-between;">
-          <h3>İtalya · İngilizce Lisans</h3>
-          <span class="pill">Faz 2</span>
-        </div>
-        <p>Politecnico di Milano, Politecnico di Torino, Bologna ve Sapienza için:</p>
-        <div style="display:flex;flex-wrap:wrap;gap:6px;">
-          <span class="pill">TOLC-I / TOLC-E / SAT</span>
-          <span class="pill">IELTS / TOEFL</span>
-          <span class="pill">DSU / ISEE Bursu</span>
-          <span class="pill">Universitaly Son Tarihleri</span>
-        </div>
-      </div>
-    </div>
-  </section>`;
-}
-
-// ============================================================================
-// Floating macOS Inspector Drawer / iOS Bottom Sheet
+// Large Centered Apple Sheet Window (Detail View)
 // ============================================================================
 function openDrawer(code) {
   ui.drawerCode = code;
@@ -1056,22 +1109,31 @@ function renderDrawer() {
   const activeNet = p.nets?.find((n) => n.year === ui.drawerNetYear) || p.nets?.[0] || null;
   const aytFields = getAytFieldsForScoreType(p.scoreType);
   const staff = p.academicStaff || {};
+  const proj = compute2027Projection(p);
+  const gap = compareWithMyNets(p, state.myNets);
   const metaLine = [p.scoreType, p.language, p.scholarship, p.tuition ? formatCurrency(p.tuition) : null].filter(Boolean).join(' · ');
 
-  const renderNetBars = (fields, valuesObj, fillColor = 'var(--accent)') =>
+  const renderNetBars = (fields, valuesObj, diffMap = {}, fillColor = 'var(--accent)') =>
     fields
       .map((f) => {
         const val = valuesObj?.[f.key];
         const pct = val !== null && val !== undefined ? Math.min(100, Math.max(0, (val / f.max) * 100)) : 0;
+        const diff = diffMap?.[f.key];
+        const diffPill =
+          diff !== undefined && diff !== null
+            ? `<span class="${diff >= 0 ? 'net-delta-pos' : 'net-delta-neg'} tabular" style="margin-left:5px;">${formatSignedNet(diff)}</span>`
+            : '';
         return `<div class="net-row">
           <div class="net-row-top">
             <span>${f.label}</span>
-            <span class="tabular"><strong>${formatNet(val)}</strong> / ${f.max}</span>
+            <span class="tabular"><strong>${formatNet(val)}</strong> / ${f.max}${diffPill}</span>
           </div>
           <div class="bar-track"><div class="bar-fill" style="width:${pct.toFixed(1)}%;background:${fillColor};"></div></div>
         </div>`;
       })
       .join('');
+
+  const checkDone = PROGRAM_CHECKLIST_ITEMS.filter((it) => p.checklist?.[it.key]).length;
 
   container.innerHTML = `
     <div class="drawer-header">
@@ -1105,6 +1167,10 @@ function renderDrawer() {
           <strong>${formatRank(p.latestRank)}</strong>
         </div>
         <div class="detail-metric-tile">
+          <span>2027 Tahmini Bandı</span>
+          <strong style="color:var(--accent);font-size:19px;">${proj ? `${formatRank(proj.low)} – ${formatRank(proj.high)}` : '—'}</strong>
+        </div>
+        <div class="detail-metric-tile">
           <span>${escapeHtml(p.latestYear || 2026)} Taban Puan</span>
           <strong>${formatScore(p.latestScore)}</strong>
         </div>
@@ -1112,15 +1178,11 @@ function renderDrawer() {
           <span>Kontenjan / Yerleşen</span>
           <strong>${p.quota ?? '—'} <span style="font-size:15px;font-weight:500;color:var(--text-tertiary)">/ ${p.placed ?? '—'}</span></strong>
         </div>
-        <div class="detail-metric-tile">
-          <span>Yıllık Değişim</span>
-          <div style="margin-top:4px;font-size:14px;">${renderTrendBadge(p)}</div>
-        </div>
       </section>
 
       <!-- Spacious 2-Column Apple Bento Layout -->
       <div class="detail-two-col">
-        <!-- Left Column: Charts, 4-Year Table & Net Averages -->
+        <!-- Left Column: Charts, 2027 Projection & Net Gap -->
         <div class="detail-col">
           <section class="drawer-section">
             <div class="section-heading">
@@ -1130,6 +1192,13 @@ function renderDrawer() {
                 <button class="seg-btn seg-btn-sm ${ui.drawerChartMode === 'score' ? 'active' : ''}" data-chart-mode="score">Puan</button>
               </div>
             </div>
+            ${proj
+              ? `<div class="proj-banner">
+                  <span><strong>2027 Öngörüsü:</strong> ${escapeHtml(proj.summary)}</span>
+                  <span class="tabular" style="font-weight:700;">${formatRank(proj.low)} – ${formatRank(proj.high)}</span>
+                </div>`
+              : ''}
+            ${proj?.quotaAlert ? `<div class="${proj.quotaAlert.type === 'warn' ? 'quota-alert-warn' : 'quota-alert-good'}">${escapeHtml(proj.quotaAlert.text)}</div>` : ''}
             ${renderDetailTrendChart(p.history, ui.drawerChartMode)}
             <table class="mini-table tabular">
               <thead>
@@ -1155,43 +1224,54 @@ function renderDrawer() {
           <section class="drawer-section">
             <div class="section-heading">
               <span>Son Yerleşen Ortalama Netleri</span>
-              ${p.nets && p.nets.length > 1
-                ? `<div class="segmented">
-                    ${p.nets
-                      .map(
-                        (n) => `<button class="seg-btn seg-btn-sm ${activeNet?.year === n.year ? 'active' : ''}" data-net-year="${n.year}">${n.year}</button>`,
-                      )
-                      .join('')}
-                  </div>`
-                : activeNet
-                  ? `<span>${activeNet.year}</span>`
+              <div style="display:flex;align-items:center;gap:6px;">
+                <button class="mini-action active" id="drawerEditMyNetsBtn" style="height:26px;font-size:11.5px;">Netlerimle Kıyasla</button>
+                ${p.nets && p.nets.length > 1
+                  ? `<div class="segmented">
+                      ${p.nets
+                        .map(
+                          (n) => `<button class="seg-btn seg-btn-sm ${activeNet?.year === n.year ? 'active' : ''}" data-net-year="${n.year}">${n.year}</button>`,
+                        )
+                        .join('')}
+                    </div>`
                   : ''}
+              </div>
             </div>
             ${activeNet
-              ? `<div style="font-size:12.5px;color:var(--text-secondary);padding:0 4px;">
+              ? `${gap
+                  ? `<div class="net-gap-banner tabular">
+                      <span><strong>Hedefe Mesafen (${gap.refYear} ortalamasına göre):</strong></span>
+                      <div style="display:flex;gap:6px;flex-wrap:wrap;">
+                        ${gap.tytDiff !== null ? `<span class="${gap.tytDiff >= 0 ? 'net-delta-pos' : 'net-delta-neg'}">TYT ${formatSignedNet(gap.tytDiff)} net</span>` : ''}
+                        ${gap.aytDiff !== null ? `<span class="${gap.aytDiff >= 0 ? 'net-delta-pos' : 'net-delta-neg'}">${gap.isDil ? 'YDT' : 'AYT'} ${formatSignedNet(gap.aytDiff)} net</span>` : ''}
+                        ${gap.obpDiff !== null ? `<span class="${gap.obpDiff >= 0 ? 'net-delta-pos' : 'net-delta-neg'}">OBP ${formatSignedNet(gap.obpDiff)}</span>` : ''}
+                      </div>
+                    </div>`
+                  : ''}
+                <div style="font-size:12.5px;color:var(--text-secondary);padding:0 4px;">
                   Yerleşen Ortalama OBP: <strong class="tabular" style="color:var(--text)">${formatScore(activeNet.obp)}</strong>
                 </div>
                 <div class="nets-grid">
                   <div class="net-box">
                     <div class="net-box-head"><span>TYT</span><span class="tabular" style="color:var(--accent)">${formatNet(activeNet.tytTotal)} / 120</span></div>
-                    ${renderNetBars(TYT_FIELDS, activeNet.tyt, 'var(--accent)')}
+                    ${renderNetBars(TYT_FIELDS, activeNet.tyt, gap?.tytDiffs, 'var(--accent)')}
                   </div>
                   <div class="net-box">
                     ${p.scoreType === 'DİL'
                       ? `<div class="net-box-head"><span>YDT</span><span class="tabular" style="color:var(--green)">${formatNet(activeNet.ydt)} / 80</span></div>
                          <div class="net-row">
-                           <div class="net-row-top"><span>YDT Neti</span><span class="tabular"><strong>${formatNet(activeNet.ydt)}</strong> / 80</span></div>
+                           <div class="net-row-top"><span>YDT Neti</span><span class="tabular"><strong>${formatNet(activeNet.ydt)}</strong> / 80${gap?.aytDiff !== null && gap?.aytDiff !== undefined ? `<span class="${gap.aytDiff >= 0 ? 'net-delta-pos' : 'net-delta-neg'}" style="margin-left:5px;">${formatSignedNet(gap.aytDiff)}</span>` : ''}</span></div>
                            <div class="bar-track"><div class="bar-fill" style="width:${Math.min(100, ((activeNet.ydt || 0) / 80) * 100)}%;background:var(--green-bright)"></div></div>
                          </div>`
                       : `<div class="net-box-head"><span>AYT (${escapeHtml(p.scoreType)})</span><span class="tabular" style="color:var(--green)">${formatNet(activeNet.aytTotal)} / 80</span></div>
-                         ${renderNetBars(aytFields, activeNet.ayt, 'var(--green-bright)')}`}
+                         ${renderNetBars(aytFields, activeNet.ayt, gap?.aytDiffs, 'var(--green-bright)')}`}
                   </div>
                 </div>`
               : `<div class="chart-empty">Bu program için YÖK Atlas net ortalaması henüz yayınlanmamış.</div>`}
           </section>
         </div>
 
-        <!-- Right Column: Personal Evaluation, Academic Staff & ÖSYM Conditions -->
+        <!-- Right Column: Personal Evaluation, Research Checklist & Links, Staff & Conditions -->
         <div class="detail-col">
           <section class="drawer-section">
             <div class="section-heading"><span>Kişisel Değerlendirmen</span></div>
@@ -1246,7 +1326,46 @@ function renderDrawer() {
 
             <div class="sheet-card">
               <label class="field-label" for="drawerNotesInput">Kişisel Notlar</label>
-              <textarea id="drawerNotesInput" class="textarea" rows="4" placeholder="Kampüs, yurt, ulaşım, Erasmus ve mezun yorumları...">${escapeHtml(p.notes || '')}</textarea>
+              <textarea id="drawerNotesInput" class="textarea" rows="3" placeholder="Kampüs, yurt, ulaşım, Erasmus ve mezun yorumları...">${escapeHtml(p.notes || '')}</textarea>
+            </div>
+          </section>
+
+          <!-- Research Checklist & Saved Resource Links -->
+          <section class="drawer-section">
+            <div class="section-heading">
+              <span>Araştırma Kontrolü & Kaynaklar</span>
+              <span class="tabular">${checkDone} / ${PROGRAM_CHECKLIST_ITEMS.length}</span>
+            </div>
+            <div class="sheet-card" style="display:flex;flex-direction:column;gap:12px;">
+              <div style="display:flex;flex-wrap:wrap;gap:6px;">
+                ${PROGRAM_CHECKLIST_ITEMS.map((it) => {
+                  const checked = Boolean(p.checklist?.[it.key]);
+                  return `<button class="check-chip ${checked ? 'checked' : ''}" data-prog-check="${it.key}">
+                    <span>${checked ? '✓' : '○'}</span> ${escapeHtml(it.label)}
+                  </button>`;
+                }).join('')}
+              </div>
+
+              <div style="border-top:0.5px solid var(--separator-subtle);padding-top:10px;">
+                <div style="font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:7px;">Kaydedilen Linkler (YouTube, Müfredat PDF, Forum)</div>
+                ${(p.links || []).length
+                  ? `<div class="link-list">
+                      ${p.links
+                        .map(
+                          (lk, idx) => `<div class="link-row">
+                            <a href="${escapeHtml(lk.url)}" target="_blank" rel="noopener">${escapeHtml(lk.title || lk.url)} ${SF.external}</a>
+                            <button class="btn-ghost" data-del-link="${idx}" title="Sil">${SF.close}</button>
+                          </div>`,
+                        )
+                        .join('')}
+                    </div>`
+                  : ''}
+                <form id="addLinkForm" style="display:flex;gap:6px;flex-wrap:wrap;">
+                  <input class="input" id="addLinkTitle" placeholder="Başlık (ör. Ders Programı)" style="flex:1;min-width:120px;padding:6px 10px;font-size:12.5px;border-radius:999px;" />
+                  <input class="input" id="addLinkUrl" type="url" placeholder="https://..." style="flex:1.4;min-width:140px;padding:6px 10px;font-size:12.5px;border-radius:999px;" />
+                  <button class="btn btn-sm btn-icon" type="submit" title="Link ekle">${SF.plus}</button>
+                </form>
+              </div>
             </div>
           </section>
 
@@ -1301,6 +1420,7 @@ function bindDrawerEvents(p) {
     renderDrawer();
   });
   document.getElementById('drawerDeleteBtn')?.addEventListener('click', () => removeProgram(p.code));
+  document.getElementById('drawerEditMyNetsBtn')?.addEventListener('click', openMyNetsModal);
 
   document.querySelectorAll('[data-chart-mode]').forEach((btn) => {
     btn.addEventListener('click', () => {
@@ -1335,10 +1455,39 @@ function bindDrawerEvents(p) {
     });
   });
 
+  document.querySelectorAll('[data-prog-check]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const key = btn.dataset.progCheck;
+      p.checklist = { ...(p.checklist || {}), [key]: !p.checklist?.[key] };
+      saveState();
+      renderAll();
+      renderDrawer();
+    });
+  });
+
+  document.getElementById('addLinkForm')?.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const titleEl = document.getElementById('addLinkTitle');
+    const urlEl = document.getElementById('addLinkUrl');
+    const rawUrl = urlEl.value.trim();
+    if (!rawUrl) return;
+    const url = /^https?:\/\//i.test(rawUrl) ? rawUrl : `https://${rawUrl}`;
+    p.links = [...(p.links || []), { title: titleEl.value.trim() || rawUrl, url }];
+    saveState();
+    renderDrawer();
+  });
+
+  document.querySelectorAll('[data-del-link]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      p.links.splice(Number(btn.dataset.delLink), 1);
+      saveState();
+      renderDrawer();
+    });
+  });
+
   document.getElementById('addProForm')?.addEventListener('submit', (e) => {
     e.preventDefault();
-    const input = document.getElementById('addProInput');
-    const val = input.value.trim();
+    const val = document.getElementById('addProInput').value.trim();
     if (!val) return;
     p.pros = [...(p.pros || []), val];
     saveState();
@@ -1348,8 +1497,7 @@ function bindDrawerEvents(p) {
 
   document.getElementById('addConForm')?.addEventListener('submit', (e) => {
     e.preventDefault();
-    const input = document.getElementById('addConInput');
-    const val = input.value.trim();
+    const val = document.getElementById('addConInput').value.trim();
     if (!val) return;
     p.cons = [...(p.cons || []), val];
     saveState();
@@ -1388,21 +1536,21 @@ function bindDrawerEvents(p) {
 }
 
 // ============================================================================
-// macOS Spotlight Style Add Program Modal
+// Spotlight Modal: Live YÖK Atlas Search + Direct Code / Link Paste
 // ============================================================================
-function openAddModal(prefillCode = '') {
+function openAddModal(prefillText = '') {
   const overlay = document.getElementById('addModalOverlay');
   const input = document.getElementById('programCodeInput');
   document.getElementById('addModalFeedback').innerHTML = '';
   document.getElementById('addModalPreview').innerHTML = '';
   if (input) {
-    input.value = prefillCode;
+    input.value = prefillText;
     autoSizeSpotlightInput(input);
     setTimeout(() => input.focus(), 60);
   }
   overlay.classList.add('open');
   overlay.setAttribute('aria-hidden', 'false');
-  if (prefillCode) handleFetchPreview();
+  if (prefillText) handleSpotlightAction();
 }
 
 function closeAddModal() {
@@ -1416,18 +1564,109 @@ function autoSizeSpotlightInput(el) {
   el.style.height = `${Math.min(92, Math.max(24, el.scrollHeight))}px`;
 }
 
-async function handleFetchPreview() {
+async function handleSpotlightAction() {
   const input = document.getElementById('programCodeInput');
+  const raw = input.value.trim();
+  const puanTuru = document.getElementById('spotPuanTuru')?.value || '';
+  const uniTuru = document.getElementById('spotUniTuru')?.value || '';
+  const maxRank = document.getElementById('spotMaxRank')?.value || '';
+
+  const codes = extractProgramCodes(raw);
+  if (codes.length > 0) {
+    return handleCodePreview(codes);
+  }
+  if (!raw && !puanTuru && !uniTuru && !maxRank) {
+    document.getElementById('addModalFeedback').innerHTML = `<div class="error-banner">Bir bölüm/üniversite adı yaz (ör. <strong>İTÜ Bilgisayar</strong>) veya 9 haneli program kodu/linki yapıştır.</div>`;
+    return;
+  }
+  return handleLiveSearch({ q: raw, puanTuru, uniTuru, maxRank });
+}
+
+async function handleLiveSearch(params) {
   const feedback = document.getElementById('addModalFeedback');
   const preview = document.getElementById('addModalPreview');
   const btn = document.getElementById('fetchProgramBtn');
 
-  const codes = extractProgramCodes(input.value);
-  if (!codes.length) {
-    feedback.innerHTML = `<div class="error-banner">Geçerli bir 9 haneli YÖK Atlas program kodu veya sayfa linki bulunamadı (ör. 102210277).</div>`;
-    preview.innerHTML = '';
-    return;
+  btn.disabled = true;
+  btn.textContent = 'Aranıyor...';
+  feedback.innerHTML = '';
+  preview.innerHTML = '';
+
+  try {
+    const res = await searchProgramsFromApi({ ...params, size: 20 });
+    const items = res.items || [];
+    if (!items.length) {
+      feedback.innerHTML = `<div class="error-banner">Eşleşen lisans programı bulunamadı. Daha genel bir ifade dene (ör. "İstanbul Bilgisayar" veya "Ankara Tıp").</div>`;
+      return;
+    }
+
+    preview.innerHTML = `
+      <div style="font-size:12px;color:var(--text-tertiary);display:flex;justify-content:space-between;padding:0 4px;">
+        <span>YÖK Atlas'ta <strong>${res.total}</strong> program bulundu (en yüksek ${items.length} sıralama)</span>
+        <span>Tek tıkla tam veriyle ekle</span>
+      </div>
+      <div class="search-results-list">
+        ${items
+          .map((item) => {
+            const exists = state.programs.some((p) => p.code === item.code);
+            return `<div class="search-result-row">
+              <div style="display:flex;align-items:center;gap:11px;min-width:0;flex:1;">
+                ${renderAvatar(item)}
+                <div style="min-width:0;">
+                  <div style="font-weight:650;font-size:13.5px;color:var(--text);">${escapeHtml(item.department)}</div>
+                  <div style="font-size:12px;color:var(--text-secondary);">${escapeHtml(item.university)}</div>
+                  <div style="font-size:11.5px;color:var(--text-tertiary);">${escapeHtml([item.scoreType, item.city, item.language, item.scholarship].filter(Boolean).join(' · '))} · <span class="mono">${escapeHtml(item.code)}</span></div>
+                </div>
+              </div>
+              <div style="display:flex;align-items:center;gap:10px;flex-shrink:0;">
+                <div style="text-align:right;" class="tabular">
+                  <div style="font-weight:700;font-size:14px;">${formatRank(item.latestRank)}</div>
+                  <div style="font-size:11px;color:var(--text-tertiary);">Kont: ${item.quota ?? '—'}</div>
+                </div>
+                <button class="btn btn-sm ${exists ? 'btn-soft' : 'btn-primary'}" data-search-add="${escapeHtml(item.code)}">
+                  ${exists ? `${SF.check} Eklendi` : `${SF.plus} Ekle`}
+                </button>
+              </div>
+            </div>`;
+          })
+          .join('')}
+      </div>
+    `;
+
+    preview.querySelectorAll('[data-search-add]').forEach((addBtn) => {
+      addBtn.addEventListener('click', async () => {
+        const code = addBtn.dataset.searchAdd;
+        addBtn.disabled = true;
+        addBtn.textContent = 'Çekiliyor...';
+        try {
+          const full = await fetchProgramFromApi(code);
+          addProgramToState(full);
+          ui.region = 'TR';
+          ui.tab = 'preferences';
+          renderAll();
+          addBtn.className = 'btn btn-sm btn-soft';
+          addBtn.innerHTML = `${SF.check} Eklendi`;
+          addBtn.disabled = false;
+          showToast(`${full.university} — ${full.department} eklendi.`, 'success');
+        } catch (err) {
+          addBtn.disabled = false;
+          addBtn.innerHTML = `${SF.plus} Ekle`;
+          showToast(err.message || 'Eklenemedi.', 'error');
+        }
+      });
+    });
+  } catch (err) {
+    feedback.innerHTML = `<div class="error-banner">${escapeHtml(err.message || 'Arama sırasında hata oluştu.')}</div>`;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Ara / Getir';
   }
+}
+
+async function handleCodePreview(codes) {
+  const feedback = document.getElementById('addModalFeedback');
+  const preview = document.getElementById('addModalPreview');
+  const btn = document.getElementById('fetchProgramBtn');
 
   btn.disabled = true;
   btn.textContent = codes.length > 1 ? `Çekiliyor (${codes.length})...` : 'Çekiliyor...';
@@ -1440,9 +1679,7 @@ async function handleFetchPreview() {
   for (const code of codes.slice(0, 12)) {
     try {
       const prog = await fetchProgramFromApi(code);
-      if (!prog.isLisans) {
-        errors.push(`${code}: Önlisans programı (yine de ekleyebilirsin).`);
-      }
+      if (!prog.isLisans) errors.push(`${code}: Önlisans programı (yine de ekleyebilirsin).`);
       found.push(prog);
     } catch (err) {
       errors.push(`${code}: ${err.message}`);
@@ -1450,7 +1687,7 @@ async function handleFetchPreview() {
   }
 
   btn.disabled = false;
-  btn.textContent = 'Getir';
+  btn.textContent = 'Ara / Getir';
 
   if (errors.length) {
     feedback.innerHTML = `<div class="error-banner">${errors.map(escapeHtml).join('<br/>')}</div>`;
@@ -1509,10 +1746,10 @@ async function handleFetchPreview() {
   } else {
     preview.innerHTML = `<div class="preview-card">
       <div style="font-family:var(--font-display);font-size:15px;font-weight:650;">${found.length} Program Bulundu</div>
-      <div style="display:flex;flex-direction:column;gap:7px;max-height:220px;overflow-y:auto;">
+      <div class="search-results-list" style="max-height:220px;">
         ${found
           .map(
-            (p) => `<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:9px 12px;background:var(--surface-secondary);border-radius:12px;font-size:13px;">
+            (p) => `<div class="search-result-row">
               <div><strong>${escapeHtml(p.department)}</strong><div style="color:var(--text-secondary);font-size:12px;">${escapeHtml(p.university)} · ${escapeHtml(p.city)}</div></div>
               <div class="tabular" style="font-weight:700;white-space:nowrap;">${formatRank(p.latestRank)}</div>
             </div>`,
@@ -1531,6 +1768,342 @@ async function handleFetchPreview() {
       showToast(`${found.length} program tercihlerine eklendi.`, 'success');
     });
   }
+}
+
+// ============================================================================
+// My Nets Modal ("Hedefe Kaç Net Kaldı?")
+// ============================================================================
+function openMyNetsModal() {
+  const overlay = document.getElementById('myNetsModalOverlay');
+  renderMyNetsModal();
+  overlay.classList.add('open');
+  overlay.setAttribute('aria-hidden', 'false');
+}
+
+function closeMyNetsModal() {
+  const overlay = document.getElementById('myNetsModalOverlay');
+  overlay.classList.remove('open');
+  overlay.setAttribute('aria-hidden', 'true');
+}
+
+function renderMyNetsModal() {
+  const body = document.getElementById('myNetsModalBody');
+  const mn = state.myNets || DEFAULT_MY_NETS;
+  const valAttr = (v) => (v !== null && v !== undefined && v !== '' ? `value="${escapeHtml(v)}"` : '');
+
+  const field = (id, label, max, val) => `
+    <div>
+      <label class="field-label" for="${id}">${label} <span style="color:var(--text-tertiary);font-weight:400;">/ ${max}</span></label>
+      <input id="${id}" class="input tabular" type="number" step="0.25" min="-10" max="${max}" ${valAttr(val)} placeholder="—" />
+    </div>`;
+
+  body.innerHTML = `
+    <div class="info-banner">
+      Güncel deneme netlerini kaydet; tüm bölümlerin kartlarında ve detay penceresinde <strong>son yerleşene göre kaç net önde/geride olduğunu</strong> otomatik gör.
+    </div>
+
+    <form id="myNetsForm" style="display:flex;flex-direction:column;gap:16px;">
+      <div>
+        <label class="field-label" for="mn_obp">Tahmini OBP Puanın (300 – 500)</label>
+        <input id="mn_obp" class="input tabular" type="number" step="0.5" min="250" max="500" ${valAttr(mn.obp)} placeholder="Örn: 475" style="max-width:200px;" />
+      </div>
+
+      <div>
+        <div class="section-heading" style="margin-bottom:8px;"><span>TYT Netlerin</span></div>
+        <div class="nets-input-grid">
+          ${field('mn_tyt_turkce', 'TYT Türkçe', 40, mn.tyt?.turkce)}
+          ${field('mn_tyt_matematik', 'TYT Matematik', 40, mn.tyt?.matematik)}
+          ${field('mn_tyt_sosyal', 'TYT Sosyal', 20, mn.tyt?.sosyal)}
+          ${field('mn_tyt_fen', 'TYT Fen', 20, mn.tyt?.fen)}
+        </div>
+      </div>
+
+      <div>
+        <div class="section-heading" style="margin-bottom:8px;"><span>AYT Sayısal & EA Netlerin</span></div>
+        <div class="nets-input-grid">
+          ${field('mn_ayt_matematik', 'AYT Matematik', 40, mn.ayt?.matematik)}
+          ${field('mn_ayt_fizik', 'AYT Fizik', 14, mn.ayt?.fizik)}
+          ${field('mn_ayt_kimya', 'AYT Kimya', 13, mn.ayt?.kimya)}
+          ${field('mn_ayt_biyoloji', 'AYT Biyoloji', 13, mn.ayt?.biyoloji)}
+          ${field('mn_ayt_edebiyat', 'AYT Edebiyat', 24, mn.ayt?.edebiyat)}
+          ${field('mn_ayt_tarih1', 'AYT Tarih-1', 10, mn.ayt?.tarih1)}
+          ${field('mn_ayt_cografya1', 'AYT Coğrafya-1', 6, mn.ayt?.cografya1)}
+          ${field('mn_ydt', 'YDT (Dil)', 80, mn.ydt)}
+        </div>
+      </div>
+
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding-top:4px;">
+        <button type="button" class="btn btn-ghost btn-sm" id="clearMyNetsBtn">Netleri Sıfırla</button>
+        <button type="submit" class="btn btn-primary">Kaydet & Kıyasla</button>
+      </div>
+    </form>
+  `;
+
+  const readNum = (id) => {
+    const raw = document.getElementById(id)?.value?.trim();
+    if (raw === '' || raw === undefined) return null;
+    const n = Number(raw);
+    return Number.isFinite(n) ? n : null;
+  };
+
+  document.getElementById('myNetsForm')?.addEventListener('submit', (e) => {
+    e.preventDefault();
+    state.myNets = {
+      obp: readNum('mn_obp'),
+      tyt: {
+        turkce: readNum('mn_tyt_turkce'),
+        matematik: readNum('mn_tyt_matematik'),
+        sosyal: readNum('mn_tyt_sosyal'),
+        fen: readNum('mn_tyt_fen'),
+      },
+      ayt: {
+        ...state.myNets.ayt,
+        matematik: readNum('mn_ayt_matematik'),
+        fizik: readNum('mn_ayt_fizik'),
+        kimya: readNum('mn_ayt_kimya'),
+        biyoloji: readNum('mn_ayt_biyoloji'),
+        edebiyat: readNum('mn_ayt_edebiyat'),
+        tarih1: readNum('mn_ayt_tarih1'),
+        cografya1: readNum('mn_ayt_cografya1'),
+      },
+      ydt: readNum('mn_ydt'),
+    };
+    saveState();
+    closeMyNetsModal();
+    renderAll();
+    if (ui.drawerCode) renderDrawer();
+    showToast('Netlerin kaydedildi — tüm bölümlerde farklar güncellendi.', 'success');
+  });
+
+  document.getElementById('clearMyNetsBtn')?.addEventListener('click', () => {
+    state.myNets = structuredClone(DEFAULT_MY_NETS);
+    saveState();
+    renderMyNetsModal();
+    renderAll();
+    if (ui.drawerCode) renderDrawer();
+    showToast('Netlerin temizlendi.');
+  });
+}
+
+// ============================================================================
+// Abroad Program Add / Edit Modal (Germany & Italy)
+// ============================================================================
+function openAbroadModal(editId = null) {
+  ui.editingAbroadId = editId;
+  const overlay = document.getElementById('abroadModalOverlay');
+  const titleEl = document.getElementById('abroadModalTitle');
+  const body = document.getElementById('abroadModalBody');
+  const existing = editId ? state.abroadPrograms.find((x) => x.id === editId) : null;
+
+  titleEl.textContent = existing ? 'Yurt Dışı Programını Düzenle' : 'Yurt Dışı Program Ekle';
+
+  const v = (val) => escapeHtml(val || '');
+  body.innerHTML = `
+    ${!existing
+      ? `<div>
+          <div style="font-size:12px;color:var(--text-tertiary);margin-bottom:6px;">Hızlı şablondan doldur:</div>
+          <div style="display:flex;flex-wrap:wrap;gap:6px;">
+            ${ABROAD_PRESETS.map((pr, idx) => `<button type="button" class="quick-chip" data-fill-preset="${idx}">${escapeHtml(pr.university.split(' ')[0])} · ${escapeHtml(pr.city)}</button>`).join('')}
+          </div>
+        </div>`
+      : ''}
+
+    <form id="abroadForm" style="display:flex;flex-direction:column;gap:12px;">
+      <div class="form-grid-2">
+        <div>
+          <label class="field-label" for="ab_country">Ülke</label>
+          <select id="ab_country" class="select">
+            <option value="DE" ${(!existing || existing.country === 'DE') ? 'selected' : ''}>Almanya (DE)</option>
+            <option value="IT" ${existing?.country === 'IT' ? 'selected' : ''}>İtalya (IT)</option>
+            <option value="OTHER" ${existing?.country === 'OTHER' ? 'selected' : ''}>Diğer Avrupa</option>
+          </select>
+        </div>
+        <div>
+          <label class="field-label" for="ab_city">Şehir</label>
+          <input id="ab_city" class="input" value="${v(existing?.city)}" placeholder="Münih, Milano, Torino..." required />
+        </div>
+      </div>
+
+      <div class="form-grid-2">
+        <div>
+          <label class="field-label" for="ab_uni">Üniversite</label>
+          <input id="ab_uni" class="input" value="${v(existing?.university)}" placeholder="Technical University of Munich" required />
+        </div>
+        <div>
+          <label class="field-label" for="ab_dept">Bölüm</label>
+          <input id="ab_dept" class="input" value="${v(existing?.department)}" placeholder="B.Sc. Computer Science" required />
+        </div>
+      </div>
+
+      <div class="form-grid-2">
+        <div>
+          <label class="field-label" for="ab_lang">Eğitim Dili</label>
+          <input id="ab_lang" class="input" value="${v(existing?.language || 'İngilizce')}" placeholder="İngilizce / Almanca" />
+        </div>
+        <div>
+          <label class="field-label" for="ab_lang_req">Dil Belgesi Şartı</label>
+          <input id="ab_lang_req" class="input" value="${v(existing?.languageReq)}" placeholder="IELTS 6.5 / TestDaF 4x4 / Goethe C1" />
+        </div>
+      </div>
+
+      <div class="form-grid-2">
+        <div>
+          <label class="field-label" for="ab_adm">Kabul / Sınav Şartı</label>
+          <input id="ab_adm" class="input" value="${v(existing?.admissionReq)}" placeholder="YKS yerleştirme / TOLC-I / SAT" />
+        </div>
+        <div>
+          <label class="field-label" for="ab_tuition">Harç & Burs Durumu</label>
+          <input id="ab_tuition" class="input" value="${v(existing?.tuition)}" placeholder="€320 / dönem veya DSU bursu" />
+        </div>
+      </div>
+
+      <div class="form-grid-2">
+        <div>
+          <label class="field-label" for="ab_portal">Başvuru Portalı</label>
+          <input id="ab_portal" class="input" value="${v(existing?.portal)}" placeholder="Uni-Assist / Universitaly" />
+        </div>
+        <div>
+          <label class="field-label" for="ab_deadline">Son Başvuru Tarihi</label>
+          <input id="ab_deadline" class="input" type="date" value="${v(existing?.deadline)}" />
+        </div>
+      </div>
+
+      <div>
+        <label class="field-label" for="ab_url">Resmi Program Linki</label>
+        <input id="ab_url" class="input" type="url" value="${v(existing?.url)}" placeholder="https://..." />
+      </div>
+
+      <div>
+        <label class="field-label" for="ab_notes">Notlar</label>
+        <textarea id="ab_notes" class="textarea" rows="2" placeholder="Yurt, bloke hesap, burs veya bölüm notların...">${v(existing?.notes)}</textarea>
+      </div>
+
+      <div style="display:flex;justify-content:flex-end;gap:8px;padding-top:4px;">
+        <button type="button" class="btn" id="cancelAbroadBtn">Vazgeç</button>
+        <button type="submit" class="btn btn-primary">${existing ? 'Değişiklikleri Kaydet' : 'Listeye Ekle'}</button>
+      </div>
+    </form>
+  `;
+
+  body.querySelectorAll('[data-fill-preset]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const pr = ABROAD_PRESETS[Number(btn.dataset.fillPreset)];
+      if (!pr) return;
+      document.getElementById('ab_country').value = pr.country;
+      document.getElementById('ab_city').value = pr.city;
+      document.getElementById('ab_uni').value = pr.university;
+      document.getElementById('ab_dept').value = pr.department;
+      document.getElementById('ab_lang').value = pr.language;
+      document.getElementById('ab_lang_req').value = pr.languageReq;
+      document.getElementById('ab_adm').value = pr.admissionReq;
+      document.getElementById('ab_tuition').value = pr.tuition;
+      document.getElementById('ab_portal').value = pr.portal;
+      document.getElementById('ab_deadline').value = pr.deadline;
+      document.getElementById('ab_url').value = pr.url;
+    });
+  });
+
+  document.getElementById('cancelAbroadBtn')?.addEventListener('click', closeAbroadModal);
+
+  document.getElementById('abroadForm')?.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const payload = {
+      id: existing?.id,
+      country: document.getElementById('ab_country').value,
+      city: document.getElementById('ab_city').value,
+      university: document.getElementById('ab_uni').value,
+      department: document.getElementById('ab_dept').value,
+      language: document.getElementById('ab_lang').value,
+      languageReq: document.getElementById('ab_lang_req').value,
+      admissionReq: document.getElementById('ab_adm').value,
+      tuition: document.getElementById('ab_tuition').value,
+      portal: document.getElementById('ab_portal').value,
+      deadline: document.getElementById('ab_deadline').value,
+      url: document.getElementById('ab_url').value,
+      notes: document.getElementById('ab_notes').value,
+      status: existing?.status || 'researching',
+      checklist: existing?.checklist,
+      createdAt: existing?.createdAt,
+    };
+    const rec = createAbroadRecord(payload);
+    if (existing) {
+      const idx = state.abroadPrograms.findIndex((x) => x.id === existing.id);
+      if (idx !== -1) state.abroadPrograms[idx] = rec;
+    } else {
+      state.abroadPrograms.push(rec);
+    }
+    saveState();
+    closeAbroadModal();
+    renderAll();
+    showToast(`${rec.university} kaydedildi.`, 'success');
+  });
+
+  overlay.classList.add('open');
+  overlay.setAttribute('aria-hidden', 'false');
+}
+
+function closeAbroadModal() {
+  const overlay = document.getElementById('abroadModalOverlay');
+  overlay.classList.remove('open');
+  overlay.setAttribute('aria-hidden', 'true');
+  ui.editingAbroadId = null;
+}
+
+function bindAbroadEvents() {
+  document.getElementById('openAbroadAddBtn')?.addEventListener('click', () => openAbroadModal());
+  document.getElementById('heroAbroadAddBtn')?.addEventListener('click', () => openAbroadModal());
+
+  document.querySelectorAll('[data-abroad-preset]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const pr = ABROAD_PRESETS[Number(btn.dataset.abroadPreset)];
+      if (!pr) return;
+      state.abroadPrograms.push(createAbroadRecord(pr));
+      saveState();
+      renderAll();
+      showToast(`${pr.university} yurt dışı listene eklendi.`, 'success');
+    });
+  });
+
+  document.querySelectorAll('[data-abroad-filter]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      ui.abroadFilter = btn.dataset.abroadFilter;
+      renderAll();
+    });
+  });
+
+  document.querySelectorAll('[data-abroad-status]').forEach((sel) => {
+    sel.addEventListener('change', () => {
+      const target = state.abroadPrograms.find((x) => x.id === sel.dataset.abroadStatus);
+      if (!target) return;
+      target.status = sel.value;
+      saveState();
+      renderAll();
+    });
+  });
+
+  document.querySelectorAll('[data-abroad-check]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const target = state.abroadPrograms.find((x) => x.id === btn.dataset.abroadCheck);
+      if (!target) return;
+      const k = btn.dataset.checkKey;
+      target.checklist = { ...(target.checklist || {}), [k]: !target.checklist?.[k] };
+      saveState();
+      renderAll();
+    });
+  });
+
+  document.querySelectorAll('[data-abroad-edit]').forEach((btn) => {
+    btn.addEventListener('click', () => openAbroadModal(btn.dataset.abroadEdit));
+  });
+
+  document.querySelectorAll('[data-abroad-del]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      state.abroadPrograms = state.abroadPrograms.filter((x) => x.id !== btn.dataset.abroadDel);
+      saveState();
+      renderAll();
+      showToast('Program yurt dışı listesinden silindi.');
+    });
+  });
 }
 
 // ============================================================================
@@ -1556,7 +2129,7 @@ function renderSyncModal() {
 
   body.innerHTML = `
     <div class="info-banner">
-      Aynı <strong>Kişisel Anahtarı</strong> Mac, iPhone ve iPad'de girdiğinde tercih listen, sıralaman ve notların otomatik eşitlenir.
+      Aynı <strong>Kişisel Anahtarı</strong> Mac, iPhone ve iPad'de girdiğinde tercih listen, netlerin, yurt dışı hedeflerin ve notların otomatik eşitlenir.
     </div>
 
     <div>
@@ -1593,8 +2166,9 @@ function renderSyncModal() {
     <hr style="border:none;border-top:0.5px solid var(--separator);margin:2px 0;" />
 
     <div>
-      <label class="field-label">Dışa Aktar & Yedekleme</label>
+      <label class="field-label">Dışa Aktar, PDF & Yedekleme</label>
       <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button class="btn btn-sm" id="exportPdfBtn">${SF.print} PDF Raporu</button>
         <button class="btn btn-sm" id="exportCsvBtn">Excel / CSV İndir</button>
         <button class="btn btn-sm" id="exportJsonBtn">JSON Yedek</button>
         <label class="btn btn-sm" style="cursor:pointer;">
@@ -1611,9 +2185,7 @@ function renderSyncModal() {
 
   document.getElementById('saveAndSyncBtn')?.addEventListener('click', async () => {
     const rawKey = document.getElementById('syncKeyInput').value.trim();
-    const rawApi = document.getElementById('apiBaseInput').value.trim();
-    setCustomApiBase(rawApi);
-
+    setCustomApiBase(document.getElementById('apiBaseInput').value.trim());
     if (rawKey.length < 6) {
       showToast('Kişisel anahtar en az 6 karakter olmalıdır.', 'error');
       return;
@@ -1648,6 +2220,10 @@ function renderSyncModal() {
     }
   });
 
+  document.getElementById('exportPdfBtn')?.addEventListener('click', () => {
+    if (!openPrintableReport(state)) showToast('Tarayıcı açılır pencereyi engelledi.', 'error');
+  });
+
   document.getElementById('exportCsvBtn')?.addEventListener('click', () => {
     if (!state.programs.length) return showToast('Dışa aktarılacak program yok.', 'error');
     exportProgramsToCsv(state.programs);
@@ -1671,7 +2247,7 @@ function renderSyncModal() {
     try {
       const parsed = JSON.parse(await file.text());
       if (!Array.isArray(parsed.programs)) throw new Error('Geçersiz yedek dosyası.');
-      state = { ...structuredClone(DEFAULT_STATE), ...parsed };
+      state = normalizeState(parsed);
       saveState();
       renderAll();
       closeSyncModal();
@@ -1686,14 +2262,16 @@ function renderSyncModal() {
 // Event Bindings
 // ============================================================================
 function bindPreferencesEvents() {
+  document.getElementById('printReportBtn')?.addEventListener('click', () => {
+    if (!openPrintableReport(state)) showToast('Tarayıcı açılır pencereyi engelledi.', 'error');
+  });
+
   document.getElementById('heroSpotlightForm')?.addEventListener('submit', (e) => {
     e.preventDefault();
     const val = document.getElementById('heroCodeInput')?.value.trim();
     openAddModal(val || '');
   });
 
-  document.getElementById('emptyAddBtn')?.addEventListener('click', () => openAddModal());
-  document.getElementById('emptySyncBtn')?.addEventListener('click', openSyncModal);
   document.getElementById('clearFiltersBtn')?.addEventListener('click', () => {
     ui.search = '';
     ui.filterRisk = 'all';
@@ -1836,6 +2414,9 @@ function bindCompareEvents() {
 
 function bindAnalysisEvents() {
   document.getElementById('analysisAddBtn')?.addEventListener('click', () => openAddModal());
+  document.getElementById('analysisPrintBtn')?.addEventListener('click', () => {
+    if (!openPrintableReport(state)) showToast('Tarayıcı açılır pencereyi engelledi.', 'error');
+  });
   document.querySelectorAll('[data-open-code]').forEach((btn) => {
     btn.addEventListener('click', () => openDrawer(btn.dataset.openCode));
   });
@@ -1890,14 +2471,14 @@ function init() {
   document.getElementById('addModalOverlay')?.addEventListener('click', (e) => {
     if (e.target.id === 'addModalOverlay') closeAddModal();
   });
-  document.getElementById('fetchProgramBtn')?.addEventListener('click', handleFetchPreview);
+  document.getElementById('fetchProgramBtn')?.addEventListener('click', handleSpotlightAction);
 
-  document.querySelectorAll('[data-sample-code]').forEach((btn) => {
+  document.querySelectorAll('[data-sample-query]').forEach((btn) => {
     btn.addEventListener('click', () => {
       const inp = document.getElementById('programCodeInput');
-      inp.value = btn.dataset.sampleCode;
+      inp.value = btn.dataset.sampleQuery;
       autoSizeSpotlightInput(inp);
-      handleFetchPreview();
+      handleSpotlightAction();
     });
   });
 
@@ -1906,8 +2487,19 @@ function init() {
   spotlightInput?.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      handleFetchPreview();
+      handleSpotlightAction();
     }
+  });
+
+  document.getElementById('openMyNetsBtn')?.addEventListener('click', openMyNetsModal);
+  document.getElementById('closeMyNetsBtn')?.addEventListener('click', closeMyNetsModal);
+  document.getElementById('myNetsModalOverlay')?.addEventListener('click', (e) => {
+    if (e.target.id === 'myNetsModalOverlay') closeMyNetsModal();
+  });
+
+  document.getElementById('closeAbroadModalBtn')?.addEventListener('click', closeAbroadModal);
+  document.getElementById('abroadModalOverlay')?.addEventListener('click', (e) => {
+    if (e.target.id === 'abroadModalOverlay') closeAbroadModal();
   });
 
   document.getElementById('openSyncBtn')?.addEventListener('click', openSyncModal);
@@ -1925,6 +2517,8 @@ function init() {
     } else if (e.key === 'Escape') {
       closeDrawer();
       closeAddModal();
+      closeMyNetsModal();
+      closeAbroadModal();
       closeSyncModal();
     }
   });

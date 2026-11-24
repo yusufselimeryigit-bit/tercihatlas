@@ -1,12 +1,14 @@
-const CACHE_NAME = 'tercihatlas-v4';
+const CACHE_NAME = 'tercihatlas-v5';
 const STATIC_ASSETS = [
   './',
   './index.html',
   './manifest.json',
   './icon.svg',
-  './css/styles.css?v=4',
-  './js/app.js?v=4',
+  './css/styles.css?v=5',
+  './js/app.js?v=5',
   './js/api.js',
+  './js/analytics.js',
+  './js/abroad.js',
   './js/charts.js',
   './js/utils.js',
 ];

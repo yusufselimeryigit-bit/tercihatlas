@@ -1568,6 +1568,217 @@ a { color: var(--accent); text-decoration: none; }
 .abroad-card p { margin: 0; font-size: 14px; color: var(--text-secondary); }
 
 /* ==========================================================================
+   Spotlight Live Search Results, Checklist Chips, Links, Health & Net Gap
+   ========================================================================== */
+.spotlight-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.search-results-list {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  max-height: 360px;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+.search-result-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 11px 13px;
+  border-radius: var(--r-md);
+  background: var(--surface);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03), 0 0 0 0.5px rgba(0, 0, 0, 0.05);
+  transition: transform 160ms var(--spring), background var(--ease);
+}
+
+.search-result-row:hover {
+  background: var(--surface-hover);
+}
+
+.check-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 11px;
+  border-radius: var(--r-pill);
+  font-size: 12px;
+  font-weight: 500;
+  background: var(--surface-secondary);
+  color: var(--text-secondary);
+  transition: all var(--ease);
+}
+
+.check-chip:hover { color: var(--text); background: var(--bg-grouped); }
+
+.check-chip.checked {
+  background: var(--green-soft);
+  color: var(--green);
+  font-weight: 600;
+}
+
+.link-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.link-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 11px;
+  border-radius: 10px;
+  background: var(--surface-secondary);
+  font-size: 12.5px;
+}
+
+.link-row a {
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.net-delta-pos {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 6px;
+  border-radius: var(--r-pill);
+  background: var(--green-soft);
+  color: var(--green);
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.net-delta-neg {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 6px;
+  border-radius: var(--r-pill);
+  background: var(--rose-soft);
+  color: var(--rose);
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.net-gap-banner {
+  padding: 10px 13px;
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03), 0 0 0 0.5px rgba(0, 0, 0, 0.04);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 12.5px;
+}
+
+.proj-banner {
+  padding: 11px 14px;
+  border-radius: var(--r-sm);
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 12.5px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.quota-alert-warn {
+  padding: 9px 12px;
+  border-radius: var(--r-sm);
+  background: var(--amber-soft);
+  color: var(--amber);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.quota-alert-good {
+  padding: 9px 12px;
+  border-radius: var(--r-sm);
+  background: var(--green-soft);
+  color: var(--green);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.health-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.health-score-badge {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  padding: 8px 16px;
+  border-radius: var(--r-pill);
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 700;
+}
+
+.health-alerts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.health-alert {
+  padding: 13px 15px;
+  border-radius: var(--r-md);
+  background: var(--surface-secondary);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.health-alert.danger { background: var(--rose-soft); }
+.health-alert.warn { background: var(--amber-soft); }
+.health-alert.good { background: var(--green-soft); }
+.health-alert.info { background: var(--accent-soft); }
+
+.health-alert strong { font-size: 13px; font-weight: 650; }
+.health-alert.danger strong { color: var(--rose); }
+.health-alert.warn strong { color: var(--amber); }
+.health-alert.good strong { color: var(--green); }
+.health-alert.info strong { color: var(--accent); }
+.health-alert span { font-size: 12.5px; color: var(--text-secondary); line-height: 1.45; }
+
+.form-grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.nets-input-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+@media (max-width: 760px) {
+  .health-alerts, .form-grid-2 { grid-template-columns: 1fr; }
+}
+
+/* ==========================================================================
    iPad & iPhone Responsive (iOS 26 Floating Tab Bar + Bottom Sheet)
    ========================================================================== */
 .mobile-nav { display: none; }

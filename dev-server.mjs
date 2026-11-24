@@ -11,7 +11,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
-import { fetchProgramFromYokAtlas, fetchUniversityLogo } from './worker/src/yokatlas.js';
+import { fetchProgramFromYokAtlas, fetchUniversityLogo, searchProgramsFromYokAtlas } from './worker/src/yokatlas.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT || 4173);
@@ -78,6 +78,18 @@ const server = http.createServer(async (req, res) => {
         kvConfigured: true,
         timestamp: new Date().toISOString(),
       });
+    }
+
+    if (pathname === '/api/search' && req.method === 'GET') {
+      const result = await searchProgramsFromYokAtlas({
+        q: url.searchParams.get('q') || '',
+        puanTuru: url.searchParams.get('puanTuru') || '',
+        universiteTuru: url.searchParams.get('uniTuru') || '',
+        minRank: url.searchParams.get('minRank') || '',
+        maxRank: url.searchParams.get('maxRank') || '',
+        size: url.searchParams.get('size') || '20',
+      });
+      return sendJson(req, res, 200, result);
     }
 
     const programMatch = pathname.match(/^\/api\/program\/(\d{7,11})$/);

@@ -285,3 +285,281 @@ export async function fetchUniversityLogo(uniId) {
   if (!res.ok) return null;
   return res;
 }
+
+// ============================================================================
+// Live YÖK Atlas Natural-Language & Filtered Search
+// ============================================================================
+function foldTurkish(str) {
+  return String(str || '')
+    .replace(/İ/g, 'i')
+    .replace(/I/g, 'i')
+    .replace(/ı/g, 'i')
+    .replace(/Ş/g, 's')
+    .replace(/ş/g, 's')
+    .replace(/Ğ/g, 'g')
+    .replace(/ğ/g, 'g')
+    .replace(/Ü/g, 'u')
+    .replace(/ü/g, 'u')
+    .replace(/Ö/g, 'o')
+    .replace(/ö/g, 'o')
+    .replace(/Ç/g, 'c')
+    .replace(/ç/g, 'c')
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+const UNI_ALIASES = {
+  itu: 'istanbul teknik',
+  odtu: 'orta dogu teknik',
+  ytu: 'yildiz teknik',
+  boun: 'bogazici',
+  gsu: 'galatasaray',
+  tobb: 'tobb ekonomi',
+  iyte: 'izmir yuksek teknoloji',
+  gtu: 'gebze teknik',
+  ktu: 'karadeniz teknik',
+  deu: 'dokuz eylul',
+  msgu: 'mimar sinan',
+  agu: 'abdullah gul',
+  medipol: 'medipol',
+  bilkent: 'ihsan dogramaci bilkent',
+  koc: 'koc universitesi',
+  sabanci: 'sabanci',
+  ozyegin: 'ozyegin',
+  bahcesehir: 'bahcesehir',
+  bau: 'bahcesehir',
+  hacettepe: 'hacettepe',
+};
+
+const STOP_WORDS = new Set([
+  'universitesi',
+  'uni',
+  'bolumu',
+  'bolum',
+  'programi',
+  'lisans',
+  'devlet',
+  'vakif',
+  'say',
+  'ea',
+  'soz',
+  'dil',
+  'ilk',
+  'ingilizce',
+  'turkce',
+  'burslu',
+  've',
+]);
+
+async function loadMetadata(kv) {
+  const cacheKey = 'yokatlas:meta:v1';
+  if (kv) {
+    const cached = await kv.get(cacheKey, { type: 'json' });
+    if (cached && cached.unis && cached.progs && cached.cities) return cached;
+  }
+
+  const [unis, progs, cities] = await Promise.all([
+    fetchJson(`${YOK_API}/tercih-kilavuz/universiteler`, { method: 'GET' }),
+    fetchJson(`${YOK_API}/tercih-kilavuz/universite-programlar`, { method: 'GET' }),
+    fetchJson(`${YOK_API}/tercih-kilavuz/universite-iller`, { method: 'GET' }),
+  ]);
+
+  const meta = {
+    unis: (Array.isArray(unis) ? unis : []).map((u) => ({
+      id: u.universiteId,
+      name: u.universiteAdi,
+      norm: foldTurkish(u.universiteAdi),
+    })),
+    progs: (Array.isArray(progs) ? progs : []).map((p) => ({
+      id: p.birimGrupId,
+      name: p.birimGrupAdi,
+      puanTuru: p.puanTuru,
+      norm: foldTurkish(p.birimGrupAdi),
+    })),
+    cities: (Array.isArray(cities) ? cities : []).map((c) => ({
+      id: c.ilKodu,
+      name: c.ilAdi,
+      norm: foldTurkish(c.ilAdi),
+    })),
+  };
+
+  if (kv) {
+    await kv.put(cacheKey, JSON.stringify(meta), { expirationTtl: 60 * 60 * 24 }).catch(() => {});
+  }
+  return meta;
+}
+
+export async function searchProgramsFromYokAtlas(params = {}, kv = null) {
+  const rawQuery = String(params.q || '').trim();
+  const normQuery = foldTurkish(rawQuery);
+  const tokens = normQuery ? normQuery.split(' ').filter(Boolean) : [];
+
+  const meta = await loadMetadata(kv);
+
+  let puanTuru = params.puanTuru ? String(params.puanTuru).toUpperCase() : null;
+  let universiteTuru = params.universiteTuru ? String(params.universiteTuru).toUpperCase() : null;
+  let minRank = toNumber(params.minRank);
+  let maxRank = toNumber(params.maxRank);
+
+  // Infer score type or university type from query tokens if not explicitly selected
+  if (!puanTuru) {
+    if (tokens.includes('say')) puanTuru = 'SAY';
+    else if (tokens.includes('ea')) puanTuru = 'EA';
+    else if (tokens.includes('soz')) puanTuru = 'SÖZ';
+    else if (tokens.includes('dil')) puanTuru = 'DİL';
+  }
+  if (!universiteTuru) {
+    if (tokens.includes('devlet')) universiteTuru = 'DEVLET';
+    else if (tokens.includes('vakif')) universiteTuru = 'VAKIF';
+  }
+
+  // Extract alias & university matches
+  const matchedUniIds = new Set();
+  const matchedCityIds = new Set();
+  const remainingTokens = [];
+
+  for (const tok of tokens) {
+    if (STOP_WORDS.has(tok)) continue;
+
+    // Check explicit alias first
+    if (UNI_ALIASES[tok]) {
+      const target = UNI_ALIASES[tok];
+      for (const u of meta.unis) {
+        if (u.norm.includes(target)) matchedUniIds.add(u.id);
+      }
+      continue;
+    }
+
+    // Check exact city match (only if >= 3 chars)
+    const cityHit = tok.length >= 3 ? meta.cities.find((c) => c.norm === tok) : null;
+    if (cityHit) {
+      // Wait: "istanbul", "ankara", "izmir" can also be part of uni name like "Ankara Üniversitesi"
+      // Treat as city filter if user also typed a department word or other tokens
+      if (tokens.length > 1) {
+        matchedCityIds.add(cityHit.id);
+        continue;
+      }
+    }
+
+    remainingTokens.push(tok);
+  }
+
+  // Try matching remaining tokens against universities AND department groups
+  const matchedProgIds = new Set();
+  const deptTokens = [];
+
+  for (const tok of remainingTokens) {
+    if (tok.length < 2) continue;
+    const uniHits = meta.unis.filter((u) => u.norm.split(' ').some((w) => w.startsWith(tok)));
+    const progHits = meta.progs.filter((p) => p.norm.includes(tok));
+
+    // If token uniquely/strongly hits universities and NOT programs (e.g. "bogazici", "marmara", "ege", "akdeniz")
+    if (uniHits.length > 0 && uniHits.length <= 12 && progHits.length === 0) {
+      for (const u of uniHits) matchedUniIds.add(u.id);
+    } else {
+      deptTokens.push(tok);
+    }
+  }
+
+  // Match department groups using all deptTokens together first, then fallback to any token
+  if (deptTokens.length > 0) {
+    let candidates = meta.progs.filter((p) => deptTokens.every((t) => p.norm.includes(t)));
+    // Expand common short forms like "muh" -> "muhendisligi", "pc"/"bilg" -> "bilgisayar", "eem" -> "elektrik"
+    if (!candidates.length) {
+      const expanded = deptTokens.map((t) => {
+        if (t === 'muh' || t === 'muhendislik') return 'muhendisligi';
+        if (t === 'eem') return 'elektrik-elektronik';
+        if (t === 'ceng' || t === 'cs') return 'bilgisayar';
+        if (t === 'ee') return 'elektrik';
+        if (t === 'ie') return 'endustri';
+        if (t === 'ai' || t === 'yz') return 'yapay zeka';
+        return t;
+      });
+      candidates = meta.progs.filter((p) => expanded.every((t) => p.norm.includes(t)));
+    }
+    if (!candidates.length) {
+      // Try matching as university name if no department matched (e.g. "yildiz", "dokuz eylul")
+      const uniCandidates = meta.unis.filter((u) => deptTokens.every((t) => u.norm.includes(t)));
+      for (const u of uniCandidates.slice(0, 10)) matchedUniIds.add(u.id);
+    } else {
+      // Prefer exact/shorter matches first, limit to 12 group IDs
+      candidates
+        .sort((a, b) => a.norm.length - b.norm.length)
+        .slice(0, 12)
+        .forEach((p) => matchedProgIds.add(p.id));
+    }
+  }
+
+  // If single city token was provided alone
+  if (!matchedUniIds.size && !matchedProgIds.size && !matchedCityIds.size && tokens.length === 1) {
+    const cityHit = meta.cities.find((c) => c.norm.startsWith(tokens[0]));
+    if (cityHit) matchedCityIds.add(cityHit.id);
+  }
+
+  const filters = {
+    puanTuru: puanTuru || null,
+    universiteId: matchedUniIds.size ? Array.from(matchedUniIds) : [],
+    birimGrupId: matchedProgIds.size ? Array.from(matchedProgIds) : [],
+    ilKodu: matchedCityIds.size ? Array.from(matchedCityIds) : [],
+    birimTuruId: 46, // LISANS only
+    universiteTuru: universiteTuru || null,
+    bursOraniId: null,
+    ogrenimTuruId: null,
+    kilavuzKodu: null,
+    minBasariSirasi: minRank,
+    maxBasariSirasi: maxRank,
+  };
+
+  if (
+    !filters.puanTuru &&
+    !filters.universiteId.length &&
+    !filters.birimGrupId.length &&
+    !filters.ilKodu.length &&
+    !filters.universiteTuru &&
+    !filters.minBasariSirasi &&
+    !filters.maxBasariSirasi
+  ) {
+    return { items: [], total: 0, query: rawQuery };
+  }
+
+  const size = Math.min(30, Math.max(5, Number(params.size) || 20));
+  const res = await fetchJson(`${YOK_API}/tercih-kilavuz/search`, {
+    method: 'POST',
+    body: JSON.stringify({
+      filters,
+      page: 0,
+      size,
+      sortBy: 'basariSirasi',
+      direction: 'ASC',
+    }),
+  });
+
+  const rows = Array.isArray(res?.content) ? res.content : [];
+  const items = rows.map((row) => {
+    const scholarship = deriveScholarship(row);
+    return {
+      code: String(row.kilavuzKodu),
+      universityId: row.universiteId || null,
+      university: cleanUniName(row.universiteAdi, row.ilAdi || row.uniIlAdi),
+      universityType: row.universiteTuru || '',
+      faculty: row.fymkAdi || '',
+      department: row.birimAdi || '',
+      city: row.ilAdi || row.uniIlAdi || '',
+      scoreType: row.puanTuru || '',
+      language: row.ogrenimDiliAdi || 'Türkçe',
+      scholarship,
+      latestYear: Number(row.yil) || 2026,
+      latestRank: toNumber(row.basariSirasi),
+      latestScore: toNumber(row.minPuan),
+      quota: toNumber(row.kontenjan),
+    };
+  });
+
+  return {
+    items,
+    total: Number(res?.totalElements) || items.length,
+    query: rawQuery,
+  };
+}
