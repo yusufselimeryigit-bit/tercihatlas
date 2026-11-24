@@ -1,0 +1,18 @@
+{
+  "name": "TercihAtlas — YKS 2027 Tercih & Üniversite Rehberi",
+  "short_name": "TercihAtlas",
+  "description": "YÖK Atlas program kodu veya linki ile üniversite bölümlerini takip et, 4 yıllık trendleri ve netleri karşılaştır.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0B0C0F",
+  "theme_color": "#0B0C0F",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

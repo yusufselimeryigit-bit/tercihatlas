@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="tr" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#090A0D" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="TercihAtlas" />
+  <title>TercihAtlas — YKS 2027 Tercih & Üniversite Rehberi</title>
+  <link rel="icon" type="image/svg+xml" href="icon.svg" />
+  <link rel="apple-touch-icon" href="icon.svg" />
+  <link rel="manifest" href="manifest.json" />
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+  <!-- Top Frosted Navigation Bar -->
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="brand-group">
+        <a href="#" class="brand" id="brandHome">
+          <img src="icon.svg" alt="TercihAtlas" class="brand-logo" />
+          <span>TercihAtlas</span>
+        </a>
+        <div class="country-switch" role="tablist" aria-label="Bölge seçimi">
+          <button class="country-btn active" data-region="TR">TR · YKS 2027</button>
+          <button class="country-btn" data-region="ABROAD">DE / IT · Yurt Dışı</button>
+        </div>
+      </div>
+
+      <nav class="nav-tabs" id="desktopNav" aria-label="Ana sekmeler">
+        <button class="nav-tab active" data-tab="preferences">
+          Tercihlerim
+          <span class="nav-badge tabular" id="prefCountBadge">0</span>
+        </button>
+        <button class="nav-tab" data-tab="compare">
+          Karşılaştır
+          <span class="nav-badge tabular" id="compareCountBadge">0</span>
+        </button>
+        <button class="nav-tab" data-tab="analysis">Analiz</button>
+      </nav>
+
+      <div class="topbar-actions">
+        <button class="sync-pill" id="openSyncBtn" title="Bulut Senkronizasyonu ve API Ayarları">
+          <span class="status-dot" id="syncDot"></span>
+          <span class="sync-label" id="syncLabel">Yerel Mod</span>
+        </button>
+        <button class="btn btn-icon" id="themeToggleBtn" title="Tema Değiştir (Açık / Koyu)" aria-label="Tema Değiştir">
+          <svg id="themeIcon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></svg>
+        </button>
+        <button class="btn btn-primary" id="openAddBtn">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+            <path d="M12 5v14M5 12h14"/>
+          </svg>
+          <span>Program Ekle</span>
+          <span class="kbd">⌘K</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Workspace -->
+  <main class="main" id="mainRoot">
+    <!-- Rendered dynamically by js/app.js -->
+  </main>
+
+  <!-- Mobile Bottom Navigation -->
+  <nav class="mobile-nav" id="mobileNav" aria-label="Mobil navigasyon">
+    <button class="mobile-nav-btn active" data-mobile-tab="preferences">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9h10M7 13h6"/></svg>
+      <span>Tercihler</span>
+    </button>
+    <button class="mobile-nav-btn" data-mobile-tab="compare">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M16 3h5v5M8 21H3v-5M21 3l-7 7M3 21l7-7"/></svg>
+      <span>Karşılaştır</span>
+    </button>
+    <button class="mobile-nav-btn" data-mobile-tab="analysis">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 6-7"/></svg>
+      <span>Analiz</span>
+    </button>
+    <button class="mobile-nav-btn" data-mobile-tab="abroad">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>
+      <span>Yurt Dışı</span>
+    </button>
+  </nav>
+
+  <!-- Slide-Over Detail Drawer -->
+  <div class="backdrop" id="drawerBackdrop"></div>
+  <aside class="drawer" id="detailDrawer" aria-hidden="true">
+    <div id="drawerContent" style="display:flex;flex-direction:column;height:100%;"></div>
+  </aside>
+
+  <!-- Add Program Modal -->
+  <div class="modal-overlay" id="addModalOverlay" aria-hidden="true">
+    <div class="modal" role="dialog" aria-labelledby="addModalTitle">
+      <div class="modal-header">
+        <h3 id="addModalTitle">YÖK Atlas'tan Program Ekle</h3>
+        <button class="btn btn-ghost btn-icon btn-sm" id="closeAddModalBtn" aria-label="Kapat">✕</button>
+      </div>
+      <div class="modal-body">
+        <div>
+          <label class="field-label" for="programCodeInput">Program Kodu veya YÖK Atlas Linki</label>
+          <textarea
+            id="programCodeInput"
+            class="textarea mono"
+            rows="2"
+            placeholder="Örn: 102210277 veya https://yokatlas.yok.gov.tr/detay/102210277&#10;Birden fazla kod için alt alta veya virgülle yapıştırabilirsiniz"
+          ></textarea>
+          <div class="field-hint">
+            YÖK Atlas sayfasındaki 9 haneli program kodunu veya sayfa linkini doğrudan yapıştırın.
+          </div>
+        </div>
+
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+          <button class="btn btn-primary" id="fetchProgramBtn">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+            <span>YÖK Atlas'tan Getir</span>
+          </button>
+          <div class="quick-code-chips" style="margin-top:0;">
+            <button class="quick-chip" type="button" data-sample-code="102210277">Boğaziçi Bilgisayar</button>
+            <button class="quick-chip" type="button" data-sample-code="108410336">ODTÜ Bilgisayar</button>
+            <button class="quick-chip" type="button" data-sample-code="203910275">Koç Ekonomi (EA)</button>
+          </div>
+        </div>
+
+        <div id="addModalFeedback"></div>
+        <div id="addModalPreview"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Cloud Sync & Settings Modal -->
+  <div class="modal-overlay" id="syncModalOverlay" aria-hidden="true">
+    <div class="modal" role="dialog" aria-labelledby="syncModalTitle">
+      <div class="modal-header">
+        <h3 id="syncModalTitle">Bulut Senkronizasyonu & Veri Yönetimi</h3>
+        <button class="btn btn-ghost btn-icon btn-sm" id="closeSyncModalBtn" aria-label="Kapat">✕</button>
+      </div>
+      <div class="modal-body" id="syncModalBody"></div>
+    </div>
+  </div>
+
+  <!-- Toast Container -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>

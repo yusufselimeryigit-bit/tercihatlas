@@ -1,0 +1,6 @@
+node_modules/
+worker/node_modules/
+worker/.wrangler/
+.local-sync/
+.DS_Store
+*.log
