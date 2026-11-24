@@ -11,10 +11,10 @@
   <link rel="icon" type="image/svg+xml" href="icon.svg" />
   <link rel="apple-touch-icon" href="icon.svg" />
   <link rel="manifest" href="manifest.json" />
-  <link rel="stylesheet" href="css/styles.css" />
+  <link rel="stylesheet" href="css/styles.css?v=3" />
 </head>
 <body>
-  <!-- Apple Liquid Glass Top Navigation -->
+  <!-- macOS Tahoe / iPadOS Floating Liquid Glass Navigation -->
   <header class="topbar">
     <div class="topbar-inner">
       <div class="brand-group">
@@ -22,33 +22,30 @@
           <img src="icon.svg" alt="TercihAtlas" class="brand-logo" />
           <span>TercihAtlas</span>
         </a>
-        <div class="segmented" id="regionSwitch" role="tablist" aria-label="Bölge seçimi">
-          <button class="seg-btn seg-btn-sm active" data-region="TR">Türkiye</button>
-          <button class="seg-btn seg-btn-sm" data-region="ABROAD">Yurt Dışı</button>
-        </div>
       </div>
 
-      <nav class="segmented" id="desktopNav" aria-label="Ana sekmeler">
-        <button class="seg-btn active" data-tab="preferences">
+      <nav class="nav-glass-capsule" id="desktopNav" aria-label="Ana sekmeler">
+        <button class="nav-pill-btn active" data-tab="preferences">
           <span>Tercihlerim</span>
           <span class="nav-count tabular" id="prefCountBadge">0</span>
         </button>
-        <button class="seg-btn" data-tab="compare">
+        <button class="nav-pill-btn" data-tab="compare">
           <span>Karşılaştır</span>
           <span class="nav-count tabular" id="compareCountBadge">0</span>
         </button>
-        <button class="seg-btn" data-tab="analysis">Analiz</button>
+        <button class="nav-pill-btn" data-tab="analysis">Analiz</button>
+        <button class="nav-pill-btn" data-tab="abroad">Yurt Dışı</button>
       </nav>
 
       <div class="topbar-actions">
-        <button class="sync-pill" id="openSyncBtn" title="Bulut Senkronizasyonu ve Yedekleme">
+        <button class="glass-icon-btn" id="openSyncBtn" title="Bulut Eşitleme ve Yedekleme">
           <span class="status-dot" id="syncDot"></span>
           <span class="sync-label" id="syncLabel">Yerel</span>
         </button>
-        <button class="btn btn-icon" id="themeToggleBtn" title="Tema Değiştir (Açık / Koyu)" aria-label="Tema Değiştir">
+        <button class="glass-icon-btn circle" id="themeToggleBtn" title="Açık / Koyu Mod" aria-label="Tema Değiştir">
           <svg id="themeIcon" class="sf-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"></svg>
         </button>
-        <button class="btn btn-primary" id="openAddBtn">
+        <button class="btn btn-primary btn-primary-nav" id="openAddBtn">
           <svg class="sf-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round">
             <path d="M12 5v14M5 12h14"/>
           </svg>
@@ -61,7 +58,7 @@
   <!-- Main Workspace -->
   <main class="main" id="mainRoot"></main>
 
-  <!-- iOS Frosted Bottom Tab Bar -->
+  <!-- iOS 26 Floating Liquid Glass Bottom Tab Capsule -->
   <nav class="mobile-nav" id="mobileNav" aria-label="Mobil navigasyon">
     <button class="mobile-nav-btn active" data-mobile-tab="preferences">
       <svg class="sf-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="3.5"/><path d="M7.5 9.5h9M7.5 14h5.5"/></svg>
@@ -81,7 +78,7 @@
     </button>
   </nav>
 
-  <!-- Floating macOS Inspector / iOS Bottom Sheet -->
+  <!-- Floating macOS Tahoe Inspector / iOS 26 Bottom Sheet -->
   <div class="backdrop" id="drawerBackdrop"></div>
   <aside class="drawer" id="detailDrawer" aria-hidden="true">
     <div class="sheet-grabber" aria-hidden="true"></div>
@@ -109,7 +106,7 @@
       </div>
       <div class="spotlight-body">
         <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
-          <span style="font-size:12px;color:var(--text-tertiary);">9 haneli kod, YÖK Atlas URL'si veya birden fazla kod yapıştırabilirsin</span>
+          <span style="font-size:12px;color:var(--text-tertiary);">9 haneli kod, YÖK Atlas URL'si veya birden fazla kod</span>
           <div class="quick-code-chips" style="margin-top:0;justify-content:flex-start;">
             <button class="quick-chip" type="button" data-sample-code="102210277">Boğaziçi Bilgisayar</button>
             <button class="quick-chip" type="button" data-sample-code="108410336">ODTÜ Bilgisayar</button>
@@ -126,7 +123,7 @@
   <div class="modal-overlay" id="syncModalOverlay" aria-hidden="true">
     <div class="modal" role="dialog" aria-labelledby="syncModalTitle">
       <div class="modal-header">
-        <h3 id="syncModalTitle">iCloud Tarzı Bulut Eşitleme</h3>
+        <h3 id="syncModalTitle">Bulut Eşitleme & Yedek</h3>
         <button class="btn btn-ghost btn-icon btn-sm" id="closeSyncModalBtn" aria-label="Kapat">
           <svg class="sf-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
         </button>
@@ -138,6 +135,6 @@
   <!-- Floating Pill Toasts -->
   <div class="toast-container" id="toastContainer"></div>
 
-  <script type="module" src="js/app.js"></script>
+  <script type="module" src="js/app.js?v=3"></script>
 </body>
 </html>

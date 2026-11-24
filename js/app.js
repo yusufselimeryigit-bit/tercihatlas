@@ -58,6 +58,11 @@ const SF = {
   trash: `<svg class="sf-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>`,
   arrowUpRight: `<svg class="sf-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17 17 7"/><path d="M8 7h9v9"/></svg>`,
   arrowDownRight: `<svg class="sf-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m7 7 10 10"/><path d="M17 8v9H8"/></svg>`,
+  chevronRight: `<svg class="sf-icon row-chevron" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>`,
+  listBadge: `<svg class="sf-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>`,
+  pieBadge: `<svg class="sf-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="8"/><path d="M12 4v8l5.5 3.5"/></svg>`,
+  chartBadge: `<svg class="sf-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 18 9 13l4 3 7-8"/></svg>`,
+  targetBadge: `<svg class="sf-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3.5"/></svg>`,
 };
 
 const ui = {
@@ -392,18 +397,14 @@ function updateHeaderBadges() {
   if (prefBadge) prefBadge.textContent = String(state.programs.length);
   if (cmpBadge) cmpBadge.textContent = String(state.compareCodes.length);
 
-  document.querySelectorAll('#regionSwitch .seg-btn').forEach((btn) => {
-    btn.classList.toggle('active', btn.dataset.region === ui.region);
-  });
+  const activeNavKey = ui.region === 'ABROAD' ? 'abroad' : ui.tab;
 
-  document.querySelectorAll('#desktopNav .seg-btn').forEach((btn) => {
-    btn.classList.toggle('active', ui.region === 'TR' && btn.dataset.tab === ui.tab);
+  document.querySelectorAll('#desktopNav .nav-pill-btn').forEach((btn) => {
+    btn.classList.toggle('active', btn.dataset.tab === activeNavKey);
   });
 
   document.querySelectorAll('#mobileNav .mobile-nav-btn').forEach((btn) => {
-    const mtab = btn.dataset.mobileTab;
-    const isActive = ui.region === 'ABROAD' ? mtab === 'abroad' : mtab === ui.tab;
-    btn.classList.toggle('active', isActive);
+    btn.classList.toggle('active', btn.dataset.mobileTab === activeNavKey);
   });
 }
 
@@ -451,13 +452,18 @@ function renderKpiStrip() {
 
   return `<section class="kpi-strip" aria-label="Tercih özeti">
     <div class="kpi-card">
-      <div class="kpi-label"><span>Tercih Sayısı</span><span style="color:var(--text-tertiary)">24 Hak</span></div>
+      <div class="kpi-head">
+        <span class="kpi-label"><span class="sf-badge sf-badge-blue">${SF.listBadge}</span>Tercih Sayısı</span>
+        <span style="font-size:11.5px;color:var(--text-tertiary);font-weight:500;">24 Hak</span>
+      </div>
       <div class="kpi-value tabular">${total}<span style="font-size:15px;font-weight:500;color:var(--text-tertiary)">/ 24</span></div>
       <div class="kpi-sub">${total === 0 ? 'İlk bölümünü ekle' : `${Math.max(0, 24 - total)} boş kontenjan kaldı`}</div>
     </div>
 
     <div class="kpi-card">
-      <div class="kpi-label"><span>Risk Dengesi</span></div>
+      <div class="kpi-head">
+        <span class="kpi-label"><span class="sf-badge sf-badge-rose">${SF.pieBadge}</span>Risk Dengesi</span>
+      </div>
       <div class="apple-stack-bar" aria-label="Risk dağılım çubuğu">
         ${hayal ? `<div class="apple-stack-seg" style="width:${pct(hayal)}%;background:var(--rose)"></div>` : ''}
         ${hedef ? `<div class="apple-stack-seg" style="width:${pct(hedef)}%;background:var(--accent)"></div>` : ''}
@@ -471,7 +477,9 @@ function renderKpiStrip() {
     </div>
 
     <div class="kpi-card">
-      <div class="kpi-label"><span>Sıralama Bandı</span></div>
+      <div class="kpi-head">
+        <span class="kpi-label"><span class="sf-badge sf-badge-green">${SF.chartBadge}</span>Sıralama Bandı</span>
+      </div>
       <div class="kpi-value tabular" style="font-size:21px;">
         ${bestRank ? `${formatRank(bestRank)} – ${formatRank(worstRank)}` : '—'}
       </div>
@@ -479,7 +487,9 @@ function renderKpiStrip() {
     </div>
 
     <div class="kpi-card">
-      <div class="kpi-label"><span>Hedef Sıralaman</span></div>
+      <div class="kpi-head">
+        <span class="kpi-label"><span class="sf-badge sf-badge-amber">${SF.targetBadge}</span>Hedef Sıralaman</span>
+      </div>
       <div>
         <input id="targetRankInput" class="target-rank-input tabular" type="number" min="1" max="3000000" step="500"
           value="${state.targetRank || ''}" placeholder="15000" aria-label="Hedef sıralama" />
@@ -495,8 +505,9 @@ function renderPreferencesView() {
 
   const headerHtml = `<div class="page-header">
     <div>
+      <div class="page-eyebrow">YKS 2027 · Türkiye</div>
       <h1 class="page-title">Tercihlerim</h1>
-      <p class="page-subtitle">YKS 2027 · Canlı YÖK Atlas verileri ve 4 yıllık sıralama trendleri</p>
+      <p class="page-subtitle">Canlı YÖK Atlas verileri, 4 yıllık sıralama trendleri ve yerleşen netleri</p>
     </div>
   </div>`;
 
@@ -504,26 +515,34 @@ function renderPreferencesView() {
 
   if (state.programs.length === 0) {
     return `${headerHtml}${kpiHtml}
-    <section class="empty-state">
-      <div class="empty-icon">
-        <svg class="sf-icon" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="12" cy="12" r="9"/><path d="m16.24 7.76-2.12 6.36-6.36 2.12 2.12-6.36 6.36-2.12z"/>
-        </svg>
+    <section class="apple-hero">
+      <div class="apple-hero-content">
+        <img src="icon.svg" alt="TercihAtlas" class="apple-hero-icon" />
+        <h2>Hayalindeki bölümü tek kodla ekle.</h2>
+        <p>YÖK Atlas'tan 9 haneli program kodunu veya sayfa linkini yapıştır; 4 yıllık taban sıralama, puan, kontenjan ve yerleşen netleri anında listene gelsin.</p>
+        <form class="hero-spotlight" id="heroSpotlightForm">
+          <svg class="sf-icon" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--text-tertiary)" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7.5"/><path d="m20 20-3.8-3.8"/></svg>
+          <input id="heroCodeInput" type="text" placeholder="Program kodu veya YÖK Atlas linki yapıştır..." autocomplete="off" />
+          <button class="btn btn-primary btn-sm" type="submit">Getir</button>
+        </form>
       </div>
-      <h2>Tercih Listen Hazır</h2>
-      <p>YÖK Atlas'tan ilgilendiğin bölümün 9 haneli <strong>program kodunu</strong> veya <strong>sayfa linkini</strong> yapıştır; 4 yıllık sıralama, puan, kontenjan ve yerleşen netleri anında gelsin.</p>
-      <div class="empty-actions">
-        <button class="btn btn-primary" id="emptyAddBtn">${SF.plus} İlk Programı Ekle</button>
-        <button class="btn" id="emptySyncBtn">Bulut Anahtarı Bağla</button>
-      </div>
-      <div class="quick-codes">
-        Canlı YÖK Atlas verisiyle hemen dene:
-        <div class="quick-code-chips">
-          <button class="quick-chip" data-quick-add="102210277">Boğaziçi Bilgisayar</button>
-          <button class="quick-chip" data-quick-add="108410336">ODTÜ Bilgisayar</button>
-          <button class="quick-chip" data-quick-add="203910399">Koç Elektrik-Elektronik</button>
-          <button class="quick-chip" data-quick-add="203910275">Koç Ekonomi</button>
-        </div>
+      <div class="sample-tiles">
+        <button class="sample-tile" data-quick-add="102210277">
+          <strong>Boğaziçi Üni.</strong>
+          <span>Bilgisayar Müh. · SAY</span>
+        </button>
+        <button class="sample-tile" data-quick-add="108410336">
+          <strong>ODTÜ</strong>
+          <span>Bilgisayar Müh. · SAY</span>
+        </button>
+        <button class="sample-tile" data-quick-add="203910399">
+          <strong>Koç Üni.</strong>
+          <span>Elektrik-Elektronik · Burslu</span>
+        </button>
+        <button class="sample-tile" data-quick-add="203910275">
+          <strong>Koç Üni.</strong>
+          <span>Ekonomi · EA · Burslu</span>
+        </button>
       </div>
     </section>`;
   }
@@ -711,9 +730,12 @@ function renderTableView(programs) {
                 ${net0 ? `TYT ${formatNet(net0.tytTotal)}<br/>${p.scoreType === 'DİL' ? `YDT ${formatNet(net0.ydt)}` : `AYT ${formatNet(net0.aytTotal)}`}` : '—'}
               </td>
               <td data-stop-card="1">
-                <button class="mini-action ${isCompared ? 'active' : ''}" data-toggle-compare="${escapeHtml(p.code)}">
-                  ${isCompared ? `${SF.check} Kıyas` : `${SF.plus} Kıyas`}
-                </button>
+                <div style="display:flex;align-items:center;justify-content:flex-end;gap:6px;">
+                  <button class="mini-action ${isCompared ? 'active' : ''}" data-toggle-compare="${escapeHtml(p.code)}">
+                    ${isCompared ? `${SF.check} Kıyas` : `${SF.plus} Kıyas`}
+                  </button>
+                  ${SF.chevronRight}
+                </div>
               </td>
             </tr>`;
           })
@@ -1181,7 +1203,7 @@ function renderDrawer() {
       <!-- Kişisel Değerlendirme -->
       <section class="drawer-section">
         <div class="section-heading"><span>Kişisel Değerlendirmen</span></div>
-        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
+        <div class="sheet-card" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
           <div class="segmented">
             ${['hayal', 'hedef', 'guvenli']
               .map(
@@ -1230,7 +1252,7 @@ function renderDrawer() {
           </div>
         </div>
 
-        <div>
+        <div class="sheet-card">
           <label class="field-label" for="drawerNotesInput">Kişisel Notlar</label>
           <textarea id="drawerNotesInput" class="textarea" placeholder="Kampüs, yurt, ulaşım, Erasmus ve mezun yorumları...">${escapeHtml(p.notes || '')}</textarea>
         </div>
@@ -1642,6 +1664,12 @@ function renderSyncModal() {
 // Event Bindings
 // ============================================================================
 function bindPreferencesEvents() {
+  document.getElementById('heroSpotlightForm')?.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const val = document.getElementById('heroCodeInput')?.value.trim();
+    openAddModal(val || '');
+  });
+
   document.getElementById('emptyAddBtn')?.addEventListener('click', () => openAddModal());
   document.getElementById('emptySyncBtn')?.addEventListener('click', openSyncModal);
   document.getElementById('clearFiltersBtn')?.addEventListener('click', () => {
@@ -1804,17 +1832,15 @@ function init() {
     renderAll();
   });
 
-  document.querySelectorAll('#regionSwitch .seg-btn').forEach((btn) => {
+  document.querySelectorAll('#desktopNav .nav-pill-btn').forEach((btn) => {
     btn.addEventListener('click', () => {
-      ui.region = btn.dataset.region;
-      renderAll();
-    });
-  });
-
-  document.querySelectorAll('#desktopNav .seg-btn').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      ui.region = 'TR';
-      ui.tab = btn.dataset.tab;
+      const target = btn.dataset.tab;
+      if (target === 'abroad') {
+        ui.region = 'ABROAD';
+      } else {
+        ui.region = 'TR';
+        ui.tab = target;
+      }
       renderAll();
     });
   });
