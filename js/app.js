@@ -1075,192 +1075,214 @@ function renderDrawer() {
 
   container.innerHTML = `
     <div class="drawer-header">
-      <div style="display:flex;gap:13px;align-items:flex-start;min-width:0;flex:1;">
-        ${renderAvatar(p)}
+      <div style="display:flex;gap:15px;align-items:center;min-width:0;flex:1;">
+        <div style="transform:scale(1.12);transform-origin:left center;">${renderAvatar(p)}</div>
         <div style="min-width:0;">
-          <div style="font-family:var(--font-display);font-size:17px;font-weight:700;letter-spacing:-0.025em;line-height:1.25;">${escapeHtml(p.department)}</div>
-          <div style="font-size:13.5px;font-weight:500;color:var(--text-secondary);margin-top:2px;">${escapeHtml(p.university)}</div>
-          <div style="font-size:12px;color:var(--text-tertiary);margin-top:2px;">${escapeHtml(p.faculty)} · ${escapeHtml(p.city)}${p.district ? ` / ${escapeHtml(p.district)}` : ''}</div>
-          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:9px;">
+          <div style="font-family:var(--font-display);font-size:21px;font-weight:700;letter-spacing:-0.03em;line-height:1.2;">${escapeHtml(p.department)}</div>
+          <div style="font-size:14.5px;font-weight:500;color:var(--text-secondary);margin-top:2px;">${escapeHtml(p.university)} · <span style="color:var(--text-tertiary)">${escapeHtml(p.faculty)}</span></div>
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:7px;">
             <button class="pill mono" id="copyCodeBtn" title="Program kodunu kopyala" style="cursor:pointer;">${escapeHtml(p.code)} ${SF.copy}</button>
-            <span style="font-size:12px;color:var(--text-secondary);font-weight:500;">${escapeHtml(metaLine)}</span>
+            <span style="font-size:12.5px;color:var(--text-secondary);font-weight:500;">${escapeHtml(p.city)}${p.district ? ` / ${escapeHtml(p.district)}` : ''} · ${escapeHtml(metaLine)}</span>
           </div>
         </div>
       </div>
-      <button class="btn btn-ghost btn-icon btn-sm" id="closeDrawerBtn" aria-label="Kapat">${SF.close}</button>
-    </div>
-
-    <div class="drawer-body">
-      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+      <div class="drawer-header-actions">
         <a class="btn btn-sm" href="${escapeHtml(p.yokAtlasUrl)}" target="_blank" rel="noopener">YÖK Atlas ${SF.external}</a>
         <button class="btn btn-sm" id="drawerRefreshBtn">${SF.refresh} Güncelle</button>
         <button class="btn btn-sm ${state.compareCodes.includes(p.code) ? 'btn-soft' : ''}" id="drawerCompareBtn">
-          ${state.compareCodes.includes(p.code) ? `${SF.check} Karşılaştırmada` : `${SF.plus} Karşılaştır`}
+          ${state.compareCodes.includes(p.code) ? `${SF.check} Kıyasla` : `${SF.plus} Kıyasla`}
         </button>
-        <button class="btn btn-sm btn-danger" id="drawerDeleteBtn" style="margin-left:auto;">${SF.trash} Çıkar</button>
+        <button class="btn btn-sm btn-danger" id="drawerDeleteBtn" title="Listeden çıkar">${SF.trash}</button>
+        <button class="btn btn-ghost btn-icon btn-sm" id="closeDrawerBtn" aria-label="Kapat">${SF.close}</button>
       </div>
+    </div>
 
-      <!-- 4-Year Trend Chart -->
-      <section class="drawer-section">
-        <div class="section-heading">
-          <span>4 Yıllık Trend</span>
-          <div class="segmented">
-            <button class="seg-btn seg-btn-sm ${ui.drawerChartMode === 'rank' ? 'active' : ''}" data-chart-mode="rank">Sıralama</button>
-            <button class="seg-btn seg-btn-sm ${ui.drawerChartMode === 'score' ? 'active' : ''}" data-chart-mode="score">Puan</button>
-          </div>
+    <div class="drawer-body">
+      <!-- Top Summary Metrics Strip -->
+      <section class="detail-hero-metrics tabular">
+        <div class="detail-metric-tile">
+          <span>${escapeHtml(p.latestYear || 2026)} Taban Sıralama</span>
+          <strong>${formatRank(p.latestRank)}</strong>
         </div>
-        ${renderDetailTrendChart(p.history, ui.drawerChartMode)}
-        <table class="mini-table tabular">
-          <thead>
-            <tr><th>Yıl</th><th>Taban Sıralama</th><th>Taban Puan</th><th>Kontenjan</th><th>Yerleşen</th></tr>
-          </thead>
-          <tbody>
-            ${[...(p.history || [])]
-              .reverse()
-              .map(
-                (h) => `<tr>
-                  <td style="font-weight:600;">${h.year}</td>
-                  <td style="font-weight:700;">${formatRank(h.rank)}</td>
-                  <td>${formatScore(h.minScore)}</td>
-                  <td>${h.quota ?? '—'}</td>
-                  <td>${h.placed ?? '—'}</td>
-                </tr>`,
-              )
-              .join('')}
-          </tbody>
-        </table>
+        <div class="detail-metric-tile">
+          <span>${escapeHtml(p.latestYear || 2026)} Taban Puan</span>
+          <strong>${formatScore(p.latestScore)}</strong>
+        </div>
+        <div class="detail-metric-tile">
+          <span>Kontenjan / Yerleşen</span>
+          <strong>${p.quota ?? '—'} <span style="font-size:15px;font-weight:500;color:var(--text-tertiary)">/ ${p.placed ?? '—'}</span></strong>
+        </div>
+        <div class="detail-metric-tile">
+          <span>Yıllık Değişim</span>
+          <div style="margin-top:4px;font-size:14px;">${renderTrendBadge(p)}</div>
+        </div>
       </section>
 
-      <!-- Son Yerleşen Net Ortalamaları -->
-      <section class="drawer-section">
-        <div class="section-heading">
-          <span>Son Yerleşen Ortalama Netleri</span>
-          ${p.nets && p.nets.length > 1
-            ? `<div class="segmented">
-                ${p.nets
+      <!-- Spacious 2-Column Apple Bento Layout -->
+      <div class="detail-two-col">
+        <!-- Left Column: Charts, 4-Year Table & Net Averages -->
+        <div class="detail-col">
+          <section class="drawer-section">
+            <div class="section-heading">
+              <span>4 Yıllık Taban Trendi</span>
+              <div class="segmented">
+                <button class="seg-btn seg-btn-sm ${ui.drawerChartMode === 'rank' ? 'active' : ''}" data-chart-mode="rank">Sıralama</button>
+                <button class="seg-btn seg-btn-sm ${ui.drawerChartMode === 'score' ? 'active' : ''}" data-chart-mode="score">Puan</button>
+              </div>
+            </div>
+            ${renderDetailTrendChart(p.history, ui.drawerChartMode)}
+            <table class="mini-table tabular">
+              <thead>
+                <tr><th>Yıl</th><th>Taban Sıralama</th><th>Taban Puan</th><th>Kontenjan</th><th>Yerleşen</th></tr>
+              </thead>
+              <tbody>
+                ${[...(p.history || [])]
+                  .reverse()
                   .map(
-                    (n) => `<button class="seg-btn seg-btn-sm ${activeNet?.year === n.year ? 'active' : ''}" data-net-year="${n.year}">${n.year}</button>`,
+                    (h) => `<tr>
+                      <td style="font-weight:600;">${h.year}</td>
+                      <td style="font-weight:700;">${formatRank(h.rank)}</td>
+                      <td>${formatScore(h.minScore)}</td>
+                      <td>${h.quota ?? '—'}</td>
+                      <td>${h.placed ?? '—'}</td>
+                    </tr>`,
                   )
                   .join('')}
-              </div>`
-            : activeNet
-              ? `<span>${activeNet.year}</span>`
-              : ''}
-        </div>
-        ${activeNet
-          ? `<div style="font-size:12.5px;color:var(--text-secondary);">
-              Yerleşen Ortalama OBP: <strong class="tabular" style="color:var(--text)">${formatScore(activeNet.obp)}</strong>
+              </tbody>
+            </table>
+          </section>
+
+          <section class="drawer-section">
+            <div class="section-heading">
+              <span>Son Yerleşen Ortalama Netleri</span>
+              ${p.nets && p.nets.length > 1
+                ? `<div class="segmented">
+                    ${p.nets
+                      .map(
+                        (n) => `<button class="seg-btn seg-btn-sm ${activeNet?.year === n.year ? 'active' : ''}" data-net-year="${n.year}">${n.year}</button>`,
+                      )
+                      .join('')}
+                  </div>`
+                : activeNet
+                  ? `<span>${activeNet.year}</span>`
+                  : ''}
             </div>
-            <div class="nets-grid">
-              <div class="net-box">
-                <div class="net-box-head"><span>TYT</span><span class="tabular" style="color:var(--accent)">${formatNet(activeNet.tytTotal)} / 120</span></div>
-                ${renderNetBars(TYT_FIELDS, activeNet.tyt, 'var(--accent)')}
-              </div>
-              <div class="net-box">
-                ${p.scoreType === 'DİL'
-                  ? `<div class="net-box-head"><span>YDT</span><span class="tabular" style="color:var(--green)">${formatNet(activeNet.ydt)} / 80</span></div>
-                     <div class="net-row">
-                       <div class="net-row-top"><span>YDT Neti</span><span class="tabular"><strong>${formatNet(activeNet.ydt)}</strong> / 80</span></div>
-                       <div class="bar-track"><div class="bar-fill" style="width:${Math.min(100, ((activeNet.ydt || 0) / 80) * 100)}%;background:var(--green-bright)"></div></div>
-                     </div>`
-                  : `<div class="net-box-head"><span>AYT (${escapeHtml(p.scoreType)})</span><span class="tabular" style="color:var(--green)">${formatNet(activeNet.aytTotal)} / 80</span></div>
-                     ${renderNetBars(aytFields, activeNet.ayt, 'var(--green-bright)')}`}
-              </div>
-            </div>`
-          : `<div class="chart-empty">Bu program için YÖK Atlas net ortalaması henüz yayınlanmamış.</div>`}
-      </section>
-
-      <!-- Akademik Kadro & Akreditasyon -->
-      <section class="drawer-section">
-        <div class="section-heading">
-          <span>Akademik Kadro</span>
-          ${p.accreditation ? `<span class="pill pill-accent">${escapeHtml(p.accreditation)}</span>` : ''}
+            ${activeNet
+              ? `<div style="font-size:12.5px;color:var(--text-secondary);padding:0 4px;">
+                  Yerleşen Ortalama OBP: <strong class="tabular" style="color:var(--text)">${formatScore(activeNet.obp)}</strong>
+                </div>
+                <div class="nets-grid">
+                  <div class="net-box">
+                    <div class="net-box-head"><span>TYT</span><span class="tabular" style="color:var(--accent)">${formatNet(activeNet.tytTotal)} / 120</span></div>
+                    ${renderNetBars(TYT_FIELDS, activeNet.tyt, 'var(--accent)')}
+                  </div>
+                  <div class="net-box">
+                    ${p.scoreType === 'DİL'
+                      ? `<div class="net-box-head"><span>YDT</span><span class="tabular" style="color:var(--green)">${formatNet(activeNet.ydt)} / 80</span></div>
+                         <div class="net-row">
+                           <div class="net-row-top"><span>YDT Neti</span><span class="tabular"><strong>${formatNet(activeNet.ydt)}</strong> / 80</span></div>
+                           <div class="bar-track"><div class="bar-fill" style="width:${Math.min(100, ((activeNet.ydt || 0) / 80) * 100)}%;background:var(--green-bright)"></div></div>
+                         </div>`
+                      : `<div class="net-box-head"><span>AYT (${escapeHtml(p.scoreType)})</span><span class="tabular" style="color:var(--green)">${formatNet(activeNet.aytTotal)} / 80</span></div>
+                         ${renderNetBars(aytFields, activeNet.ayt, 'var(--green-bright)')}`}
+                  </div>
+                </div>`
+              : `<div class="chart-empty">Bu program için YÖK Atlas net ortalaması henüz yayınlanmamış.</div>`}
+          </section>
         </div>
-        <div class="staff-grid tabular">
-          <div class="staff-tile"><strong>${staff.prof || 0}</strong><span>Prof. Dr.</span></div>
-          <div class="staff-tile"><strong>${staff.doc || 0}</strong><span>Doç. Dr.</span></div>
-          <div class="staff-tile"><strong>${staff.drOgr || 0}</strong><span>Dr. Öğr. Üyesi</span></div>
-          <div class="staff-tile"><strong>${staff.arGor || 0}</strong><span>Ar. Gör.</span></div>
-        </div>
-        ${p.accreditationDesc ? `<div style="font-size:12px;color:var(--text-secondary);">Akreditasyon: ${escapeHtml(p.accreditationDesc)}</div>` : ''}
-        ${p.minRankRequirement ? `<div style="font-size:12px;color:var(--amber);font-weight:500;">Baraj: ${escapeHtml(p.minRankRequirement)}</div>` : ''}
-      </section>
 
-      <!-- ÖSYM Özel Koşullar -->
-      ${p.conditions && p.conditions.length
-        ? `<section class="drawer-section">
-            <details class="cond-details">
-              <summary>ÖSYM Özel Koşul ve Açıklamaları (${p.conditions.length} madde)</summary>
-              <div class="cond-list">
-                ${p.conditions
-                  .map((c) => `<div class="cond-item"><strong class="mono">Bk. ${escapeHtml(c.code)}:</strong> ${escapeHtml(c.text)}</div>`)
+        <!-- Right Column: Personal Evaluation, Academic Staff & ÖSYM Conditions -->
+        <div class="detail-col">
+          <section class="drawer-section">
+            <div class="section-heading"><span>Kişisel Değerlendirmen</span></div>
+            <div class="sheet-card" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
+              <div class="segmented">
+                ${['hayal', 'hedef', 'guvenli']
+                  .map(
+                    (rk) => `<button class="seg-btn seg-btn-sm ${p.risk === rk ? 'active' : ''}" data-set-risk="${rk}">${RISK_META[rk].label}</button>`,
+                  )
                   .join('')}
               </div>
-            </details>
-          </section>`
-        : ''}
+              <div class="rating-stars" aria-label="Yıldız puanı">
+                ${[1, 2, 3, 4, 5]
+                  .map(
+                    (n) => `<button class="star-btn ${(p.rating || 0) >= n ? 'filled' : ''}" data-set-star="${n}" title="${n} yıldız">${(p.rating || 0) >= n ? SF.starFilled(18) : SF.starEmpty(18)}</button>`,
+                  )
+                  .join('')}
+              </div>
+            </div>
 
-      <!-- Kişisel Değerlendirme -->
-      <section class="drawer-section">
-        <div class="section-heading"><span>Kişisel Değerlendirmen</span></div>
-        <div class="sheet-card" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
-          <div class="segmented">
-            ${['hayal', 'hedef', 'guvenli']
-              .map(
-                (rk) => `<button class="seg-btn seg-btn-sm ${p.risk === rk ? 'active' : ''}" data-set-risk="${rk}">${RISK_META[rk].label}</button>`,
-              )
-              .join('')}
-          </div>
-          <div class="rating-stars" aria-label="Yıldız puanı">
-            ${[1, 2, 3, 4, 5]
-              .map(
-                (n) => `<button class="star-btn ${(p.rating || 0) >= n ? 'filled' : ''}" data-set-star="${n}" title="${n} yıldız">${(p.rating || 0) >= n ? SF.starFilled(18) : SF.starEmpty(18)}</button>`,
-              )
-              .join('')}
+            <div class="pros-cons-grid">
+              <div class="pc-box">
+                <div style="font-size:12.5px;font-weight:650;color:var(--green);">Artılar</div>
+                <ul class="pc-list">
+                  ${(p.pros || [])
+                    .map(
+                      (item, idx) => `<li class="pc-item"><span>${escapeHtml(item)}</span><button class="btn-ghost" data-del-pro="${idx}" title="Sil">${SF.close}</button></li>`,
+                    )
+                    .join('')}
+                </ul>
+                <form class="pc-add-row" id="addProForm">
+                  <input class="input" id="addProInput" placeholder="Artı ekle..." />
+                  <button class="btn btn-sm btn-icon" type="submit">${SF.plus}</button>
+                </form>
+              </div>
+
+              <div class="pc-box">
+                <div style="font-size:12.5px;font-weight:650;color:var(--rose);">Eksiler</div>
+                <ul class="pc-list">
+                  ${(p.cons || [])
+                    .map(
+                      (item, idx) => `<li class="pc-item"><span>${escapeHtml(item)}</span><button class="btn-ghost" data-del-con="${idx}" title="Sil">${SF.close}</button></li>`,
+                    )
+                    .join('')}
+                </ul>
+                <form class="pc-add-row" id="addConForm">
+                  <input class="input" id="addConInput" placeholder="Eksi ekle..." />
+                  <button class="btn btn-sm btn-icon" type="submit">${SF.plus}</button>
+                </form>
+              </div>
+            </div>
+
+            <div class="sheet-card">
+              <label class="field-label" for="drawerNotesInput">Kişisel Notlar</label>
+              <textarea id="drawerNotesInput" class="textarea" rows="4" placeholder="Kampüs, yurt, ulaşım, Erasmus ve mezun yorumları...">${escapeHtml(p.notes || '')}</textarea>
+            </div>
+          </section>
+
+          <section class="drawer-section">
+            <div class="section-heading">
+              <span>Akademik Kadro</span>
+              ${p.accreditation ? `<span class="pill pill-accent">${escapeHtml(p.accreditation)}</span>` : ''}
+            </div>
+            <div class="staff-grid tabular">
+              <div class="staff-tile"><strong>${staff.prof || 0}</strong><span>Prof. Dr.</span></div>
+              <div class="staff-tile"><strong>${staff.doc || 0}</strong><span>Doç. Dr.</span></div>
+              <div class="staff-tile"><strong>${staff.drOgr || 0}</strong><span>Dr. Öğr. Üyesi</span></div>
+              <div class="staff-tile"><strong>${staff.arGor || 0}</strong><span>Ar. Gör.</span></div>
+            </div>
+            ${p.accreditationDesc ? `<div style="font-size:12px;color:var(--text-secondary);padding:0 4px;">Akreditasyon: ${escapeHtml(p.accreditationDesc)}</div>` : ''}
+            ${p.minRankRequirement ? `<div style="font-size:12px;color:var(--amber);font-weight:500;padding:0 4px;">Baraj: ${escapeHtml(p.minRankRequirement)}</div>` : ''}
+          </section>
+
+          ${p.conditions && p.conditions.length
+            ? `<section class="drawer-section">
+                <details class="cond-details">
+                  <summary>ÖSYM Özel Koşul ve Açıklamaları (${p.conditions.length} madde)</summary>
+                  <div class="cond-list">
+                    ${p.conditions
+                      .map((c) => `<div class="cond-item"><strong class="mono">Bk. ${escapeHtml(c.code)}:</strong> ${escapeHtml(c.text)}</div>`)
+                      .join('')}
+                  </div>
+                </details>
+              </section>`
+            : ''}
+
+          <div style="font-size:11.5px;color:var(--text-tertiary);padding:0 4px;">
+            Son YÖK Atlas güncellemesi · ${formatRelativeTime(p.fetchedAt)}
           </div>
         </div>
-
-        <div class="pros-cons-grid">
-          <div class="pc-box">
-            <div style="font-size:12.5px;font-weight:650;color:var(--green);">Artılar</div>
-            <ul class="pc-list">
-              ${(p.pros || [])
-                .map(
-                  (item, idx) => `<li class="pc-item"><span>${escapeHtml(item)}</span><button class="btn-ghost" data-del-pro="${idx}" title="Sil">${SF.close}</button></li>`,
-                )
-                .join('')}
-            </ul>
-            <form class="pc-add-row" id="addProForm">
-              <input class="input" id="addProInput" placeholder="Artı ekle..." />
-              <button class="btn btn-sm btn-icon" type="submit">${SF.plus}</button>
-            </form>
-          </div>
-
-          <div class="pc-box">
-            <div style="font-size:12.5px;font-weight:650;color:var(--rose);">Eksiler</div>
-            <ul class="pc-list">
-              ${(p.cons || [])
-                .map(
-                  (item, idx) => `<li class="pc-item"><span>${escapeHtml(item)}</span><button class="btn-ghost" data-del-con="${idx}" title="Sil">${SF.close}</button></li>`,
-                )
-                .join('')}
-            </ul>
-            <form class="pc-add-row" id="addConForm">
-              <input class="input" id="addConInput" placeholder="Eksi ekle..." />
-              <button class="btn btn-sm btn-icon" type="submit">${SF.plus}</button>
-            </form>
-          </div>
-        </div>
-
-        <div class="sheet-card">
-          <label class="field-label" for="drawerNotesInput">Kişisel Notlar</label>
-          <textarea id="drawerNotesInput" class="textarea" placeholder="Kampüs, yurt, ulaşım, Erasmus ve mezun yorumları...">${escapeHtml(p.notes || '')}</textarea>
-        </div>
-
-        <div style="font-size:11.5px;color:var(--text-tertiary);">
-          Son YÖK Atlas güncellemesi · ${formatRelativeTime(p.fetchedAt)}
-        </div>
-      </section>
+      </div>
     </div>
   `;
 
