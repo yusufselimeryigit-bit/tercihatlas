@@ -1,4 +1,4 @@
-const CACHE_NAME = 'tercihatlas-v1';
+const CACHE_NAME = 'tercihatlas-v2';
 const STATIC_ASSETS = [
   './',
   './index.html',
@@ -29,7 +29,6 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
   if (event.request.method !== 'GET') return;
-  // Never cache API calls in SW — always network-first
   if (url.pathname.startsWith('/api/') || url.hostname.includes('workers.dev')) return;
 
   event.respondWith(
