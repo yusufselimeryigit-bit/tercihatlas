@@ -1,22 +1,22 @@
-const CACHE_NAME = 'tercihatlas-v14';
+const CACHE_NAME = 'tercihatlas-v15';
 const STATIC_ASSETS = [
   './',
   './index.html',
-  './manifest.json?v=14',
-  './favicon.png?v=14',
-  './apple-touch-icon.png?v=14',
+  './manifest.json?v=15',
+  './favicon.png?v=15',
+  './apple-touch-icon.png?v=15',
   './icon-192.png?v=13',
   './icon-512.png',
   './icon.svg',
-  './css/styles.css?v=14',
-  './js/app.js?v=14',
-  './js/api.js?v=14',
-  './js/analytics.js?v=14',
-  './js/abroad.js?v=14',
-  './js/charts.js?v=14',
-  './js/map-cost.js?v=14',
-  './js/pdf-parser.js?v=14',
-  './js/utils.js?v=14',
+  './css/styles.css?v=15',
+  './js/app.js?v=15',
+  './js/api.js?v=15',
+  './js/analytics.js?v=15',
+  './js/abroad.js?v=15',
+  './js/charts.js?v=15',
+  './js/map-cost.js?v=15',
+  './js/pdf-parser.js?v=15',
+  './js/utils.js?v=15',
 ];
 
 self.addEventListener('install', (event) => {

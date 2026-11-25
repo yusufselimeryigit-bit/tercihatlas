@@ -284,11 +284,10 @@ export function renderAbroadView(abroadPrograms, activeFilter = 'ALL', abroadToo
 
   const headerHtml = `<div class="page-header">
     <div>
-      <div class="page-eyebrow">Avrupa Lisans Başvuruları</div>
       <h1 class="page-title">Yurt Dışı</h1>
-      <p class="page-subtitle">Almanya & İtalya üniversiteleri, Bavarian Formula NC çevirici, bloke hesap ve DSU takibi</p>
+      <p class="page-status tabular">Almanya (${deCount}) · İtalya (${itCount}) · ${appliedCount} başvuru</p>
     </div>
-    <button class="btn btn-primary" id="openAbroadAddBtn">+ Yurt Dışı Program Ekle</button>
+    <button class="btn btn-primary" id="openAbroadAddBtn">+ Program Ekle</button>
   </div>`;
 
   const kpiHtml = `<section class="kpi-strip">

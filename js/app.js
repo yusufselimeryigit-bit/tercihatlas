@@ -13,7 +13,7 @@ import {
   getAytFieldsForScoreType,
   generateSyncKey,
   exportProgramsToCsv,
-} from './utils.js?v=14';
+} from './utils.js?v=15';
 import {
   getApiBase,
   setCustomApiBase,
@@ -27,7 +27,7 @@ import {
   pushCloudSync,
   createShareSnapshot,
   fetchShareSnapshot,
-} from './api.js?v=14';
+} from './api.js?v=15';
 import {
   renderSparkline,
   renderDetailTrendChart,
@@ -35,7 +35,7 @@ import {
   renderExamProgressionChart,
   renderMiniNetSparkline,
   renderAppleActivityRings,
-} from './charts.js?v=14';
+} from './charts.js?v=15';
 import {
   compute2027Projection,
   compareWithMyNets,
@@ -50,15 +50,15 @@ import {
   compareScenarios,
   computeExamPersonalRecords,
   diffProgramLists,
-} from './analytics.js?v=14';
-import { ABROAD_PRESETS, DEFAULT_ABROAD_TOOLS, createAbroadRecord, renderAbroadView } from './abroad.js?v=14';
-import { parseExamPdfFile } from './pdf-parser.js?v=14';
+} from './analytics.js?v=15';
+import { ABROAD_PRESETS, DEFAULT_ABROAD_TOOLS, createAbroadRecord, renderAbroadView } from './abroad.js?v=15';
+import { parseExamPdfFile } from './pdf-parser.js?v=15';
 import {
   renderTurkeyCampusMap,
   renderCostCalculator,
   renderTimelineView,
   downloadTimelineIcs,
-} from './map-cost.js?v=14';
+} from './map-cost.js?v=15';
 
 const STATE_KEY = 'tercihatlas_state_v1';
 const SYNC_KEY_STORAGE = 'tercihatlas_sync_key';
@@ -274,18 +274,24 @@ function switchScenario(id) {
   renderAll();
 }
 
-function createScenario({ duplicateCurrent = false } = {}) {
+async function createScenario({ duplicateCurrent = false } = {}) {
   const defaultName = duplicateCurrent
     ? `${getActiveScenario().name} (Kopya)`
     : `Plan ${String.fromCharCode(65 + (state.scenarios.length % 26))}`;
-  const name = window.prompt('Yeni senaryo adı:', defaultName);
-  if (!name || !name.trim()) return;
+  const res = await applePrompt({
+    title: duplicateCurrent ? 'Planı Kopyala' : 'Yeni Senaryo Oluştur',
+    message: 'Tercih senaryona kısa bir ad ver (ör. İstanbul Ağırlıklı).',
+    fields: [{ id: 'name', label: 'Senaryo Adı', value: defaultName, placeholder: 'Plan B' }],
+    confirmLabel: 'Oluştur',
+  });
+  const name = res?.name?.trim();
+  if (!name) return;
   syncActiveScenarioPointers();
   const cur = getActiveScenario();
   const id = `sc-${Date.now()}`;
   const next = {
     id,
-    name: name.trim(),
+    name,
     targetRank: cur.targetRank,
     programs: duplicateCurrent ? structuredClone(cur.programs) : [],
     compareCodes: duplicateCurrent ? [...cur.compareCodes] : [],
@@ -295,22 +301,34 @@ function createScenario({ duplicateCurrent = false } = {}) {
   showToast(`"${next.name}" senaryosu oluşturuldu.`, 'success');
 }
 
-function renameActiveScenario() {
+async function renameActiveScenario() {
   const cur = getActiveScenario();
-  const name = window.prompt('Senaryo adını güncelle:', cur.name);
-  if (!name || !name.trim()) return;
-  cur.name = name.trim();
+  const res = await applePrompt({
+    title: 'Senaryoyu Yeniden Adlandır',
+    fields: [{ id: 'name', label: 'Yeni Ad', value: cur.name, placeholder: 'Plan A' }],
+    confirmLabel: 'Kaydet',
+  });
+  const name = res?.name?.trim();
+  if (!name) return;
+  cur.name = name;
   saveState();
   renderAll();
+  showToast('Senaryo adı güncellendi.', 'success');
 }
 
-function deleteActiveScenario() {
+async function deleteActiveScenario() {
   if (state.scenarios.length <= 1) {
     showToast('En az bir senaryo kalmalıdır.', 'error');
     return;
   }
   const cur = getActiveScenario();
-  if (!window.confirm(`"${cur.name}" senaryosunu silmek istediğine emin misin?`)) return;
+  const ok = await appleConfirm({
+    title: `"${cur.name}" silinsin mi?`,
+    message: `Bu senaryodaki ${cur.programs.length} tercih kalıcı olarak kaldırılır.`,
+    confirmLabel: 'Sil',
+    destructive: true,
+  });
+  if (!ok) return;
   state.scenarios = state.scenarios.filter((s) => s.id !== cur.id);
   switchScenario(state.scenarios[0].id);
   showToast(`"${cur.name}" silindi.`);
@@ -507,15 +525,107 @@ function showToast(message, type = 'info') {
   if (!container) return;
   const el = document.createElement('div');
   el.className = 'toast';
-  const dotColor = type === 'error' ? 'var(--rose)' : type === 'success' ? 'var(--green-bright)' : 'var(--accent)';
-  el.innerHTML = `<span class="dot" style="background:${dotColor}"></span><span>${escapeHtml(message)}</span>`;
+  const badgeBg = type === 'error' ? 'var(--rose)' : type === 'success' ? 'var(--green-bright)' : 'var(--accent)';
+  const badgeIcon =
+    type === 'error'
+      ? '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M12 7v6M12 17h.01"/></svg>'
+      : type === 'success'
+        ? '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>'
+        : '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M12 16v-4M12 8h.01"/></svg>';
+  el.innerHTML = `<span class="toast-badge" style="background:${badgeBg}">${badgeIcon}</span><span>${escapeHtml(message)}</span>`;
   container.appendChild(el);
   setTimeout(() => {
     el.style.opacity = '0';
-    el.style.transform = 'translateY(6px)';
+    el.style.transform = 'translateY(6px) scale(0.96)';
     el.style.transition = 'opacity 200ms ease, transform 200ms ease';
     setTimeout(() => el.remove(), 220);
   }, 3000);
+}
+
+// ============================================================================
+// Native iOS / macOS Liquid Glass Alert & Prompt Dialogs
+// ============================================================================
+let activeDialogClose = null;
+
+function openAppleDialog({ title, message = '', fields = [], confirmLabel = 'Tamam', cancelLabel = 'Vazgeç', destructive = false }) {
+  return new Promise((resolve) => {
+    const overlay = document.getElementById('appleDialogOverlay');
+    const box = document.getElementById('appleDialogBox');
+    if (!overlay || !box) {
+      resolve(null);
+      return;
+    }
+
+    const close = (result) => {
+      overlay.classList.remove('open');
+      overlay.setAttribute('aria-hidden', 'true');
+      activeDialogClose = null;
+      resolve(result);
+    };
+    activeDialogClose = () => close(null);
+
+    box.innerHTML = `
+      <form id="appleDialogForm">
+        <div class="apple-dialog-body">
+          <h3 class="apple-dialog-title">${escapeHtml(title)}</h3>
+          ${message ? `<p class="apple-dialog-msg">${escapeHtml(message)}</p>` : ''}
+          ${fields.length
+            ? `<div class="apple-dialog-fields">
+                ${fields
+                  .map(
+                    (f) => `<div>
+                      ${f.label ? `<label class="field-label" for="ad_${escapeHtml(f.id)}" style="margin-bottom:4px;">${escapeHtml(f.label)}</label>` : ''}
+                      <input id="ad_${escapeHtml(f.id)}" class="input" type="text" value="${escapeHtml(f.value || '')}" placeholder="${escapeHtml(f.placeholder || '')}" autocomplete="off" />
+                    </div>`,
+                  )
+                  .join('')}
+              </div>`
+            : ''}
+        </div>
+        <div class="apple-dialog-actions">
+          <button type="button" class="apple-dialog-btn" id="appleDialogCancel">${escapeHtml(cancelLabel)}</button>
+          <button type="submit" class="apple-dialog-btn ${destructive ? 'destructive' : 'primary'}">${escapeHtml(confirmLabel)}</button>
+        </div>
+      </form>
+    `;
+
+    overlay.classList.add('open');
+    overlay.setAttribute('aria-hidden', 'false');
+
+    if (fields.length) {
+      const firstInput = document.getElementById(`ad_${fields[0].id}`);
+      setTimeout(() => {
+        firstInput?.focus();
+        firstInput?.select?.();
+      }, 40);
+    }
+
+    document.getElementById('appleDialogCancel')?.addEventListener('click', () => close(null));
+    overlay.onclick = (e) => {
+      if (e.target === overlay) close(null);
+    };
+
+    document.getElementById('appleDialogForm')?.addEventListener('submit', (e) => {
+      e.preventDefault();
+      if (!fields.length) {
+        close(true);
+        return;
+      }
+      const values = {};
+      for (const f of fields) {
+        values[f.id] = document.getElementById(`ad_${f.id}`)?.value ?? '';
+      }
+      close(values);
+    });
+  });
+}
+
+function appleConfirm(opts) {
+  return openAppleDialog({ ...opts, fields: [] }).then((v) => v === true);
+}
+
+function applePrompt(opts) {
+  return openAppleDialog(opts);
 }
 
 // ============================================================================
@@ -1000,36 +1110,51 @@ function updateHeaderBadges() {
   updateCollapsingHeader();
 }
 
+let lastRenderedViewKey = '';
+
 function renderAll() {
   renderShareBanner();
   updateHeaderBadges();
   const root = document.getElementById('mainRoot');
   if (!root) return;
 
+  const viewKey = `${ui.region}:${ui.tab}:${ui.tab === 'analysis' ? ui.analysisSubTab : ui.tab === 'compare' ? ui.compareMode : ''}`;
+  const viewChanged = lastRenderedViewKey && lastRenderedViewKey !== viewKey;
+  lastRenderedViewKey = viewKey;
+
+  const finishRender = () => {
+    if (viewChanged) {
+      root.classList.remove('view-enter');
+      void root.offsetWidth;
+      root.classList.add('view-enter');
+    }
+    initSlidingSegmentedControls();
+  };
+
   if (ui.region === 'ABROAD') {
     root.innerHTML = renderAbroadView(state.abroadPrograms, ui.abroadFilter, state.abroadTools, state.costSettings?.eurTry || 39);
     bindAbroadEvents();
-    initSlidingSegmentedControls();
+    finishRender();
     return;
   }
 
   if (ui.tab === 'compare') {
     root.innerHTML = renderCompareView();
     bindCompareEvents();
-    initSlidingSegmentedControls();
+    finishRender();
     return;
   }
 
   if (ui.tab === 'analysis') {
     root.innerHTML = renderAnalysisView();
     bindAnalysisEvents();
-    initSlidingSegmentedControls();
+    finishRender();
     return;
   }
 
   root.innerHTML = renderPreferencesView();
   bindPreferencesEvents();
-  initSlidingSegmentedControls();
+  finishRender();
 }
 
 function renderScenarioBar() {
@@ -1116,11 +1241,11 @@ function renderPreferencesView() {
   const est = estimateYksRankFromNets(state.myNets);
   const reachableCount = est ? state.programs.filter((p) => isProgramCurrentlyReachable(p, est)).length : 0;
 
+  const activeSc = getActiveScenario();
   const headerHtml = `<div class="page-header">
     <div>
-      <div class="page-eyebrow">YKS 2027 · Türkiye</div>
       <h1 class="page-title">Tercihlerim</h1>
-      <p class="page-subtitle">Canlı YÖK Atlas arama, çoklu senaryo, 2027 tahminleri ve dershane PDF net kıyaslaması</p>
+      <p class="page-status tabular">${escapeHtml(activeSc?.name || 'Plan A')} · ${state.programs.length} / 24 tercih${state.targetRank ? ` · Hedef ${formatRank(state.targetRank)}` : ''}</p>
     </div>
     <div class="actions-menu-wrap">
       <button class="btn btn-soft btn-sm" id="openDiscoverShortcutBtn">✦ Keşfet</button>
@@ -1245,7 +1370,7 @@ function renderPreferencesView() {
         </button>
         <button class="seg-btn seg-btn-sm ${ui.viewMode === 'table' ? 'active' : ''}" data-view="table">
           <svg class="sf-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
-          <span>Tablo</span>
+          <span>Liste</span>
         </button>
       </div>
     </div>
@@ -1367,71 +1492,45 @@ function renderTableView(programs) {
     ui.filterScoreType === 'all' &&
     !ui.filterReachable;
   const est = estimateYksRankFromNets(state.myNets);
-  return `<section class="table-wrap">
-    <table class="prog-table">
-      <thead>
-        <tr>
-          <th style="width:52px;">#</th>
-          <th>Üniversite & Bölüm</th>
-          <th>Detay</th>
-          <th>Kategori</th>
-          <th>Son Sıra</th>
-          <th>2027 Tahmini</th>
-          <th>4 Yıl Trend</th>
-          <th>Kontenjan</th>
-          <th>Ort. Net</th>
-          <th style="width:105px;">İşlem</th>
-        </tr>
-      </thead>
-      <tbody id="programList">
-        ${programs
-          .map((p) => {
-            const net0 = p.nets?.[0];
-            const proj = compute2027Projection(p);
-            const isCompared = state.compareCodes.includes(p.code);
-            const isReachable = isProgramCurrentlyReachable(p, est);
-            const riskMeta = RISK_META[p.risk] || RISK_META.hedef;
-            return `<tr data-code="${escapeHtml(p.code)}" draggable="${manualMode ? 'true' : 'false'}">
-              <td class="tabular" style="color:var(--text-tertiary);font-weight:600;">${String(p._order).padStart(2, '0')}</td>
-              <td>
-                <div class="td-uni-cell">
-                  ${renderAvatar(p)}
-                  <div style="min-width:0;">
-                    <div style="font-weight:600;color:var(--text);">${escapeHtml(p.department)}</div>
-                    <div style="font-size:12px;color:var(--text-secondary);">${escapeHtml(p.university)}</div>
-                  </div>
-                </div>
-              </td>
-              <td>
-                <div>${escapeHtml(p.city)} · ${escapeHtml(p.scoreType)}</div>
-                <div style="font-size:12px;color:var(--text-tertiary);">${escapeHtml(p.language)} · ${escapeHtml(p.scholarship)}</div>
-              </td>
-              <td>
-                <div style="display:flex;flex-direction:column;align-items:flex-start;gap:4px;">
-                  <span class="pill pill-risk-${escapeHtml(p.risk || 'hedef')}">${escapeHtml(riskMeta.label)}</span>
-                  ${isReachable ? `<span class="reachable-pill">${SF.check} Giriyorsun</span>` : ''}
-                </div>
-              </td>
-              <td class="tabular" style="font-weight:700;">${formatRank(p.latestRank)}</td>
-              <td class="tabular" style="color:var(--accent);font-weight:600;">${proj ? `${formatRank(proj.low)}–${formatRank(proj.high)}` : '—'}</td>
-              <td>${renderSparkline(p.history, { width: 76, height: 24 })}</td>
-              <td class="tabular">${p.quota ?? '—'}</td>
-              <td class="tabular" style="font-size:12px;color:var(--text-secondary);">
-                ${net0 ? `TYT ${formatNet(net0.tytTotal)}<br/>${p.scoreType === 'DİL' ? `YDT ${formatNet(net0.ydt)}` : `AYT ${formatNet(net0.aytTotal)}`}` : '—'}
-              </td>
-              <td data-stop-card="1">
-                <div style="display:flex;align-items:center;justify-content:flex-end;gap:6px;">
-                  <button class="mini-action ${isCompared ? 'active' : ''}" data-toggle-compare="${escapeHtml(p.code)}">
-                    ${isCompared ? `${SF.check} Kıyas` : `${SF.plus} Kıyas`}
-                  </button>
-                  ${SF.chevronRight}
-                </div>
-              </td>
-            </tr>`;
-          })
-          .join('')}
-      </tbody>
-    </table>
+  return `<section class="apple-grouped-list" id="programList" role="list">
+    ${programs
+      .map((p) => {
+        const proj = compute2027Projection(p);
+        const isCompared = state.compareCodes.includes(p.code);
+        const isReachable = isProgramCurrentlyReachable(p, est);
+        const riskMeta = RISK_META[p.risk] || RISK_META.hedef;
+        const subMeta = [p.university, p.city, p.scoreType, p.language, p.scholarship].filter(Boolean).join(' · ');
+
+        return `<div class="apple-list-row" role="listitem" data-code="${escapeHtml(p.code)}" draggable="${manualMode ? 'true' : 'false'}">
+          <div class="apple-list-left">
+            <span class="apple-list-ord tabular">${String(p._order).padStart(2, '0')}</span>
+            ${renderAvatar(p)}
+            <div class="apple-list-titles">
+              <div class="apple-list-dept">${escapeHtml(p.department)}</div>
+              <div class="apple-list-sub">${escapeHtml(subMeta)}</div>
+            </div>
+          </div>
+
+          <div class="apple-list-right">
+            <div class="apple-list-badges">
+              <span class="pill pill-risk-${escapeHtml(p.risk || 'hedef')}">${escapeHtml(riskMeta.label)}</span>
+              ${isReachable ? `<span class="reachable-pill">${SF.check} Giriyorsun</span>` : ''}
+            </div>
+            <div class="apple-list-spark">${renderSparkline(p.history, { width: 76, height: 24 })}</div>
+            <div class="apple-list-rank-col tabular">
+              <div class="apple-list-rank">${formatRank(p.latestRank)}</div>
+              <div class="apple-list-proj">${proj ? `27: ${formatRank(proj.low)}–${formatRank(proj.high)}` : `Kont: ${p.quota ?? '—'}`}</div>
+            </div>
+            <div data-stop-card="1" style="display:flex;align-items:center;gap:6px;">
+              <button class="mini-action ${isCompared ? 'active' : ''}" data-toggle-compare="${escapeHtml(p.code)}" title="Karşılaştır">
+                ${isCompared ? `${SF.check}` : `${SF.plus}`}
+              </button>
+              ${SF.chevronRight}
+            </div>
+          </div>
+        </div>`;
+      })
+      .join('')}
   </section>`;
 }
 
@@ -1543,9 +1642,8 @@ function renderCompareView() {
 
   const headerHtml = `<div class="page-header">
     <div>
-      <div class="page-eyebrow">Yan Yana Karar Paneli</div>
       <h1 class="page-title">Karşılaştır</h1>
-      <p class="page-subtitle">Bölümleri veya farklı tercih senaryolarını (Plan A vs Plan B) yan yana kıyasla</p>
+      <p class="page-status tabular">${ui.compareMode === 'scenarios' ? `${state.scenarios.length} senaryo` : `${selected.length} / 4 bölüm seçili`}</p>
     </div>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
       <div class="segmented" role="tablist" aria-label="Karşılaştırma modu">
@@ -2198,11 +2296,11 @@ function renderAnalysisView() {
     ['timeline', 'Takvim', '<svg class="sf-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="5" width="18" height="16" rx="2.5"/><path d="M8 3v4M16 3v4M3 10h18"/></svg>'],
   ];
 
+  const activeTabInfo = analysisTabs.find(([k]) => k === ui.analysisSubTab);
   const headerHtml = `<div class="page-header">
     <div>
-      <div class="page-eyebrow">Strateji · Gelişim · Keşfet · Karar Skoru · Bütçe</div>
       <h1 class="page-title">Analiz</h1>
-      <p class="page-subtitle">ÖSYM sağlık kontrolü, deneme gelişimi, keşif sihirbazı, karar skoru, harita ve bütçe</p>
+      <p class="page-status tabular">${escapeHtml(activeTabInfo?.[1] || 'Genel')} · ${state.programs.length} tercih</p>
     </div>
     <div class="analysis-tabs-scroll">
       <div class="segmented" role="tablist" aria-label="Analiz alt sekmeleri">
@@ -3445,14 +3543,20 @@ function renderMyNetsModal() {
   });
 
   body.querySelectorAll('[data-edit-exam]').forEach((btn) => {
-    btn.addEventListener('click', () => {
+    btn.addEventListener('click', async () => {
       const ex = state.examHistory[Number(btn.dataset.editExam)];
       if (!ex) return;
-      const nextName = window.prompt('Deneme adını düzenle:', ex.examName || '');
-      if (nextName === null) return;
-      if (nextName.trim()) ex.examName = nextName.trim();
-      const nextDate = window.prompt('Deneme tarihi (ör. 25.11.2026):', ex.examDate || '');
-      if (nextDate !== null) ex.examDate = nextDate.trim() || ex.examDate;
+      const res = await applePrompt({
+        title: 'Deneme Bilgilerini Düzenle',
+        fields: [
+          { id: 'name', label: 'Deneme Adı', value: ex.examName || '', placeholder: 'Örn: 3D TYT Deneme 4' },
+          { id: 'date', label: 'Tarih', value: ex.examDate || '', placeholder: 'Örn: 25.11.2026' },
+        ],
+        confirmLabel: 'Kaydet',
+      });
+      if (!res) return;
+      if (res.name?.trim()) ex.examName = res.name.trim();
+      if (res.date !== undefined) ex.examDate = res.date.trim() || ex.examDate;
       saveState();
       renderMyNetsModal();
       renderAll();
@@ -3737,12 +3841,15 @@ function renderSnapshotModal() {
   });
 
   body.querySelectorAll('[data-restore-snap]').forEach((btn) => {
-    btn.addEventListener('click', () => {
+    btn.addEventListener('click', async () => {
       const sn = state.snapshots[Number(btn.dataset.restoreSnap)];
       if (!sn) return;
-      if (!window.confirm(`"${sn.label}" kaydındaki ${sn.programs.length} bölümlük sıraya dönülsün mü? (Mevcut sıran önce otomatik yedeklenecek.)`)) {
-        return;
-      }
+      const ok = await appleConfirm({
+        title: `"${sn.label}" geri yüklensin mi?`,
+        message: `${sn.programs.length} bölümlük bu sıraya dönülecek. Mevcut sıran önce otomatik yedeklenir.`,
+        confirmLabel: 'Geri Yükle',
+      });
+      if (!ok) return;
       // Auto-backup current state before restoring so nothing is ever lost
       const curDiff = diffProgramLists(state.programs, sn.programs);
       if (!curDiff.identical && state.programs.length) {
@@ -4692,6 +4799,10 @@ async function init() {
       e.preventDefault();
       openAddModal();
     } else if (e.key === 'Escape') {
+      if (activeDialogClose) {
+        activeDialogClose();
+        return;
+      }
       closeContextMenu();
       closeAppearancePopover();
       document.getElementById('prefActionsDropdown')?.classList.remove('open');
@@ -4707,7 +4818,7 @@ async function init() {
 
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker
-      .register('./sw.js?v=14')
+      .register('./sw.js?v=15')
       .then((reg) => reg.update().catch(() => {}))
       .catch(() => {});
   }

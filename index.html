@@ -8,10 +8,10 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <meta name="apple-mobile-web-app-title" content="TercihAtlas" />
   <title>TercihAtlas — YKS 2027 Tercih & Üniversite Rehberi</title>
-  <link rel="icon" type="image/png" sizes="64x64" href="favicon.png?v=14" />
-  <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png?v=14" />
-  <link rel="manifest" href="manifest.json?v=14" />
-  <link rel="stylesheet" href="css/styles.css?v=14" />
+  <link rel="icon" type="image/png" sizes="64x64" href="favicon.png?v=15" />
+  <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png?v=15" />
+  <link rel="manifest" href="manifest.json?v=15" />
+  <link rel="stylesheet" href="css/styles.css?v=15" />
 </head>
 <body>
   <!-- macOS Tahoe / iPadOS Floating Liquid Glass Top Navigation -->
@@ -232,12 +232,17 @@
     </div>
   </div>
 
+  <!-- Native Apple Liquid Glass Alert / Prompt Dialog -->
+  <div class="modal-overlay apple-dialog-overlay" id="appleDialogOverlay" aria-hidden="true">
+    <div class="apple-dialog" id="appleDialogBox" role="alertdialog" aria-modal="true"></div>
+  </div>
+
   <!-- macOS Liquid Glass Right-Click Context Menu -->
   <div class="context-menu" id="contextMenu" role="menu" aria-hidden="true"></div>
 
   <!-- Floating Pill Toasts -->
   <div class="toast-container" id="toastContainer"></div>
 
-  <script type="module" src="js/app.js?v=14"></script>
+  <script type="module" src="js/app.js?v=15"></script>
 </body>
 </html>
