@@ -173,6 +173,14 @@ const SF = {
   pieBadge: `<svg class="sf-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="8"/><path d="M12 4v8l5.5 3.5"/></svg>`,
   chartBadge: `<svg class="sf-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 18 9 13l4 3 7-8"/></svg>`,
   targetBadge: `<svg class="sf-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3.5"/></svg>`,
+  clock: `<svg class="sf-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>`,
+  warn: `<svg class="sf-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M10.3 3.9 2.6 17.5A2 2 0 0 0 4.3 20.5h15.4a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg>`,
+  sparkles: `<svg class="sf-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9L12 3z"/></svg>`,
+  keyboard: `<svg class="sf-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="3"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M8 14h8"/></svg>`,
+  shield: `<svg class="sf-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v5c0 4.8-3 8.8-7 10-4-1.2-7-5.2-7-10V6l7-3z"/></svg>`,
+  lockOpen: `<svg class="sf-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2.5"/><path d="M8 11V7a4 4 0 0 1 7.6-1.7"/></svg>`,
+  checkCircle: `<svg class="sf-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="m8.5 12.2 2.4 2.4 4.8-5"/></svg>`,
+  trendDown: `<svg class="sf-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7l6 6 4-4 8 8"/><path d="M16 17h5v-5"/></svg>`,
 };
 
 const ui = {
@@ -1626,12 +1634,12 @@ function renderPreferencesView() {
     </div>
     <div class="actions-menu-wrap" style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;">
       ${daysToYks > 0
-        ? `<button class="countdown-pill-btn tabular" id="openRoadmapShortcutBtn" type="button" title="YKS 2027 & Yurtdışı Takvim">⏳ YKS 2027: ${daysToYks} gün</button>`
+        ? `<button class="countdown-pill-btn tabular" id="openRoadmapShortcutBtn" type="button" title="YKS 2027 & Yurtdışı Takvim">${SF.clock} YKS 2027: ${daysToYks} gün</button>`
         : ''}
       ${prefAudit?.deadPreferences?.length
-        ? `<button class="audit-warn-pill" id="openAuditShortcutBtn" type="button" title="Ölü tercih uyarısını incele">⚠ ${prefAudit.deadPreferences.length} Ölü Tercih</button>`
+        ? `<button class="audit-warn-pill" id="openAuditShortcutBtn" type="button" title="Ölü tercih uyarısını incele">${SF.warn} ${prefAudit.deadPreferences.length} Ölü Tercih</button>`
         : ''}
-      <button class="btn btn-soft btn-sm" id="openDiscoverShortcutBtn">✦ Keşfet</button>
+      <button class="btn btn-soft btn-sm" id="openDiscoverShortcutBtn">${SF.sparkles} Keşfet</button>
       ${state.programs.length
         ? `<button class="btn btn-sm" id="prefActionsMenuBtn" aria-haspopup="menu" aria-expanded="false">
             ${ui.refreshBusy
@@ -1641,14 +1649,14 @@ function renderPreferencesView() {
           <div class="actions-dropdown" id="prefActionsDropdown" role="menu">
             ${!ui.readOnlyShare
               ? `<button class="ctx-item" id="refreshAllBtn" ${ui.refreshBusy ? 'disabled' : ''}>${SF.refresh} Tümünü Canlı Güncelle</button>
-                 <button class="ctx-item" id="openSnapshotsBtn"><svg class="sf-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg> Zaman Makinesi (${state.snapshots.length})</button>`
+                 <button class="ctx-item" id="openSnapshotsBtn">${SF.clock} Zaman Makinesi (${state.snapshots.length})</button>`
               : ''}
             <button class="ctx-item" id="openPresentationBtn"><svg class="sf-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg> Sunum / Okuma Modu</button>
             <button class="ctx-item" id="exportPngCardBtn">${SF.share} PNG Özet Kartı İndir</button>
             <button class="ctx-item" id="openOsymBtn">${SF.share} ÖSYM AİS & Paylaşım Linki</button>
             <button class="ctx-item" id="printReportBtn">${SF.print} PDF Raporu / Yazdır</button>
             <div class="ctx-sep"></div>
-            <button class="ctx-item" id="openShortcutsMenuBtn">⌨️ Klavye Kısayolları (?)</button>
+            <button class="ctx-item" id="openShortcutsMenuBtn">${SF.keyboard} Klavye Kısayolları (?)</button>
           </div>`
         : ''}
     </div>
@@ -2227,7 +2235,7 @@ function renderSimulatorPanel() {
     verdictHtml = `<div class="osym-sim-verdict">
       <div>
         <div style="font-size:12px;font-weight:600;opacity:0.85;">ÖSYM Yerleştirme Tahmini (${formatRank(placementRank)} sıralama ile)</div>
-        <strong style="font-size:16px;">🎉 #${w.order} tercihin olan ${escapeHtml(w.program.university)} — ${escapeHtml(w.program.department)} bölümüne yerleşiyorsun!</strong>
+        <strong style="font-size:15.5px;display:inline-flex;align-items:center;gap:6px;">${SF.checkCircle} #${w.order} tercihin olan ${escapeHtml(w.program.university)} — ${escapeHtml(w.program.department)} bölümüne yerleşiyorsun</strong>
       </div>
       <span class="pill pill-risk-guvenli tabular">Son Taban: ${formatRank(w.latest)}</span>
     </div>`;
@@ -2236,7 +2244,7 @@ function renderSimulatorPanel() {
     verdictHtml = `<div class="osym-sim-verdict warn">
       <div>
         <div style="font-size:12px;font-weight:600;opacity:0.85;">Sınırda Senaryo (${formatRank(placementRank)} sıralama ile)</div>
-        <strong style="font-size:15.5px;">⚖️ #${b.order} tercihin (${escapeHtml(b.program.university)} — ${escapeHtml(b.program.department)}) sınırda görünüyor.</strong>
+        <strong style="font-size:15px;display:inline-flex;align-items:center;gap:6px;">${SF.warn} #${b.order} tercihin (${escapeHtml(b.program.university)} — ${escapeHtml(b.program.department)}) sınırda görünüyor</strong>
       </div>
       <span class="pill pill-risk-hedef tabular">Son Taban: ${formatRank(b.latest)}</span>
     </div>`;
@@ -2244,7 +2252,7 @@ function renderSimulatorPanel() {
     verdictHtml = `<div class="osym-sim-verdict danger">
       <div>
         <div style="font-size:12px;font-weight:600;opacity:0.85;">Açıkta Kalma Riski (${formatRank(placementRank)} sıralama ile)</div>
-        <strong style="font-size:15.5px;">⚠️ Mevcut listedeki tüm bölümler bu sıralamanın üstünde kapatmış — altına güvenli tercih eklemelisin.</strong>
+        <strong style="font-size:15px;display:inline-flex;align-items:center;gap:6px;">${SF.warn} Mevcut listedeki tüm bölümler bu sıralamanın üstünde kapatmış — altına güvenli tercih eklemelisin.</strong>
       </div>
     </div>`;
   }
@@ -2340,7 +2348,7 @@ function renderSimulatorPanel() {
             </div>
             ${boostRes.newlyUnlocked.length
               ? `<div class="quota-alert-good" style="margin-bottom:10px;">
-                   🔓 Bu net artışı ile <strong>${boostRes.newlyUnlocked.length} yeni tercihin</strong> kilidi açıldı:
+                   ${SF.lockOpen} Bu net artışı ile <strong>${boostRes.newlyUnlocked.length} yeni tercihin</strong> kilidi açıldı:
                    ${boostRes.newlyUnlocked.map((r) => `<strong>#${r.order} ${escapeHtml(r.program.university)} (${escapeHtml(r.program.department)})</strong>`).join(', ')}
                  </div>`
               : hasBoost
@@ -2954,7 +2962,7 @@ function renderAnalysisView() {
             ? `<span class="pill pill-risk-guvenli">✓ Ölü Tercih & Kritik Boşluk Yok</span>`
             : `<span class="pill pill-risk-hayal">${orderAudit.issueCount} bulgu tespit edildi</span>`}
           ${orderAudit.deadPreferences.length && !ui.readOnlyShare
-            ? `<button class="btn btn-primary btn-sm" id="autoFixOrderBtn" type="button">✦ Sıralamayı Otomatik Düzelt</button>`
+            ? `<button class="btn btn-primary btn-sm" id="autoFixOrderBtn" type="button">${SF.sparkles} Sıralamayı Otomatik Düzelt</button>`
             : ''}
         </div>
       </div>
@@ -2965,8 +2973,8 @@ function renderAnalysisView() {
             ${orderAudit.deadPreferences
               .map(
                 (dp) => `<div class="audit-issue-card dead">
-                  <div style="font-size:13.5px;font-weight:650;color:var(--rose);">
-                    ⛔ Ölü Tercih: #${dp.blockerOrder} (${escapeHtml(dp.blocker.university)} · ${formatRank(dp.blockerRank)}) üstteyken #${dp.blockedOrder} (${escapeHtml(dp.blocked.university)} · ${formatRank(dp.blockedRank)}) değerlendirilmeyebilir
+                  <div style="font-size:13.5px;font-weight:650;color:var(--rose);display:flex;align-items:center;gap:6px;">
+                    ${SF.warn} Ölü Tercih: #${dp.blockerOrder} (${escapeHtml(dp.blocker.university)} · ${formatRank(dp.blockerRank)}) üstteyken #${dp.blockedOrder} (${escapeHtml(dp.blocked.university)} · ${formatRank(dp.blockedRank)}) değerlendirilmeyebilir
                   </div>
                   <div style="font-size:12.5px;color:var(--text-secondary);">
                     ÖSYM yukarıdan aşağıya yerleştirir; #${dp.blockerOrder} tercihinin gelmesi durumunda daha yüksek tabanlı #${dp.blockedOrder} hiç denenmez.
@@ -2977,8 +2985,8 @@ function renderAnalysisView() {
             ${orderAudit.rankGaps
               .map(
                 (gp, idx) => `<div class="audit-issue-card gap">
-                  <div style="font-size:13.5px;font-weight:650;color:var(--amber);">
-                    📉 Sıralama Uçurumu: #${gp.fromOrder} (${formatRank(gp.lowRank)}) → #${gp.toOrder} (${formatRank(gp.highRank)}) arasında ${gp.ratio}× boşluk var
+                  <div style="font-size:13.5px;font-weight:650;color:var(--amber);display:flex;align-items:center;gap:6px;">
+                    ${SF.trendDown} Sıralama Uçurumu: #${gp.fromOrder} (${formatRank(gp.lowRank)}) → #${gp.toOrder} (${formatRank(gp.highRank)}) arasında ${gp.ratio}× boşluk var
                   </div>
                   <div style="font-size:12.5px;color:var(--text-secondary);">
                     ${escapeHtml(gp.fromProgram.university)} ile ${escapeHtml(gp.toProgram.university)} arasındaki bandı dengelemek için 12.239 programlık katalogdan öneriler:
@@ -2991,7 +2999,7 @@ function renderAnalysisView() {
               .join('')}
             ${orderAudit.safetyWarning
               ? `<div class="audit-issue-card dead">
-                  <div style="font-size:13.5px;font-weight:650;color:var(--rose);">🛡️ Güvenlik Ağı Uyarısı</div>
+                  <div style="font-size:13.5px;font-weight:650;color:var(--rose);display:flex;align-items:center;gap:6px;">${SF.shield} Güvenlik Ağı Uyarısı</div>
                   <div style="font-size:12.5px;color:var(--text-secondary);">${escapeHtml(orderAudit.safetyWarning.text)}</div>
                 </div>`
               : ''}
