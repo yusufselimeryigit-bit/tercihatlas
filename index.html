@@ -11,7 +11,7 @@
   <link rel="icon" type="image/svg+xml" href="icon.svg" />
   <link rel="apple-touch-icon" href="icon.svg" />
   <link rel="manifest" href="manifest.json" />
-  <link rel="stylesheet" href="css/styles.css?v=9" />
+  <link rel="stylesheet" href="css/styles.css?v=10" />
 </head>
 <body>
   <!-- macOS Tahoe / iPadOS Floating Liquid Glass Top Navigation -->
@@ -49,7 +49,7 @@
           <span class="status-dot" id="syncDot"></span>
           <span class="sync-label" id="syncLabel">Yerel</span>
         </button>
-        <button class="glass-icon-btn circle" id="themeToggleBtn" title="Açık / Koyu Mod" aria-label="Tema Değiştir">
+        <button class="glass-icon-btn circle" id="themeToggleBtn" title="Görünüm, Tema ve Vurgu Rengi" aria-label="Görünüm Ayarları">
           <svg id="themeIcon" class="sf-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"></svg>
         </button>
         <button class="btn btn-primary btn-primary-nav" id="openAddBtn" title="Spotlight Arama ve Bölüm Ekle (⌘K)">
@@ -194,12 +194,36 @@
     </div>
   </div>
 
+  <!-- macOS Appearance Popover (Light / Dark / Auto + Accent Color) -->
+  <div class="appearance-popover" id="appearancePopover" role="dialog" aria-label="Görünüm ve Vurgu Rengi" aria-hidden="true">
+    <div class="ap-section">
+      <div class="ap-label">Görünüm</div>
+      <div class="segmented" style="width:100%;" id="themeModeSegmented">
+        <button class="seg-btn seg-btn-sm" style="flex:1;" data-theme-mode="light">Açık</button>
+        <button class="seg-btn seg-btn-sm" style="flex:1;" data-theme-mode="dark">Koyu</button>
+        <button class="seg-btn seg-btn-sm" style="flex:1;" data-theme-mode="auto">Sistem</button>
+      </div>
+    </div>
+    <div class="ap-section">
+      <div class="ap-label">Vurgu Rengi</div>
+      <div class="accent-swatches" id="accentSwatches">
+        <button class="accent-swatch" data-accent-pick="blue" style="--swatch:#0071E3" title="Apple Mavi" aria-label="Apple Mavi"></button>
+        <button class="accent-swatch" data-accent-pick="indigo" style="--swatch:#5856D6" title="İndigo" aria-label="İndigo"></button>
+        <button class="accent-swatch" data-accent-pick="purple" style="--swatch:#AF52DE" title="Mor" aria-label="Mor"></button>
+        <button class="accent-swatch" data-accent-pick="rose" style="--swatch:#FF2D55" title="Gül" aria-label="Gül"></button>
+        <button class="accent-swatch" data-accent-pick="orange" style="--swatch:#FF9500" title="Turuncu" aria-label="Turuncu"></button>
+        <button class="accent-swatch" data-accent-pick="green" style="--swatch:#248A3D" title="Zümrüt" aria-label="Zümrüt"></button>
+        <button class="accent-swatch" data-accent-pick="graphite" style="--swatch:#636366" title="Grafit" aria-label="Grafit"></button>
+      </div>
+    </div>
+  </div>
+
   <!-- macOS Liquid Glass Right-Click Context Menu -->
   <div class="context-menu" id="contextMenu" role="menu" aria-hidden="true"></div>
 
   <!-- Floating Pill Toasts -->
   <div class="toast-container" id="toastContainer"></div>
 
-  <script type="module" src="js/app.js?v=9"></script>
+  <script type="module" src="js/app.js?v=10"></script>
 </body>
 </html>

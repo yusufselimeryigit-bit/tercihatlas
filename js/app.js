@@ -61,6 +61,7 @@ import {
 const STATE_KEY = 'tercihatlas_state_v1';
 const SYNC_KEY_STORAGE = 'tercihatlas_sync_key';
 const THEME_STORAGE = 'tercihatlas_theme_v2';
+const ACCENT_STORAGE = 'tercihatlas_accent_v1';
 
 const PROGRAM_CHECKLIST_ITEMS = [
   { key: 'mufredat', label: 'Ders Müfredatı' },
@@ -417,27 +418,83 @@ async function syncPullOnStartup({ forceOverwrite = false, silent = true } = {})
 }
 
 // ============================================================================
-// Theme & Floating Pill Toast
+// Theme (Light / Dark / System Auto), macOS Accent Color & Floating Pill Toast
 // ============================================================================
+const systemDarkQuery = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
+
 function initTheme() {
-  const saved = localStorage.getItem(THEME_STORAGE);
-  applyTheme(saved || 'light');
+  const savedMode = localStorage.getItem(THEME_STORAGE) || 'light';
+  const savedAccent = localStorage.getItem(ACCENT_STORAGE) || 'blue';
+  applyThemeMode(savedMode, { silent: true });
+  applyAccent(savedAccent, { silent: true });
+
+  systemDarkQuery?.addEventListener?.('change', () => {
+    if ((localStorage.getItem(THEME_STORAGE) || 'light') === 'auto') {
+      applyThemeMode('auto', { silent: true });
+    }
+  });
 }
 
-function applyTheme(theme) {
-  document.documentElement.setAttribute('data-theme', theme);
-  localStorage.setItem(THEME_STORAGE, theme);
+function applyThemeMode(mode) {
+  const normalized = ['light', 'dark', 'auto'].includes(mode) ? mode : 'light';
+  localStorage.setItem(THEME_STORAGE, normalized);
+  const resolved = normalized === 'auto' ? (systemDarkQuery?.matches ? 'dark' : 'light') : normalized;
+
+  document.documentElement.setAttribute('data-theme', resolved);
   const meta = document.querySelector('meta[name="theme-color"]');
-  if (meta) meta.setAttribute('content', theme === 'dark' ? '#000000' : '#F5F5F7');
+  if (meta) meta.setAttribute('content', resolved === 'dark' ? '#000000' : '#F5F5F7');
   const statusMeta = document.querySelector('meta[name="apple-mobile-web-app-status-bar-style"]');
-  if (statusMeta) statusMeta.setAttribute('content', theme === 'dark' ? 'black-translucent' : 'default');
+  if (statusMeta) statusMeta.setAttribute('content', resolved === 'dark' ? 'black-translucent' : 'default');
+
   const svgInner =
-    theme === 'dark'
-      ? '<circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2.5 12h2M19.5 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/>'
-      : '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>';
-  for (const id of ['themeIcon', 'sidebarThemeIcon']) {
-    const icon = document.getElementById(id);
-    if (icon) icon.innerHTML = svgInner;
+    normalized === 'auto'
+      ? '<circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 1 0 16z" fill="currentColor" stroke="none"/>'
+      : resolved === 'dark'
+        ? '<circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2.5 12h2M19.5 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/>'
+        : '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>';
+
+  const icon = document.getElementById('themeIcon');
+  if (icon) icon.innerHTML = svgInner;
+
+  document.querySelectorAll('#themeModeSegmented [data-theme-mode]').forEach((btn) => {
+    btn.classList.toggle('active', btn.dataset.themeMode === normalized);
+  });
+  initSlidingSegmentedControls();
+}
+
+function applyAccent(accent) {
+  const valid = ['blue', 'indigo', 'purple', 'rose', 'orange', 'green', 'graphite'];
+  const chosen = valid.includes(accent) ? accent : 'blue';
+  localStorage.setItem(ACCENT_STORAGE, chosen);
+  if (chosen === 'blue') {
+    document.documentElement.removeAttribute('data-accent');
+  } else {
+    document.documentElement.setAttribute('data-accent', chosen);
+  }
+  document.querySelectorAll('#accentSwatches [data-accent-pick]').forEach((btn) => {
+    btn.classList.toggle('active', btn.dataset.accentPick === chosen);
+  });
+}
+
+function closeAppearancePopover() {
+  const pop = document.getElementById('appearancePopover');
+  if (!pop) return;
+  pop.classList.remove('open');
+  pop.setAttribute('aria-hidden', 'true');
+}
+
+function toggleAppearancePopover(e) {
+  e?.stopPropagation();
+  const pop = document.getElementById('appearancePopover');
+  if (!pop) return;
+  const willOpen = !pop.classList.contains('open');
+  closeContextMenu();
+  if (willOpen) {
+    pop.classList.add('open');
+    pop.setAttribute('aria-hidden', 'false');
+    initSlidingSegmentedControls();
+  } else {
+    closeAppearancePopover();
   }
 }
 
@@ -714,7 +771,26 @@ function updateCollapsingHeader() {
 
 function initSlidingSegmentedControls() {
   requestAnimationFrame(() => {
+    // 1. Sliding Liquid Glass Pill on Desktop Top Navigation Capsule
+    const navCap = document.getElementById('desktopNav');
+    if (navCap && navCap.offsetWidth > 0) {
+      const activeNav = navCap.querySelector('.nav-pill-btn.active');
+      if (activeNav) {
+        let navThumb = navCap.querySelector('.nav-thumb');
+        if (!navThumb) {
+          navThumb = document.createElement('div');
+          navThumb.className = 'nav-thumb';
+          navCap.prepend(navThumb);
+        }
+        navCap.classList.add('has-thumb');
+        navThumb.style.width = `${activeNav.offsetWidth}px`;
+        navThumb.style.transform = `translateX(${activeNav.offsetLeft}px)`;
+      }
+    }
+
+    // 2. Sliding Spring Thumbs on all .segmented controls
     document.querySelectorAll('.segmented').forEach((seg) => {
+      if (seg.offsetWidth === 0) return;
       const activeBtn = seg.querySelector('.seg-btn.active');
       if (!activeBtn) return;
       let thumb = seg.querySelector('.seg-thumb');
@@ -989,14 +1065,21 @@ function renderPreferencesView() {
       <h1 class="page-title">Tercihlerim</h1>
       <p class="page-subtitle">Canlı YÖK Atlas arama, çoklu senaryo, 2027 tahminleri ve dershane PDF net kıyaslaması</p>
     </div>
-    <div style="display:flex;gap:8px;flex-wrap:wrap;">
-      <button class="btn btn-sm" id="openDiscoverShortcutBtn">✦ Sıralamama Göre Keşfet</button>
-      ${state.programs.length && !ui.readOnlyShare
-        ? `<button class="btn btn-sm" id="refreshAllBtn" ${ui.refreshBusy ? 'disabled' : ''}>${SF.refresh} ${ui.refreshBusy ? escapeHtml(ui.refreshProgressText || 'Güncelleniyor...') : 'Tümünü Güncelle'}</button>`
-        : ''}
+    <div class="actions-menu-wrap">
+      <button class="btn btn-soft btn-sm" id="openDiscoverShortcutBtn">✦ Keşfet</button>
       ${state.programs.length
-        ? `<button class="btn btn-sm" id="openOsymBtn">${SF.share} ÖSYM / Paylaş</button>
-           <button class="btn btn-sm" id="printReportBtn">${SF.print} PDF / Yazdır</button>`
+        ? `<button class="btn btn-sm" id="prefActionsMenuBtn" aria-haspopup="menu" aria-expanded="false">
+            ${ui.refreshBusy
+              ? `${SF.refresh} ${escapeHtml(ui.refreshProgressText || 'Güncelleniyor...')}`
+              : `<svg class="sf-icon" width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg><span>İşlemler</span>`}
+          </button>
+          <div class="actions-dropdown" id="prefActionsDropdown" role="menu">
+            ${!ui.readOnlyShare
+              ? `<button class="ctx-item" id="refreshAllBtn" ${ui.refreshBusy ? 'disabled' : ''}>${SF.refresh} Tümünü Canlı Güncelle</button>`
+              : ''}
+            <button class="ctx-item" id="openOsymBtn">${SF.share} ÖSYM AİS & Paylaşım Linki</button>
+            <button class="ctx-item" id="printReportBtn">${SF.print} PDF Raporu / Yazdır</button>
+          </div>`
         : ''}
     </div>
   </div>`;
@@ -2025,27 +2108,29 @@ function renderDecisionScorePanel() {
 }
 
 function renderAnalysisView() {
+  const analysisTabs = [
+    ['overview', 'Sağlık & Özet', '<svg class="sf-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 21s-7-4.5-7-10.2A4.3 4.3 0 0 1 12 7.5a4.3 4.3 0 0 1 7 3.3C19 16.5 12 21 12 21z"/></svg>'],
+    ['progression', 'Gelişim', '<svg class="sf-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l6-6 4 4 7-8"/></svg>'],
+    ['discover', 'Keşfet', '<svg class="sf-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><polygon points="15.5 8.5 13.5 13.5 8.5 15.5 10.5 10.5 15.5 8.5"/></svg>'],
+    ['decision', 'Karar Skoru', '<svg class="sf-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/><circle cx="9" cy="7" r="2" fill="currentColor"/><circle cx="15" cy="12" r="2" fill="currentColor"/><circle cx="11" cy="17" r="2" fill="currentColor"/></svg>'],
+    ['map', 'Harita', '<svg class="sf-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 21s-6-5.5-6-10a6 6 0 1 1 12 0c0 4.5-6 10-6 10z"/><circle cx="12" cy="11" r="2"/></svg>'],
+    ['simulator', 'Simülatör', '<svg class="sf-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M13 2 3 14h8l-1 8 10-12h-8l1-8z"/></svg>'],
+    ['cost', 'Maliyet', '<svg class="sf-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="6" width="18" height="12" rx="2.5"/><circle cx="12" cy="12" r="2.5"/></svg>'],
+    ['timeline', 'Takvim', '<svg class="sf-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="5" width="18" height="16" rx="2.5"/><path d="M8 3v4M16 3v4M3 10h18"/></svg>'],
+  ];
+
   const headerHtml = `<div class="page-header">
     <div>
-      <div class="page-eyebrow">Strateji · Gelişim · Karar Skoru · Harita · Maliyet</div>
+      <div class="page-eyebrow">Strateji · Gelişim · Keşfet · Karar Skoru · Bütçe</div>
       <h1 class="page-title">Analiz</h1>
-      <p class="page-subtitle">ÖSYM sağlık kontrolü, deneme gelişim grafiği, ağırlıklı karar skoru, harita ve bütçe</p>
+      <p class="page-subtitle">ÖSYM sağlık kontrolü, deneme gelişimi, keşif sihirbazı, karar skoru, harita ve bütçe</p>
     </div>
-    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+    <div class="analysis-tabs-scroll">
       <div class="segmented" role="tablist" aria-label="Analiz alt sekmeleri">
-        ${[
-          ['overview', 'Sağlık & Özet'],
-          ['progression', 'Gelişim'],
-          ['discover', 'Keşfet'],
-          ['decision', 'Karar Skoru'],
-          ['map', 'Harita'],
-          ['simulator', 'Simülatör'],
-          ['cost', 'Maliyet'],
-          ['timeline', 'Takvim'],
-        ]
+        ${analysisTabs
           .map(
-            ([k, lbl]) =>
-              `<button class="seg-btn seg-btn-sm ${ui.analysisSubTab === k ? 'active' : ''}" data-analysis-sub="${k}">${lbl}</button>`,
+            ([k, lbl, icon]) =>
+              `<button class="seg-btn seg-btn-sm ${ui.analysisSubTab === k ? 'active' : ''}" data-analysis-sub="${k}">${icon}<span>${lbl}</span></button>`,
           )
           .join('')}
       </div>
@@ -2210,6 +2295,8 @@ function renderDrawer() {
   const container = document.getElementById('drawerContent');
   const p = state.programs.find((item) => item.code === ui.drawerCode);
   if (!container || !p) return;
+
+  document.getElementById('detailDrawer')?.setAttribute('data-risk', p.risk || 'hedef');
 
   const activeNet = p.nets?.find((n) => n.year === ui.drawerNetYear) || p.nets?.[0] || null;
   const aytFields = getAytFieldsForScoreType(p.scoreType);
@@ -3786,13 +3873,29 @@ function bindPreferencesEvents() {
     ui.analysisSubTab = 'discover';
     renderAll();
   });
-  document.getElementById('refreshAllBtn')?.addEventListener('click', refreshAllProgramsLive);
+
+  const prefMenuBtn = document.getElementById('prefActionsMenuBtn');
+  const prefDropdown = document.getElementById('prefActionsDropdown');
+  prefMenuBtn?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const open = prefDropdown?.classList.toggle('open');
+    prefMenuBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  });
+
+  document.getElementById('refreshAllBtn')?.addEventListener('click', () => {
+    prefDropdown?.classList.remove('open');
+    refreshAllProgramsLive();
+  });
   document.getElementById('dismissRefreshDiffBtn')?.addEventListener('click', () => {
     ui.refreshDiff = null;
     renderAll();
   });
-  document.getElementById('openOsymBtn')?.addEventListener('click', openOsymModal);
+  document.getElementById('openOsymBtn')?.addEventListener('click', () => {
+    prefDropdown?.classList.remove('open');
+    openOsymModal();
+  });
   document.getElementById('printReportBtn')?.addEventListener('click', () => {
+    prefDropdown?.classList.remove('open');
     if (!openPrintableReport(state)) showToast('Tarayıcı açılır pencereyi engelledi.', 'error');
   });
 
@@ -4178,9 +4281,16 @@ async function init() {
     });
   });
 
-  document.getElementById('themeToggleBtn')?.addEventListener('click', () => {
-    const cur = document.documentElement.getAttribute('data-theme');
-    applyTheme(cur === 'dark' ? 'light' : 'dark');
+  document.getElementById('themeToggleBtn')?.addEventListener('click', toggleAppearancePopover);
+
+  document.getElementById('appearancePopover')?.addEventListener('click', (e) => e.stopPropagation());
+
+  document.querySelectorAll('#themeModeSegmented [data-theme-mode]').forEach((btn) => {
+    btn.addEventListener('click', () => applyThemeMode(btn.dataset.themeMode));
+  });
+
+  document.querySelectorAll('#accentSwatches [data-accent-pick]').forEach((btn) => {
+    btn.addEventListener('click', () => applyAccent(btn.dataset.accentPick));
   });
 
   document.getElementById('openAddBtn')?.addEventListener('click', () => openAddModal());
@@ -4238,7 +4348,12 @@ async function init() {
 
   window.addEventListener('scroll', updateCollapsingHeader, { passive: true });
   window.addEventListener('resize', initSlidingSegmentedControls);
-  document.addEventListener('click', closeContextMenu);
+  document.fonts?.ready?.then?.(() => initSlidingSegmentedControls());
+  document.addEventListener('click', () => {
+    closeContextMenu();
+    closeAppearancePopover();
+    document.getElementById('prefActionsDropdown')?.classList.remove('open');
+  });
 
   document.addEventListener('keydown', (e) => {
     if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
@@ -4246,6 +4361,8 @@ async function init() {
       openAddModal();
     } else if (e.key === 'Escape') {
       closeContextMenu();
+      closeAppearancePopover();
+      document.getElementById('prefActionsDropdown')?.classList.remove('open');
       closeDrawer();
       closeAddModal();
       closeMyNetsModal();
