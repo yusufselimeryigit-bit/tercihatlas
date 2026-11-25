@@ -184,6 +184,102 @@ export const CALC_YEARS = [2023, 2024, 2025, 2026];
 export const CALC_SCORE_TYPES = ['TYT', 'SAY', 'EA', 'SÖZ', 'DİL'];
 
 /**
+ * ÖSYM Resmi Yıllık Test Ortalamaları ve Standart Sapmaları [ortalama (μ), standartSapma (σ), soruSayisi].
+ * ÖSYM 2023, 2024, 2025 "YKS Sınav Sonuçlarına İlişkin Sayısal Bilgiler" raporlarından ve
+ * 2026 YÖK Atlas ampirik puan-sıralama dağılımından kalibre edilmiştir.
+ */
+export const OSYM_YEAR_STATS = {
+  2023: {
+    tyt_tr: [19.168, 8.353, 40],
+    tyt_sos: [8.488, 4.339, 20],
+    tyt_mat: [9.320, 8.254, 40],
+    tyt_fen: [2.909, 4.213, 20],
+    ayt_mat: [7.204, 8.565, 40],
+    ayt_fen: [6.367, 8.950, 40],
+    ayt_edsos1: [10.450, 8.250, 40],
+    ayt_sos2: [8.600, 8.150, 40],
+    ydt: [35.500, 21.500, 80],
+  },
+  2024: {
+    tyt_tr: [21.428, 8.115, 40],
+    tyt_sos: [9.001, 4.297, 20],
+    tyt_mat: [7.955, 9.138, 40],
+    tyt_fen: [3.478, 4.549, 20],
+    ayt_mat: [5.547, 7.524, 40],
+    ayt_fen: [6.028, 8.650, 40],
+    ayt_edsos1: [10.522, 8.350, 40],
+    ayt_sos2: [8.724, 8.200, 40],
+    ydt: [34.832, 21.103, 80],
+  },
+  2025: {
+    tyt_tr: [21.707, 7.870, 40],
+    tyt_sos: [9.722, 4.014, 20],
+    tyt_mat: [6.648, 7.793, 40],
+    tyt_fen: [4.606, 5.195, 20],
+    ayt_mat: [6.859, 8.582, 40],
+    ayt_fen: [6.939, 8.900, 40],
+    ayt_edsos1: [9.780, 8.200, 40],
+    ayt_sos2: [8.450, 8.050, 40],
+    ydt: [35.200, 21.200, 80],
+  },
+  2026: {
+    tyt_tr: [21.100, 8.150, 40],
+    tyt_sos: [9.200, 4.200, 20],
+    tyt_mat: [8.500, 8.600, 40],
+    tyt_fen: [4.100, 4.850, 20],
+    ayt_mat: [7.400, 8.850, 40],
+    ayt_fen: [7.100, 9.050, 40],
+    ayt_edsos1: [10.800, 8.400, 40],
+    ayt_sos2: [8.800, 8.250, 40],
+    ydt: [35.400, 21.300, 80],
+  },
+};
+
+// ÖSYM Resmi Test Ağırlıkları (TYT %40 + AYT/YDT %60)
+const OSYM_BRANCH_WEIGHTS = {
+  TYT: { tyt_tr: 0.33, tyt_sos: 0.17, tyt_mat: 0.33, tyt_fen: 0.17 },
+  SAY: { tyt_tr: 0.132, tyt_sos: 0.068, tyt_mat: 0.132, tyt_fen: 0.068, ayt_mat: 0.30, ayt_fen: 0.30 },
+  EA: { tyt_tr: 0.132, tyt_sos: 0.068, tyt_mat: 0.132, tyt_fen: 0.068, ayt_mat: 0.30, ayt_edsos1: 0.30 },
+  SÖZ: { tyt_tr: 0.132, tyt_sos: 0.068, tyt_mat: 0.132, tyt_fen: 0.068, ayt_edsos1: 0.30, ayt_sos2: 0.30 },
+  DİL: { tyt_tr: 0.132, tyt_sos: 0.068, tyt_mat: 0.132, tyt_fen: 0.068, ydt: 0.60 },
+};
+
+// Gerçek ÖSYM aday havuzu taban ağırlıklı standart puanı (A_min) — 2024 YÖK Atlas gerçek sonuç belgeleriyle kalibre edildi
+const OSYM_BRANCH_AMIN = {
+  TYT: 32.0,
+  SAY: 32.0,
+  EA: 31.5,
+  SÖZ: 31.5,
+  DİL: 33.7,
+};
+
+/**
+ * ÖSYM Resmi Z-Puanı (Standart Puan) dönüşümü ile belirli bir sınav yılı için Ham Puan (100–500) hesaplar:
+ *   S_k = 50 + 10 * ((net_k - μ_k) / σ_k)
+ *   A   = Σ (w_k * S_k)
+ *   Ham = 100 + 400 * ((A - A_min) / (A_max - A_min))
+ */
+export function computeOsymStandardRawScore(netMap, type, year) {
+  const stats = OSYM_YEAR_STATS[year] || OSYM_YEAR_STATS[2026];
+  const weights = OSYM_BRANCH_WEIGHTS[type];
+  const amin = OSYM_BRANCH_AMIN[type] ?? 32.0;
+  if (!weights) return 100;
+
+  let A = 0;
+  let Amax = 0;
+  for (const [k, w] of Object.entries(weights)) {
+    const [mu, sd, max] = stats[k];
+    const net = Number(netMap[k]) || 0;
+    const S = 50 + 10 * ((net - mu) / sd);
+    const Smax = 50 + 10 * ((max - mu) / sd);
+    A += w * S;
+    Amax += w * Smax;
+  }
+  const raw = 100 + 400 * ((A - amin) / Math.max(1e-6, Amax - amin));
+  return Number(Math.min(500, Math.max(100, raw)).toFixed(3));
+}
+
+/**
  * Doğru ve Yanlış sayılarını soru limitine göre doğrular (D + Y <= max)
  * ve Net = Doğru - (Yanlış / 4) formülünü uygular.
  */
@@ -254,41 +350,41 @@ export function calculateYksResults(rawInput = {}) {
     ayt[f.key] = sanitizeFieldPair(rawInput.ayt?.[f.key]?.d, rawInput.ayt?.[f.key]?.y, f.max);
   }
 
-  // ÖSYM Standart Katsayıları (Ham Puanlar: 100 – 500)
-  const clampRaw = (v) => Number(Math.min(500, Math.max(100, v)).toFixed(3));
+  const netMap = {
+    tyt_tr: tyt.turkce.net,
+    tyt_sos: tyt.sosyal.net,
+    tyt_mat: tyt.matematik.net,
+    tyt_fen: tyt.fen.net,
+    ayt_mat: ayt.matematik.net,
+    ayt_fen: ayt.fen.net,
+    ayt_edsos1: ayt.edSos1.net,
+    ayt_sos2: ayt.sos2.net,
+    ydt: ayt.ydt.net,
+  };
+
+  const selectedYear = CALC_YEARS.includes(Number(rawInput.selectedYear)) ? Number(rawInput.selectedYear) : 2026;
   const clampPlace = (v) => Number(Math.min(560, Math.max(100, v)).toFixed(3));
 
-  const tytRaw = clampRaw(
-    100 +
-      tyt.turkce.net * 3.3 +
-      tyt.sosyal.net * 3.4 +
-      tyt.matematik.net * 3.3 +
-      tyt.fen.net * 3.4,
-  );
-
-  // AYT/YDT puanlarında %40 TYT katkısı (max 160 puan) + %60 AYT/YDT katkısı (max 240 puan)
-  const tyt40 =
-    tyt.turkce.net * 1.32 +
-    tyt.sosyal.net * 1.36 +
-    tyt.matematik.net * 1.32 +
-    tyt.fen.net * 1.36;
-
-  const sayRaw = clampRaw(100 + tyt40 + ayt.matematik.net * 3.0 + ayt.fen.net * 3.0);
-  const eaRaw = clampRaw(100 + tyt40 + ayt.matematik.net * 3.0 + ayt.edSos1.net * 3.0);
-  const sozRaw = clampRaw(100 + tyt40 + ayt.edSos1.net * 3.0 + ayt.sos2.net * 3.0);
-  const dilRaw = clampRaw(100 + tyt40 + ayt.ydt.net * 3.0);
-
-  const buildBranch = (type, rawScore, active) => {
-    const placement = clampPlace(rawScore + obpAdd);
+  const buildBranch = (type, active) => {
+    const rawByYear = {};
+    const placementByYear = {};
     const ranks = {};
+
     for (const yr of CALC_YEARS) {
-      ranks[yr] = interpolateRankLinear(placement, YKS_RANK_TABLES[type][yr]);
+      const rScore = computeOsymStandardRawScore(netMap, type, yr);
+      const pScore = clampPlace(rScore + obpAdd);
+      rawByYear[yr] = rScore;
+      placementByYear[yr] = pScore;
+      ranks[yr] = interpolateRankLinear(pScore, YKS_RANK_TABLES[type][yr]);
     }
+
     const rankVals = CALC_YEARS.map((yr) => ranks[yr]).filter(Boolean);
     return {
       type,
-      raw: rawScore,
-      placement,
+      raw: rawByYear[selectedYear],
+      placement: placementByYear[selectedYear],
+      rawByYear,
+      placementByYear,
       ranks,
       bestYearRank: rankVals.length ? Math.min(...rankVals) : null,
       worstYearRank: rankVals.length ? Math.max(...rankVals) : null,
@@ -296,13 +392,13 @@ export function calculateYksResults(rawInput = {}) {
     };
   };
 
-  const hasTytAny = tytTotalD > 0 || tytTotalY > 0;
+  const hasTytAny = tyt.turkce.net >= 0.5 || tyt.matematik.net >= 0.5 || tytTotalD > 0 || tytTotalY > 0;
   const branches = {
-    TYT: buildBranch('TYT', tytRaw, hasTytAny),
-    SAY: buildBranch('SAY', sayRaw, ayt.matematik.d + ayt.matematik.y + ayt.fen.d + ayt.fen.y > 0),
-    EA: buildBranch('EA', eaRaw, ayt.matematik.d + ayt.matematik.y + ayt.edSos1.d + ayt.edSos1.y > 0),
-    SÖZ: buildBranch('SÖZ', sozRaw, ayt.edSos1.d + ayt.edSos1.y + ayt.sos2.d + ayt.sos2.y > 0),
-    DİL: buildBranch('DİL', dilRaw, ayt.ydt.d + ayt.ydt.y > 0),
+    TYT: buildBranch('TYT', hasTytAny),
+    SAY: buildBranch('SAY', hasTytAny && (ayt.matematik.d + ayt.matematik.y + ayt.fen.d + ayt.fen.y > 0)),
+    EA: buildBranch('EA', hasTytAny && (ayt.matematik.d + ayt.matematik.y + ayt.edSos1.d + ayt.edSos1.y > 0)),
+    SÖZ: buildBranch('SÖZ', hasTytAny && (ayt.edSos1.d + ayt.edSos1.y + ayt.sos2.d + ayt.sos2.y > 0)),
+    DİL: buildBranch('DİL', hasTytAny && (ayt.ydt.d + ayt.ydt.y > 0)),
   };
 
   return {
@@ -311,6 +407,7 @@ export function calculateYksResults(rawInput = {}) {
     obpBroken,
     obpCoeff,
     obpAdd,
+    selectedYear,
     tyt,
     tytTotalNet,
     tytTotalD,
@@ -373,6 +470,8 @@ export function renderYksResultsBlockHtml(results, { selectedType = 'SAY', selec
   const st = CALC_SCORE_TYPES.includes(selectedType) ? selectedType : 'SAY';
   const yr = CALC_YEARS.includes(Number(selectedYear)) ? Number(selectedYear) : 2026;
   const activeBranch = results.branches[st] || results.branches.SAY;
+  const heroRaw = activeBranch.rawByYear?.[yr] ?? activeBranch.raw;
+  const heroPlacement = activeBranch.placementByYear?.[yr] ?? activeBranch.placement;
   const heroRank = activeBranch.ranks[yr];
   const canFilterCatalog = st !== 'TYT';
 
@@ -380,6 +479,8 @@ export function renderYksResultsBlockHtml(results, { selectedType = 'SAY', selec
     const b = results.branches[code];
     const isSel = code === st;
     const isMuted = !b.active && code !== 'TYT';
+    const rowRaw = b.rawByYear?.[yr] ?? b.raw;
+    const rowPlace = b.placementByYear?.[yr] ?? b.placement;
     return `<tr class="yks-res-row ${isSel ? 'selected' : ''} ${isMuted ? 'muted' : ''}" data-calc-select-type="${code}">
       <td>
         <div style="display:flex;align-items:center;gap:7px;">
@@ -387,16 +488,16 @@ export function renderYksResultsBlockHtml(results, { selectedType = 'SAY', selec
           ${isMuted ? `<span style="font-size:11px;color:var(--text-tertiary);">Boş</span>` : ''}
         </div>
       </td>
-      <td class="tabular">${fmtPts(b.raw)}</td>
-      <td class="tabular"><strong>${fmtPts(b.placement)}</strong></td>
-      <td class="tabular ${yr === 2023 ? 'yks-yr-hl' : ''}">${formatRank(b.ranks[2023])}</td>
-      <td class="tabular ${yr === 2024 ? 'yks-yr-hl' : ''}">${formatRank(b.ranks[2024])}</td>
-      <td class="tabular ${yr === 2025 ? 'yks-yr-hl' : ''}">${formatRank(b.ranks[2025])}</td>
-      <td class="tabular ${yr === 2026 ? 'yks-yr-hl' : ''}"><strong>${formatRank(b.ranks[2026])}</strong></td>
+      <td class="tabular">${isMuted ? '—' : fmtPts(rowRaw)}</td>
+      <td class="tabular"><strong>${isMuted ? '—' : fmtPts(rowPlace)}</strong></td>
+      <td class="tabular ${yr === 2023 ? 'yks-yr-hl' : ''}">${isMuted ? '—' : formatRank(b.ranks[2023])}</td>
+      <td class="tabular ${yr === 2024 ? 'yks-yr-hl' : ''}">${isMuted ? '—' : formatRank(b.ranks[2024])}</td>
+      <td class="tabular ${yr === 2025 ? 'yks-yr-hl' : ''}">${isMuted ? '—' : formatRank(b.ranks[2025])}</td>
+      <td class="tabular ${yr === 2026 ? 'yks-yr-hl' : ''}"><strong>${isMuted ? '—' : formatRank(b.ranks[2026])}</strong></td>
       <td style="text-align:right;">
-        ${code !== 'TYT'
+        ${code !== 'TYT' && !isMuted
           ? `<button class="mini-action" type="button" data-calc-filter-row="${code}" data-calc-filter-rank="${b.ranks[yr]}" title="${code} ${yr} sıralamasıyla bölümleri filtrele">Filtrele →</button>`
-          : `<span style="font-size:11.5px;color:var(--text-tertiary);">Ön Lisans</span>`}
+          : `<span style="font-size:11.5px;color:var(--text-tertiary);">${code === 'TYT' ? 'Ön Lisans' : '—'}</span>`}
       </td>
     </tr>`;
   }).join('');
@@ -430,12 +531,12 @@ export function renderYksResultsBlockHtml(results, { selectedType = 'SAY', selec
 
           <div class="yks-hero-scores tabular">
             <div class="yks-score-pill-box">
-              <span>Ham Puan</span>
-              <strong>${fmtPts(activeBranch.raw)}</strong>
+              <span>Ham Puan (${yr})</span>
+              <strong>${fmtPts(heroRaw)}</strong>
             </div>
             <div class="yks-score-pill-box accent">
-              <span>Yerleştirme Puanı</span>
-              <strong>${fmtPts(activeBranch.placement)}</strong>
+              <span>Yerleştirme (${yr})</span>
+              <strong>${fmtPts(heroPlacement)}</strong>
             </div>
             <div class="yks-score-pill-box">
               <span>OBP Katkısı ${results.obpBroken ? '(Kırık)' : ''}</span>
@@ -462,8 +563,8 @@ export function renderYksResultsBlockHtml(results, { selectedType = 'SAY', selec
         <thead>
           <tr>
             <th>Puan Türü</th>
-            <th>Ham Puan</th>
-            <th>Yerleştirme</th>
+            <th>Ham (${yr})</th>
+            <th>Yerleştirme (${yr})</th>
             <th>2023 Sıra</th>
             <th>2024 Sıra</th>
             <th>2025 Sıra</th>

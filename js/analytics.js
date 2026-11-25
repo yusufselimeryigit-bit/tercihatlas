@@ -11,6 +11,11 @@ import {
   TYT_FIELDS,
   getAytFieldsForScoreType,
 } from './utils.js';
+import {
+  computeOsymStandardRawScore,
+  interpolateRankLinear,
+  YKS_RANK_TABLES,
+} from './yks-calculator.js?v=27';
 
 /**
  * Computes a realistic 2027 rank projection range & quota change warning
@@ -559,10 +564,8 @@ export function estimateYksRankFromNets(myNets) {
   const hasTyt = [tTr, tSos, tMat, tFen].some((v) => v !== null);
   if (!hasTyt) return null;
 
-  const tytContrib = (tTr || 0) * 1.32 + (tSos || 0) * 1.36 + (tMat || 0) * 1.32 + (tFen || 0) * 1.36;
   const obp = num(myNets.obp) ?? 450; // sensible default 450 (90 diploma) if omitted
   const obpContrib = obp * 0.12;
-  const base = 100;
 
   const aMat = num(myNets.ayt?.matematik);
   const aFiz = num(myNets.ayt?.fizik);
@@ -577,40 +580,29 @@ export function estimateYksRankFromNets(myNets) {
   const aDin = num(myNets.ayt?.din);
   const ydt = num(myNets.ydt);
 
+  const netMap = {
+    tyt_tr: tTr || 0,
+    tyt_sos: tSos || 0,
+    tyt_mat: tMat || 0,
+    tyt_fen: tFen || 0,
+    ayt_mat: aMat || 0,
+    ayt_fen: (aFiz || 0) + (aKim || 0) + (aBio || 0),
+    ayt_edsos1: (aEdb || 0) + (aTr1 || 0) + (aCg1 || 0),
+    ayt_sos2: (aTr2 || 0) + (aCg2 || 0) + (aFel || 0) + (aDin || 0),
+    ydt: ydt || 0,
+  };
+
   const out = {};
+  const addBranch = (st) => {
+    const raw = computeOsymStandardRawScore(netMap, st, 2026);
+    const score = Number(Math.min(560, raw + obpContrib).toFixed(3));
+    out[st] = { score, rank: interpolateRankLinear(score, YKS_RANK_TABLES[st][2026]) };
+  };
 
-  if ([aMat, aFiz, aKim, aBio].some((v) => v !== null)) {
-    const score = Number((base + tytContrib + (aMat || 0) * 3.0 + (aFiz || 0) * 2.85 + (aKim || 0) * 3.07 + (aBio || 0) * 3.07 + obpContrib).toFixed(2));
-    out.SAY = { score, rank: interpolateScoreToRank(score, RANK_ANCHORS.SAY) };
-  }
-
-  if ([aMat, aEdb, aTr1, aCg1].some((v) => v !== null)) {
-    const score = Number((base + tytContrib + (aMat || 0) * 3.0 + (aEdb || 0) * 3.0 + (aTr1 || 0) * 2.8 + (aCg1 || 0) * 3.33 + obpContrib).toFixed(2));
-    out.EA = { score, rank: interpolateScoreToRank(score, RANK_ANCHORS.EA) };
-  }
-
-  if ([aEdb, aTr1, aCg1, aTr2, aCg2, aFel, aDin].some((v) => v !== null)) {
-    const score = Number(
-      (
-        base +
-        tytContrib +
-        (aEdb || 0) * 3.0 +
-        (aTr1 || 0) * 2.8 +
-        (aCg1 || 0) * 3.33 +
-        (aTr2 || 0) * 2.91 +
-        (aCg2 || 0) * 2.91 +
-        (aFel || 0) * 3.0 +
-        (aDin || 0) * 3.33 +
-        obpContrib
-      ).toFixed(2),
-    );
-    out.SÖZ = { score, rank: interpolateScoreToRank(score, RANK_ANCHORS.SÖZ) };
-  }
-
-  if (ydt !== null) {
-    const score = Number((base + tytContrib + ydt * 3.0 + obpContrib).toFixed(2));
-    out.DİL = { score, rank: interpolateScoreToRank(score, RANK_ANCHORS.DİL) };
-  }
+  if ([aMat, aFiz, aKim, aBio].some((v) => v !== null)) addBranch('SAY');
+  if ([aMat, aEdb, aTr1, aCg1].some((v) => v !== null)) addBranch('EA');
+  if ([aEdb, aTr1, aCg1, aTr2, aCg2, aFel, aDin].some((v) => v !== null)) addBranch('SÖZ');
+  if (ydt !== null) addBranch('DİL');
 
   return Object.keys(out).length ? { ...out, obpUsed: obp, obpEstimated: num(myNets.obp) === null } : null;
 }

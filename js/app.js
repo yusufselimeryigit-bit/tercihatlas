@@ -60,7 +60,7 @@ import {
   auditPreferenceOrder,
   SUBJECT_BOOST_PRESETS,
   simulateSubjectNetBoost,
-} from './analytics.js?v=26';
+} from './analytics.js?v=27';
 import { ABROAD_PRESETS, DEFAULT_ABROAD_TOOLS, createAbroadRecord, renderAbroadView } from './abroad.js?v=26';
 import { parseExamPdfFile } from './pdf-parser.js?v=26';
 import {
@@ -85,7 +85,7 @@ import {
   buildCalcInputFromMyNets,
   renderYksCalculatorPanel,
   renderYksResultsBlockHtml,
-} from './yks-calculator.js?v=26';
+} from './yks-calculator.js?v=27';
 import {
   translateBkCondition,
   deriveProgramBkTags,
