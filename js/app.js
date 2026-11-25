@@ -13,7 +13,7 @@ import {
   getAytFieldsForScoreType,
   generateSyncKey,
   exportProgramsToCsv,
-} from './utils.js';
+} from './utils.js?v=11';
 import {
   getApiBase,
   setCustomApiBase,
@@ -27,7 +27,7 @@ import {
   pushCloudSync,
   createShareSnapshot,
   fetchShareSnapshot,
-} from './api.js';
+} from './api.js?v=11';
 import {
   renderSparkline,
   renderDetailTrendChart,
@@ -35,7 +35,7 @@ import {
   renderExamProgressionChart,
   renderMiniNetSparkline,
   renderAppleActivityRings,
-} from './charts.js';
+} from './charts.js?v=11';
 import {
   compute2027Projection,
   compareWithMyNets,
@@ -48,15 +48,15 @@ import {
   analyzeSubjectLeverage,
   computeGoalRingsAndWeeklyPlan,
   compareScenarios,
-} from './analytics.js';
-import { ABROAD_PRESETS, DEFAULT_ABROAD_TOOLS, createAbroadRecord, renderAbroadView } from './abroad.js';
-import { parseExamPdfFile } from './pdf-parser.js';
+} from './analytics.js?v=11';
+import { ABROAD_PRESETS, DEFAULT_ABROAD_TOOLS, createAbroadRecord, renderAbroadView } from './abroad.js?v=11';
+import { parseExamPdfFile } from './pdf-parser.js?v=11';
 import {
   renderTurkeyCampusMap,
   renderCostCalculator,
   renderTimelineView,
   downloadTimelineIcs,
-} from './map-cost.js';
+} from './map-cost.js?v=11';
 
 const STATE_KEY = 'tercihatlas_state_v1';
 const SYNC_KEY_STORAGE = 'tercihatlas_sync_key';
@@ -4373,7 +4373,10 @@ async function init() {
   });
 
   if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('./sw.js').catch(() => {});
+    navigator.serviceWorker
+      .register('./sw.js?v=11')
+      .then((reg) => reg.update().catch(() => {}))
+      .catch(() => {});
   }
 
   renderAll();

@@ -1,18 +1,18 @@
-const CACHE_NAME = 'tercihatlas-v10';
+const CACHE_NAME = 'tercihatlas-v11';
 const STATIC_ASSETS = [
   './',
   './index.html',
   './manifest.json',
   './icon.svg',
-  './css/styles.css?v=7',
-  './js/app.js?v=7',
-  './js/api.js',
-  './js/analytics.js',
-  './js/abroad.js',
-  './js/charts.js',
-  './js/map-cost.js',
-  './js/pdf-parser.js',
-  './js/utils.js',
+  './css/styles.css?v=11',
+  './js/app.js?v=11',
+  './js/api.js?v=11',
+  './js/analytics.js?v=11',
+  './js/abroad.js?v=11',
+  './js/charts.js?v=11',
+  './js/map-cost.js?v=11',
+  './js/pdf-parser.js?v=11',
+  './js/utils.js?v=11',
 ];
 
 self.addEventListener('install', (event) => {
@@ -35,8 +35,10 @@ self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
   if (url.pathname.startsWith('/api/') || url.hostname.includes('workers.dev') || url.hostname.includes('jsdelivr.net')) return;
 
+  const req = url.origin === self.location.origin ? new Request(event.request, { cache: 'no-cache' }) : event.request;
+
   event.respondWith(
-    fetch(event.request)
+    fetch(req)
       .then((response) => {
         if (response.ok && url.origin === self.location.origin) {
           const clone = response.clone();
