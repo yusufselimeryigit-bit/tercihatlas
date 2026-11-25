@@ -711,3 +711,219 @@ export function computeDecisionScores(programs, weights = DEFAULT_DECISION_WEIGH
     })
     .sort((a, b) => b.fitScore - a.fitScore);
 }
+
+// ============================================================================
+// Subject-Level Weak Link & YKS Rank Leverage Analysis (from PDFs + My Nets)
+// ============================================================================
+export function analyzeSubjectLeverage(myNets, examHistory, targetProgram, fallbackTargetRank = 15000) {
+  const refNet = targetProgram?.nets?.[0] || null;
+  const scoreType = String(targetProgram?.scoreType || 'SAY').toUpperCase();
+  const est = estimateYksRankFromNets(myNets);
+  const baseRank = est?.[scoreType]?.rank || est?.SAY?.rank || est?.EA?.rank || Number(fallbackTargetRank) || 15000;
+
+  const num = (v) => (v !== null && v !== undefined && v !== '' && Number.isFinite(Number(v)) ? Number(v) : null);
+  const chrono = [...(examHistory || [])].reverse(); // oldest -> newest
+
+  const subjects = [];
+
+  // TYT subjects
+  for (const f of TYT_FIELDS) {
+    const historyPts = chrono
+      .filter((e) => e.examType === 'TYT' && num(e.tyt?.[f.key]) !== null)
+      .map((e) => num(e.tyt[f.key]));
+    const current = num(myNets?.tyt?.[f.key]) ?? (historyPts.length ? historyPts[historyPts.length - 1] : null);
+    const avg = historyPts.length ? Number((historyPts.reduce((a, b) => a + b, 0) / historyPts.length).toFixed(2)) : null;
+    const target = num(refNet?.tyt?.[f.key]);
+    const gap = current !== null && target !== null ? Number((current - target).toFixed(2)) : null;
+    const deficit = gap !== null && gap < 0 ? Math.abs(gap) : 0;
+    const rankGain = deficit > 0 ? Math.max(10, Math.round(baseRank * (1 - Math.pow(0.981, deficit)))) : 0;
+
+    subjects.push({
+      group: 'TYT',
+      key: `tyt_${f.key}`,
+      label: f.label,
+      max: f.max,
+      current,
+      avg,
+      target,
+      gap,
+      rankGain,
+      history: historyPts,
+      leverageScore: deficit * 1.9,
+    });
+  }
+
+  // AYT or YDT subjects
+  if (scoreType === 'DİL') {
+    const current = num(myNets?.ydt);
+    const target = num(refNet?.ydt);
+    const gap = current !== null && target !== null ? Number((current - target).toFixed(2)) : null;
+    const deficit = gap !== null && gap < 0 ? Math.abs(gap) : 0;
+    const rankGain = deficit > 0 ? Math.max(10, Math.round(baseRank * (1 - Math.pow(0.96, deficit)))) : 0;
+    subjects.push({
+      group: 'YDT',
+      key: 'ydt',
+      label: 'YDT (Yabancı Dil)',
+      max: 80,
+      current,
+      avg: null,
+      target,
+      gap,
+      rankGain,
+      history: [],
+      leverageScore: deficit * 4.0,
+    });
+  } else {
+    const aytFields = getAytFieldsForScoreType(scoreType);
+    for (const f of aytFields) {
+      const historyPts = chrono
+        .filter((e) => e.examType === 'AYT' && num(e.ayt?.[f.key]) !== null)
+        .map((e) => num(e.ayt[f.key]));
+      const current = num(myNets?.ayt?.[f.key]) ?? (historyPts.length ? historyPts[historyPts.length - 1] : null);
+      const avg = historyPts.length ? Number((historyPts.reduce((a, b) => a + b, 0) / historyPts.length).toFixed(2)) : null;
+      const target = num(refNet?.ayt?.[f.key]);
+      const gap = current !== null && target !== null ? Number((current - target).toFixed(2)) : null;
+      const deficit = gap !== null && gap < 0 ? Math.abs(gap) : 0;
+      const rankGain = deficit > 0 ? Math.max(10, Math.round(baseRank * (1 - Math.pow(0.956, deficit)))) : 0;
+
+      subjects.push({
+        group: 'AYT',
+        key: `ayt_${f.key}`,
+        label: f.label,
+        max: f.max,
+        current,
+        avg,
+        target,
+        gap,
+        rankGain,
+        history: historyPts,
+        leverageScore: deficit * 4.4,
+      });
+    }
+  }
+
+  const withData = subjects.filter((s) => s.current !== null || s.target !== null || s.history.length > 0);
+  const priority = [...withData].filter((s) => s.gap !== null && s.gap < 0).sort((a, b) => b.leverageScore - a.leverageScore)[0] || null;
+
+  return {
+    scoreType,
+    baseRank,
+    targetProgram,
+    subjects: withData,
+    priority,
+  };
+}
+
+// ============================================================================
+// Apple Fitness Activity Rings & Weekly Net Plan toward YKS 2027
+// ============================================================================
+export function computeGoalRingsAndWeeklyPlan(programs, myNets, targetDateIso = '2027-06-19') {
+  const now = Date.now();
+  const examTs = new Date(`${targetDateIso}T10:15:00+03:00`).getTime();
+  const daysLeft = Math.max(1, Math.ceil((examTs - now) / (1000 * 60 * 60 * 24)));
+  const weeksLeft = Math.max(1, Math.ceil(daysLeft / 7));
+
+  const topProg = programs?.[0] || null;
+  const topNet = topProg?.nets?.[0] || null;
+  const gap = topProg ? compareWithMyNets(topProg, myNets) : null;
+
+  // Ring 1: TYT %
+  const targetTyt = topNet?.tytTotal || 95;
+  const myTyt = gap?.myTytTotal ?? null;
+  const tytPct = myTyt !== null && targetTyt > 0 ? Math.min(100, Math.max(0, Math.round((myTyt / targetTyt) * 100))) : 0;
+  const tytDeficit = myTyt !== null && targetTyt ? Math.max(0, Number((targetTyt - myTyt).toFixed(2))) : null;
+
+  // Ring 2: AYT / YDT %
+  const isDil = topProg?.scoreType === 'DİL';
+  const targetAyt = isDil ? topNet?.ydt || 65 : topNet?.aytTotal || 60;
+  const myAyt = gap?.myAytTotal ?? null;
+  const aytPct = myAyt !== null && targetAyt > 0 ? Math.min(100, Math.max(0, Math.round((myAyt / targetAyt) * 100))) : 0;
+  const aytDeficit = myAyt !== null && targetAyt ? Math.max(0, Number((targetAyt - myAyt).toFixed(2))) : null;
+
+  // Ring 3: Research Checklist %
+  const checklistKeys = ['mufredat', 'kampusYurt', 'mezun', 'erasmus'];
+  const totalChecks = (programs?.length || 0) * checklistKeys.length;
+  let doneChecks = 0;
+  for (const p of programs || []) {
+    for (const k of checklistKeys) {
+      if (p.checklist?.[k]) doneChecks += 1;
+    }
+  }
+  const researchPct = totalChecks > 0 ? Math.round((doneChecks / totalChecks) * 100) : 0;
+
+  return {
+    daysLeft,
+    weeksLeft,
+    topProg,
+    isDil,
+    tytPct,
+    aytPct,
+    researchPct,
+    myTyt,
+    targetTyt,
+    tytDeficit,
+    tytPerWeek: tytDeficit !== null ? Number((tytDeficit / weeksLeft).toFixed(2)) : null,
+    myAyt,
+    targetAyt,
+    aytDeficit,
+    aytPerWeek: aytDeficit !== null ? Number((aytDeficit / weeksLeft).toFixed(2)) : null,
+    doneChecks,
+    totalChecks,
+  };
+}
+
+// ============================================================================
+// Side-by-Side Scenario Comparison (Plan A vs Plan B)
+// ============================================================================
+export function compareScenarios(scenarioA, scenarioB, targetRank, costSettings = {}) {
+  const monthlyIst = costSettings.monthlyIstanbul || 22000;
+  const monthlyMetro = costSettings.monthlyMetro || 17000;
+  const monthlyOther = costSettings.monthlyOther || 13000;
+
+  const summarize = (sc) => {
+    const progs = sc?.programs || [];
+    const health = analyzePreferenceHealth(progs, targetRank);
+    const validRanks = progs.map((p) => p.latestRank).filter((r) => r && r > 0).sort((a, b) => a - b);
+    const bestRank = validRanks.length ? validRanks[0] : null;
+    const worstRank = validRanks.length ? validRanks[validRanks.length - 1] : null;
+    const medianRank = validRanks.length ? validRanks[Math.floor(validRanks.length / 2)] : null;
+    const cities = [...new Set(progs.map((p) => p.city).filter(Boolean))];
+
+    const fourYearCosts = progs.map((p) => {
+      const c = String(p.city || '').toLocaleUpperCase('tr');
+      const m = c === 'İSTANBUL' ? monthlyIst : c === 'ANKARA' || c === 'İZMİR' ? monthlyMetro : monthlyOther;
+      return ((p.tuition || 0) + m * 9) * 4;
+    });
+    const avgFourYearCost = fourYearCosts.length
+      ? Math.round(fourYearCosts.reduce((a, b) => a + b, 0) / fourYearCosts.length)
+      : 0;
+
+    return {
+      id: sc?.id,
+      name: sc?.name || 'Plan',
+      count: progs.length,
+      healthScore: health.score,
+      hayal: progs.filter((p) => p.risk === 'hayal').length,
+      hedef: progs.filter((p) => p.risk === 'hedef').length,
+      guvenli: progs.filter((p) => p.risk === 'guvenli').length,
+      bestRank,
+      medianRank,
+      worstRank,
+      cityCount: cities.length,
+      cities,
+      avgFourYearCost,
+      programs: progs,
+    };
+  };
+
+  const a = summarize(scenarioA);
+  const b = summarize(scenarioB);
+  const codesA = new Set(a.programs.map((p) => p.code));
+  const codesB = new Set(b.programs.map((p) => p.code));
+
+  const common = a.programs.filter((p) => codesB.has(p.code));
+  const onlyA = a.programs.filter((p) => !codesB.has(p.code));
+  const onlyB = b.programs.filter((p) => !codesA.has(p.code));
+
+  return { a, b, common, onlyA, onlyB };
+}

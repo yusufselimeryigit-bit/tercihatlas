@@ -144,7 +144,139 @@ export function createAbroadRecord(data) {
   };
 }
 
-export function renderAbroadView(abroadPrograms, activeFilter = 'ALL') {
+export const DEFAULT_ABROAD_TOOLS = {
+  diplomaScore: 92,
+  yksScore: 480,
+  sperrkontoSaved: 0,
+  sperrkontoTarget: 11904,
+  iseeEstimate: 15000,
+  ieltsScore: '',
+  testdafScore: '',
+  tolcScore: '',
+};
+
+/**
+ * Bavarian Formula (Modifizierte bayerische Formel):
+ * N = 1 + 3 * (N_max - N_d) / (N_max - N_min)
+ * German scale: 1.0 (best) -> 4.0 (minimum passing)
+ */
+export function calculateBavarianGrade(score, maxScore = 100, minScore = 50) {
+  const v = Number(score);
+  if (!Number.isFinite(v)) return null;
+  const clamped = Math.max(minScore, Math.min(maxScore, v));
+  const raw = 1 + 3 * ((maxScore - clamped) / Math.max(1, maxScore - minScore));
+  const grade = Math.min(4.0, Math.max(1.0, Number(raw.toFixed(2))));
+  let badge = 'İyi / Kabul Edilebilir';
+  let tone = 'accent';
+  if (grade <= 1.5) {
+    badge = 'Sehr Gut · TUM / RWTH / KIT için çok güçlü';
+    tone = 'green';
+  } else if (grade <= 2.3) {
+    badge = 'Gut · Çoğu devlet üniversitesi NC bandında';
+    tone = 'accent';
+  } else if (grade <= 3.0) {
+    badge = 'Befriedigend · NC-frei bölümlerde güçlü';
+    tone = 'amber';
+  } else {
+    badge = 'Ausreichend · NC-frei başvurular önerilir';
+    tone = 'rose';
+  }
+  return { grade, badge, tone };
+}
+
+function renderAbroadToolsSection(abroadTools, eurTry = 38) {
+  const t = { ...DEFAULT_ABROAD_TOOLS, ...(abroadTools || {}) };
+  const dip = calculateBavarianGrade(t.diplomaScore, 100, 50);
+  const yks = calculateBavarianGrade(t.yksScore, 560, 180);
+  const saved = Math.max(0, Number(t.sperrkontoSaved) || 0);
+  const target = Math.max(1000, Number(t.sperrkontoTarget) || 11904);
+  const pct = Math.min(100, Math.round((saved / target) * 100));
+  const remainingEur = Math.max(0, target - saved);
+  const remainingTry = Math.round(remainingEur * (Number(eurTry) || 38));
+  const isee = Number(t.iseeEstimate) || 0;
+  const dsuOk = isee > 0 && isee <= 23000;
+
+  const fmtEur = (n) => `€${Math.round(n).toLocaleString('tr-TR')}`;
+  const fmtTry = (n) => `${Math.round(n).toLocaleString('tr-TR')} ₺`;
+
+  return `
+    <section class="abroad-tools-grid" aria-label="Almanya ve İtalya başvuru araçları">
+      <div class="panel">
+        <div class="panel-title">
+          <span>🇩🇪 Alman Notu Çevirici (Bavarian Formula)</span>
+          <span class="pill pill-accent">1.0 – 4.0 NC</span>
+        </div>
+        <div class="form-grid-2" style="margin-bottom:12px;">
+          <div>
+            <label class="field-label" for="abToolDiploma">Lise Diploma Notun (100'lük)</label>
+            <input id="abToolDiploma" class="input tabular" type="number" step="0.1" min="50" max="100" value="${escapeHtml(t.diplomaScore)}" />
+          </div>
+          <div>
+            <label class="field-label" for="abToolYks">Tahmini YKS Puanın (180 – 560)</label>
+            <input id="abToolYks" class="input tabular" type="number" step="1" min="180" max="560" value="${escapeHtml(t.yksScore)}" />
+          </div>
+        </div>
+        <div class="bavarian-result-grid tabular">
+          <div class="bavarian-tile">
+            <span class="metric-label">Diploma Alman Notu</span>
+            <strong style="color:var(--${dip?.tone || 'accent'});">${dip ? dip.grade.toFixed(2) : '—'}</strong>
+            <div style="font-size:11.5px;color:var(--text-secondary);margin-top:2px;">${dip ? escapeHtml(dip.badge) : ''}</div>
+          </div>
+          <div class="bavarian-tile">
+            <span class="metric-label">YKS Alman Karşılığı</span>
+            <strong style="color:var(--${yks?.tone || 'accent'});">${yks ? yks.grade.toFixed(2) : '—'}</strong>
+            <div style="font-size:11.5px;color:var(--text-secondary);margin-top:2px;">Uni-Assist VPD (50/50 karma) ≈ <strong>${dip && yks ? ((dip.grade + yks.grade) / 2).toFixed(2) : '—'}</strong></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-title">
+          <span>💶 Bloke Hesap (Sperrkonto) & 🇮🇹 DSU Bursu</span>
+          <span class="pill pill-risk-guvenli tabular">%${pct}</span>
+        </div>
+        <div class="form-grid-2" style="margin-bottom:10px;">
+          <div>
+            <label class="field-label" for="abToolSperrSaved">Biriken Bloke Hesap (€)</label>
+            <input id="abToolSperrSaved" class="input tabular" type="number" step="100" min="0" value="${escapeHtml(saved)}" />
+          </div>
+          <div>
+            <label class="field-label" for="abToolIsee">İtalya Tahmini ISEE (€ / yıl)</label>
+            <input id="abToolIsee" class="input tabular" type="number" step="500" min="0" value="${escapeHtml(isee)}" />
+          </div>
+        </div>
+        <div style="margin-bottom:10px;">
+          <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:5px;" class="tabular">
+            <span style="color:var(--text-secondary);">Hedef: <strong>${fmtEur(target)}</strong> (€992/ay × 12)</span>
+            <span style="color:var(--text-tertiary);">Kalan: <strong>${fmtEur(remainingEur)}</strong> (~${fmtTry(remainingTry)})</span>
+          </div>
+          <div class="bar-track" style="height:8px;"><div class="bar-fill" style="width:${pct}%;background:var(--green-bright);"></div></div>
+        </div>
+        <div class="${dsuOk ? 'quota-alert-good' : 'quota-alert-warn'}" style="margin-bottom:10px;">
+          ${dsuOk
+            ? `🇮🇹 ISEE ≤ €23.000: İtalya DSU bölgesel bursu (harç muafiyeti + yurt + yıllık ~€5.000–7.000 destek) bandındasın.`
+            : `🇮🇹 ISEE > €23.000: Tam DSU bursu sınırı €23.000; gelir beyanına göre kademeli harç indirimi alabilirsin.`}
+        </div>
+        <div class="abroad-exam-row">
+          <div>
+            <label class="field-label" for="abToolIelts" style="font-size:11.5px;">IELTS</label>
+            <input id="abToolIelts" class="input" type="text" value="${escapeHtml(t.ieltsScore)}" placeholder="Örn: 6.5" style="padding:6px 10px;font-size:12.5px;" />
+          </div>
+          <div>
+            <label class="field-label" for="abToolTestdaf" style="font-size:11.5px;">TestDaF / Goethe</label>
+            <input id="abToolTestdaf" class="input" type="text" value="${escapeHtml(t.testdafScore)}" placeholder="Örn: C1 / 4x4" style="padding:6px 10px;font-size:12.5px;" />
+          </div>
+          <div>
+            <label class="field-label" for="abToolTolc" style="font-size:11.5px;">TOLC-I / SAT</label>
+            <input id="abToolTolc" class="input" type="text" value="${escapeHtml(t.tolcScore)}" placeholder="Örn: SAT 1350" style="padding:6px 10px;font-size:12.5px;" />
+          </div>
+        </div>
+      </div>
+    </section>
+  `;
+}
+
+export function renderAbroadView(abroadPrograms, activeFilter = 'ALL', abroadTools = DEFAULT_ABROAD_TOOLS, eurTry = 38) {
   const list = activeFilter === 'ALL' ? abroadPrograms : abroadPrograms.filter((p) => p.country === activeFilter);
   const deCount = abroadPrograms.filter((p) => p.country === 'DE').length;
   const itCount = abroadPrograms.filter((p) => p.country === 'IT').length;
@@ -154,7 +286,7 @@ export function renderAbroadView(abroadPrograms, activeFilter = 'ALL') {
     <div>
       <div class="page-eyebrow">Avrupa Lisans Başvuruları</div>
       <h1 class="page-title">Yurt Dışı</h1>
-      <p class="page-subtitle">Almanya & İtalya üniversiteleri, dil/sınav şartları, burs ve son başvuru geri sayımları</p>
+      <p class="page-subtitle">Almanya & İtalya üniversiteleri, Bavarian Formula NC çevirici, bloke hesap ve DSU takibi</p>
     </div>
     <button class="btn btn-primary" id="openAbroadAddBtn">+ Yurt Dışı Program Ekle</button>
   </div>`;
@@ -182,6 +314,8 @@ export function renderAbroadView(abroadPrograms, activeFilter = 'ALL') {
     </div>
   </section>`;
 
+  const toolsHtml = renderAbroadToolsSection(abroadTools, eurTry);
+
   const filterBar = `<div class="toolbar">
     <div class="filter-pills">
       <button class="filter-pill ${activeFilter === 'ALL' ? 'active' : ''}" data-abroad-filter="ALL">Tümü (${abroadPrograms.length})</button>
@@ -192,7 +326,7 @@ export function renderAbroadView(abroadPrograms, activeFilter = 'ALL') {
   </div>`;
 
   if (!abroadPrograms.length) {
-    return `${headerHtml}${kpiHtml}
+    return `${headerHtml}${kpiHtml}${toolsHtml}
     <section class="apple-hero" style="padding:40px 28px;">
       <div class="apple-hero-content">
         <h2 style="font-size:26px;">Almanya & İtalya hedeflerini ekle.</h2>
@@ -281,5 +415,5 @@ export function renderAbroadView(abroadPrograms, activeFilter = 'ALL') {
       .join('')}
   </section>`;
 
-  return `${headerHtml}${kpiHtml}${filterBar}${cardsHtml}`;
+  return `${headerHtml}${kpiHtml}${toolsHtml}${filterBar}${cardsHtml}`;
 }

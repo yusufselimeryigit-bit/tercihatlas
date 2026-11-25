@@ -74,11 +74,12 @@ export async function fetchProgramFromApi(code, { refresh = false } = {}) {
   return apiRequest(`/api/program/${encodeURIComponent(code)}${q}`, { method: 'GET' });
 }
 
-export async function searchProgramsFromApi({ q = '', puanTuru = '', uniTuru = '', maxRank = '', size = 20 } = {}) {
+export async function searchProgramsFromApi({ q = '', puanTuru = '', uniTuru = '', minRank = '', maxRank = '', size = 20 } = {}) {
   const sp = new URLSearchParams();
   if (q) sp.set('q', q);
   if (puanTuru) sp.set('puanTuru', puanTuru);
   if (uniTuru) sp.set('uniTuru', uniTuru);
+  if (minRank) sp.set('minRank', String(minRank));
   if (maxRank) sp.set('maxRank', String(maxRank));
   if (size) sp.set('size', String(size));
   return apiRequest(`/api/search?${sp.toString()}`, { method: 'GET' });

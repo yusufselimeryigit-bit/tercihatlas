@@ -33,6 +33,8 @@ import {
   renderDetailTrendChart,
   renderRankSpectrum,
   renderExamProgressionChart,
+  renderMiniNetSparkline,
+  renderAppleActivityRings,
 } from './charts.js';
 import {
   compute2027Projection,
@@ -43,8 +45,11 @@ import {
   isProgramCurrentlyReachable,
   DEFAULT_DECISION_WEIGHTS,
   computeDecisionScores,
+  analyzeSubjectLeverage,
+  computeGoalRingsAndWeeklyPlan,
+  compareScenarios,
 } from './analytics.js';
-import { ABROAD_PRESETS, createAbroadRecord, renderAbroadView } from './abroad.js';
+import { ABROAD_PRESETS, DEFAULT_ABROAD_TOOLS, createAbroadRecord, renderAbroadView } from './abroad.js';
 import { parseExamPdfFile } from './pdf-parser.js';
 import {
   renderTurkeyCampusMap,
@@ -105,6 +110,7 @@ const DEFAULT_STATE = {
   myNets: structuredClone(DEFAULT_MY_NETS),
   examHistory: [],
   abroadPrograms: [],
+  abroadTools: structuredClone(DEFAULT_ABROAD_TOOLS),
   costSettings: structuredClone(DEFAULT_COST_SETTINGS),
   decisionWeights: structuredClone(DEFAULT_DECISION_WEIGHTS),
 };
@@ -141,8 +147,23 @@ const SF = {
 const ui = {
   region: 'TR',
   tab: 'preferences',
-  analysisSubTab: 'overview', // 'overview' | 'progression' | 'decision' | 'map' | 'simulator' | 'cost' | 'timeline'
+  analysisSubTab: 'overview', // 'overview' | 'progression' | 'discover' | 'decision' | 'map' | 'simulator' | 'cost' | 'timeline'
   progressionType: 'TYT',
+  compareMode: 'programs', // 'programs' | 'scenarios'
+  cmpScenarioA: null,
+  cmpScenarioB: null,
+  discover: {
+    q: 'Bilgisayar',
+    rank: null,
+    puanTuru: 'SAY',
+    uniTuru: '',
+    loading: false,
+    error: '',
+    bands: null, // { hayal: [], hedef: [], guvenli: [], usedRank }
+  },
+  refreshBusy: false,
+  refreshProgressText: '',
+  refreshDiff: null, // { updatedCount, failCount, changes: [] }
   selectedMapCity: null,
   simTytBoost: 0,
   simAytBoost: 0,
@@ -178,6 +199,7 @@ function normalizeState(parsed) {
     ...(parsed || {}),
     studentName: parsed?.studentName || 'Yusuf Selim Eryiğit',
     abroadPrograms: Array.isArray(parsed?.abroadPrograms) ? parsed.abroadPrograms : [],
+    abroadTools: { ...structuredClone(DEFAULT_ABROAD_TOOLS), ...(parsed?.abroadTools || {}) },
     examHistory: Array.isArray(parsed?.examHistory) ? parsed.examHistory : [],
     costSettings: { ...structuredClone(DEFAULT_COST_SETTINGS), ...(parsed?.costSettings || {}) },
     decisionWeights: { ...structuredClone(DEFAULT_DECISION_WEIGHTS), ...(parsed?.decisionWeights || {}) },
@@ -586,6 +608,67 @@ async function refreshProgramLive(code) {
   }
 }
 
+async function refreshAllProgramsLive() {
+  if (ui.refreshBusy || !state.programs.length) return;
+  ui.refreshBusy = true;
+  ui.refreshDiff = null;
+  const total = state.programs.length;
+  const changes = [];
+  let updatedCount = 0;
+  let failCount = 0;
+
+  const snapshot = state.programs.map((p) => ({
+    code: p.code,
+    university: p.university,
+    department: p.department,
+    latestRank: p.latestRank,
+    latestYear: p.latestYear,
+    quota: p.quota,
+  }));
+
+  for (let i = 0; i < snapshot.length; i++) {
+    const prev = snapshot[i];
+    ui.refreshProgressText = `Güncelleniyor (${i + 1}/${total})...`;
+    renderAll();
+    try {
+      const fresh = await fetchProgramFromApi(prev.code, { refresh: true });
+      addProgramToState(fresh);
+      updatedCount += 1;
+
+      const diffs = [];
+      if (fresh.latestRank && prev.latestRank && fresh.latestRank !== prev.latestRank) {
+        diffs.push(`Sıra: ${formatRank(prev.latestRank)} → ${formatRank(fresh.latestRank)}`);
+      }
+      if (fresh.quota !== null && prev.quota !== null && fresh.quota !== prev.quota) {
+        diffs.push(`Kontenjan: ${prev.quota} → ${fresh.quota}`);
+      }
+      if (fresh.latestYear && prev.latestYear && fresh.latestYear !== prev.latestYear) {
+        diffs.push(`Yeni kılavuz yılı: ${fresh.latestYear}`);
+      }
+      if (diffs.length) {
+        changes.push({
+          code: prev.code,
+          title: `${fresh.university} — ${fresh.department}`,
+          detail: diffs.join(' · '),
+        });
+      }
+    } catch {
+      failCount += 1;
+    }
+  }
+
+  ui.refreshBusy = false;
+  ui.refreshProgressText = '';
+  ui.refreshDiff = { updatedCount, failCount, changes, ranAt: new Date().toISOString() };
+  renderAll();
+  showToast(
+    changes.length
+      ? `${updatedCount} bölüm güncellendi (${changes.length} değişiklik bulundu).`
+      : `${updatedCount} bölüm canlı doğrulandı — değişiklik yok.`,
+    'success',
+  );
+}
+
 function removeProgram(code) {
   const target = state.programs.find((p) => p.code === code);
   if (!target) return;
@@ -791,7 +874,7 @@ function renderAll() {
   if (!root) return;
 
   if (ui.region === 'ABROAD') {
-    root.innerHTML = renderAbroadView(state.abroadPrograms, ui.abroadFilter);
+    root.innerHTML = renderAbroadView(state.abroadPrograms, ui.abroadFilter, state.abroadTools, state.costSettings?.eurTry || 39);
     bindAbroadEvents();
     initSlidingSegmentedControls();
     return;
@@ -906,19 +989,45 @@ function renderPreferencesView() {
       <h1 class="page-title">Tercihlerim</h1>
       <p class="page-subtitle">Canlı YÖK Atlas arama, çoklu senaryo, 2027 tahminleri ve dershane PDF net kıyaslaması</p>
     </div>
-    ${state.programs.length
-      ? `<div style="display:flex;gap:8px;flex-wrap:wrap;">
-          <button class="btn btn-sm" id="openOsymBtn">${SF.share} ÖSYM / Paylaş</button>
-          <button class="btn btn-sm" id="printReportBtn">${SF.print} PDF / Yazdır</button>
-        </div>`
-      : ''}
+    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+      <button class="btn btn-sm" id="openDiscoverShortcutBtn">✦ Sıralamama Göre Keşfet</button>
+      ${state.programs.length && !ui.readOnlyShare
+        ? `<button class="btn btn-sm" id="refreshAllBtn" ${ui.refreshBusy ? 'disabled' : ''}>${SF.refresh} ${ui.refreshBusy ? escapeHtml(ui.refreshProgressText || 'Güncelleniyor...') : 'Tümünü Güncelle'}</button>`
+        : ''}
+      ${state.programs.length
+        ? `<button class="btn btn-sm" id="openOsymBtn">${SF.share} ÖSYM / Paylaş</button>
+           <button class="btn btn-sm" id="printReportBtn">${SF.print} PDF / Yazdır</button>`
+        : ''}
+    </div>
   </div>`;
+
+  const diffBannerHtml = ui.refreshDiff
+    ? `<div class="refresh-diff-banner">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+          <strong style="font-size:13.5px;color:${ui.refreshDiff.changes.length ? 'var(--accent)' : 'var(--green)'};">
+            ${SF.check} ${ui.refreshDiff.updatedCount} program canlı YÖK Atlas'tan doğrulandı${ui.refreshDiff.failCount ? ` (${ui.refreshDiff.failCount} hata)` : ''}
+          </strong>
+          <button class="btn btn-ghost btn-icon btn-sm" id="dismissRefreshDiffBtn" title="Kapat">${SF.close}</button>
+        </div>
+        ${ui.refreshDiff.changes.length
+          ? `<div style="display:flex;flex-direction:column;gap:5px;font-size:12.5px;">
+              ${ui.refreshDiff.changes
+                .map(
+                  (c) => `<div style="padding:6px 10px;border-radius:9px;background:var(--accent-soft);color:var(--text);">
+                    <strong>${escapeHtml(c.title)}:</strong> <span class="tabular" style="color:var(--accent);font-weight:600;">${escapeHtml(c.detail)}</span>
+                  </div>`,
+                )
+                .join('')}
+            </div>`
+          : `<div style="font-size:12.5px;color:var(--text-secondary);">Tüm bölümlerin taban sıralaması ve kontenjanı zaten en güncel kılavuzla eşleşiyor.</div>`}
+      </div>`
+    : '';
 
   const scenarioHtml = renderScenarioBar();
   const kpiHtml = renderKpiStrip();
 
   if (state.programs.length === 0) {
-    return `${headerHtml}${scenarioHtml}${kpiHtml}
+    return `${headerHtml}${diffBannerHtml}${scenarioHtml}${kpiHtml}
     <section class="apple-hero">
       <div class="apple-hero-content">
         <img src="icon.svg" alt="TercihAtlas" class="apple-hero-icon" />
@@ -1002,7 +1111,7 @@ function renderPreferencesView() {
   </section>`;
 
   if (!filtered.length) {
-    return `${headerHtml}${scenarioHtml}${kpiHtml}${toolbarHtml}<div class="empty-state" style="padding:40px 24px;">
+    return `${headerHtml}${diffBannerHtml}${scenarioHtml}${kpiHtml}${toolbarHtml}<div class="empty-state" style="padding:40px 24px;">
       <h2>Eşleşen program bulunamadı</h2>
       <p>Arama kelimesini veya seçili filtreyi temizleyerek tüm tercihlerini görebilirsin.</p>
       <button class="btn" id="clearFiltersBtn">Filtreleri Temizle</button>
@@ -1010,7 +1119,7 @@ function renderPreferencesView() {
   }
 
   const contentHtml = ui.viewMode === 'table' ? renderTableView(filtered) : renderCardsView(filtered);
-  return `${headerHtml}${scenarioHtml}${kpiHtml}${toolbarHtml}${contentHtml}`;
+  return `${headerHtml}${diffBannerHtml}${scenarioHtml}${kpiHtml}${toolbarHtml}${contentHtml}`;
 }
 
 function renderCardsView(programs) {
@@ -1186,8 +1295,107 @@ function renderTableView(programs) {
 }
 
 // ============================================================================
-// Compare View
+// Compare View (Programs Side-by-Side | Scenarios Plan A vs Plan B)
 // ============================================================================
+function renderScenarioCompareBody() {
+  if (state.scenarios.length < 2) {
+    return `<div class="empty-state" style="padding:44px 24px;">
+      <h2>Kıyaslamak için en az 2 senaryo oluştur</h2>
+      <p>Tercihlerim ekranındaki <strong>+ Yeni Plan</strong> veya <strong>Kopyala</strong> butonuyla örneğin "Plan A (İstanbul)" ve "Plan B (Ankara)" oluşturup burada yan yana kıyaslayabilirsin.</p>
+      <button class="btn btn-primary" id="cmpCreateSecondScenarioBtn">${SF.plus} İkinci Senaryo Oluştur</button>
+    </div>`;
+  }
+
+  syncActiveScenarioPointers();
+  if (!ui.cmpScenarioA || !state.scenarios.some((s) => s.id === ui.cmpScenarioA)) {
+    ui.cmpScenarioA = state.scenarios[0].id;
+  }
+  if (!ui.cmpScenarioB || !state.scenarios.some((s) => s.id === ui.cmpScenarioB) || ui.cmpScenarioB === ui.cmpScenarioA) {
+    ui.cmpScenarioB = (state.scenarios.find((s) => s.id !== ui.cmpScenarioA) || state.scenarios[0]).id;
+  }
+
+  const scA = state.scenarios.find((s) => s.id === ui.cmpScenarioA);
+  const scB = state.scenarios.find((s) => s.id === ui.cmpScenarioB);
+  const cmp = compareScenarios(scA, scB, state.targetRank, state.costSettings);
+
+  const renderCard = (s, selectId, selectedId, otherScore) => {
+    const scoreTone = s.healthScore >= 80 ? 'green' : s.healthScore >= 60 ? 'amber' : 'rose';
+    return `<div class="scenario-cmp-card">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+        <select id="${selectId}" class="select toolbar-select" style="font-weight:650;font-size:14px;">
+          ${state.scenarios
+            .map((sc) => `<option value="${escapeHtml(sc.id)}" ${sc.id === selectedId ? 'selected' : ''}>${escapeHtml(sc.name)} (${sc.programs.length})</option>`)
+            .join('')}
+        </select>
+        <span class="pill tabular" style="background:var(--${scoreTone}-soft);color:var(--${scoreTone});font-weight:700;">
+          Sağlık: ${s.healthScore}/100${s.healthScore > otherScore ? ' ★' : ''}
+        </span>
+      </div>
+
+      <div class="scenario-cmp-metrics tabular">
+        <div class="ring-stat-tile">
+          <span class="ring-stat-title">Tercih Sayısı</span>
+          <span class="ring-stat-val">${s.count} <span style="font-size:13px;font-weight:500;color:var(--text-tertiary);">/ 24</span></span>
+        </div>
+        <div class="ring-stat-tile">
+          <span class="ring-stat-title">Ort. 4 Yıllık Bütçe</span>
+          <span class="ring-stat-val" style="font-size:17px;">${s.avgFourYearCost ? formatCurrency(s.avgFourYearCost) : '—'}</span>
+        </div>
+        <div class="ring-stat-tile">
+          <span class="ring-stat-title">Sıralama Bandı</span>
+          <span class="ring-stat-val" style="font-size:16px;">${s.bestRank ? `${formatRank(s.bestRank)} – ${formatRank(s.worstRank)}` : '—'}</span>
+        </div>
+        <div class="ring-stat-tile">
+          <span class="ring-stat-title">Medyan Sıralama</span>
+          <span class="ring-stat-val" style="font-size:17px;">${formatRank(s.medianRank)}</span>
+        </div>
+      </div>
+
+      <div style="display:flex;gap:8px;flex-wrap:wrap;font-size:12.5px;" class="tabular">
+        <span class="pill pill-risk-hayal">${s.hayal} Hayal</span>
+        <span class="pill pill-risk-hedef">${s.hedef} Hedef</span>
+        <span class="pill pill-risk-guvenli">${s.guvenli} Güvenli</span>
+        <span class="pill">${s.cityCount} Şehir</span>
+      </div>
+    </div>`;
+  };
+
+  const renderMiniList = (title, items, badgeTone = '') => `
+    <div class="panel">
+      <div class="panel-title">
+        <span>${title}</span>
+        <span class="pill ${badgeTone} tabular">${items.length}</span>
+      </div>
+      ${items.length
+        ? `<div class="sim-unlock-list">
+            ${items
+              .map(
+                (p) => `<div class="sim-unlock-row">
+                  <div style="min-width:0;">
+                    <strong style="font-size:13px;">${escapeHtml(p.department)}</strong>
+                    <div style="font-size:11.5px;color:var(--text-secondary);">${escapeHtml(p.university)} · ${escapeHtml(p.city)}</div>
+                  </div>
+                  <span class="pill pill-risk-${escapeHtml(p.risk || 'hedef')} tabular">${formatRank(p.latestRank)}</span>
+                </div>`,
+              )
+              .join('')}
+          </div>`
+        : `<div style="font-size:12.5px;color:var(--text-tertiary);">Bu grupta bölüm yok.</div>`}
+    </div>`;
+
+  return `
+    <section class="scenario-cmp-grid" style="margin-bottom:16px;">
+      ${renderCard(cmp.a, 'cmpScenarioASelect', ui.cmpScenarioA, cmp.b.healthScore)}
+      ${renderCard(cmp.b, 'cmpScenarioBSelect', ui.cmpScenarioB, cmp.a.healthScore)}
+    </section>
+    <section class="analysis-grid">
+      ${renderMiniList(`Ortak Bölümler (${cmp.common.length})`, cmp.common, 'pill-accent')}
+      ${renderMiniList(`Sadece ${escapeHtml(cmp.a.name)}`, cmp.onlyA)}
+      ${renderMiniList(`Sadece ${escapeHtml(cmp.b.name)}`, cmp.onlyB)}
+    </section>
+  `;
+}
+
 function renderCompareView() {
   const selected = state.compareCodes.map((code) => state.programs.find((p) => p.code === code)).filter(Boolean);
   const available = state.programs.filter((p) => !state.compareCodes.includes(p.code));
@@ -1196,18 +1404,26 @@ function renderCompareView() {
     <div>
       <div class="page-eyebrow">Yan Yana Karar Paneli</div>
       <h1 class="page-title">Karşılaştır</h1>
-      <p class="page-subtitle">En fazla 4 bölümü 2027 tahmini, net farkın ve kişisel notlarınla kıyasla</p>
+      <p class="page-subtitle">Bölümleri veya farklı tercih senaryolarını (Plan A vs Plan B) yan yana kıyasla</p>
     </div>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-      ${available.length && selected.length < 4
-        ? `<select id="cmpAddSelect" class="select toolbar-select" style="max-width:280px;">
+      <div class="segmented" role="tablist" aria-label="Karşılaştırma modu">
+        <button class="seg-btn seg-btn-sm ${ui.compareMode === 'programs' ? 'active' : ''}" data-cmp-mode="programs">Bölümler</button>
+        <button class="seg-btn seg-btn-sm ${ui.compareMode === 'scenarios' ? 'active' : ''}" data-cmp-mode="scenarios">Senaryolar (${state.scenarios.length})</button>
+      </div>
+      ${ui.compareMode === 'programs' && available.length && selected.length < 4
+        ? `<select id="cmpAddSelect" class="select toolbar-select" style="max-width:260px;">
             <option value="">+ Listeden bölüm ekle...</option>
             ${available.map((p) => `<option value="${escapeHtml(p.code)}">${escapeHtml(p.university)} — ${escapeHtml(p.department)}</option>`).join('')}
           </select>`
         : ''}
-      ${selected.length ? `<button class="btn btn-sm" id="cmpClearBtn">Temizle</button>` : ''}
+      ${ui.compareMode === 'programs' && selected.length ? `<button class="btn btn-sm" id="cmpClearBtn">Temizle</button>` : ''}
     </div>
   </div>`;
+
+  if (ui.compareMode === 'scenarios') {
+    return `${headerHtml}${renderScenarioCompareBody()}`;
+  }
 
   if (state.programs.length < 2) {
     return `${headerHtml}<div class="empty-state">
@@ -1433,7 +1649,55 @@ function renderProgressionPanel() {
       ? Number((Number(typedExams[typedExams.length - 1].total) - Number(typedExams[0].total)).toFixed(2))
       : null;
 
+  const rings = computeGoalRingsAndWeeklyPlan(state.programs, state.myNets);
+  const leverage = analyzeSubjectLeverage(state.myNets, state.examHistory, topProg, state.targetRank);
+
   return `
+    <!-- Feature 3: Apple Fitness Activity Rings & YKS 2027 Weekly Net Planner -->
+    <div class="panel panel-full">
+      <div class="panel-title">
+        <span>YKS 2027 Hedef Halkaları & Haftalık Plan</span>
+        <span class="pill pill-accent tabular">YKS 2027'ye ${rings.weeksLeft} hafta (${rings.daysLeft} gün)</span>
+      </div>
+      <div class="rings-layout">
+        ${renderAppleActivityRings({ tytPct: rings.tytPct, aytPct: rings.aytPct, researchPct: rings.researchPct })}
+        <div class="rings-legend">
+          <div class="ring-stat-tile">
+            <span class="ring-stat-title"><span class="dot" style="background:#0071E3"></span>TYT Hedefi</span>
+            <span class="ring-stat-val tabular" style="color:#0071E3;">%${rings.tytPct}</span>
+            <div style="font-size:11.5px;color:var(--text-secondary);" class="tabular">
+              ${rings.myTyt !== null ? `${formatNet(rings.myTyt)} / ${formatNet(rings.targetTyt)} net` : 'TYT neti girilmedi'}
+            </div>
+            ${rings.tytPerWeek !== null && rings.tytPerWeek > 0
+              ? `<div style="font-size:11.5px;color:var(--accent);font-weight:600;" class="tabular">Haftalık +${formatNet(rings.tytPerWeek)} net</div>`
+              : rings.myTyt !== null
+                ? `<div style="font-size:11.5px;color:var(--green);font-weight:600;">✓ Hedef netin üstündesin</div>`
+                : ''}
+          </div>
+
+          <div class="ring-stat-tile">
+            <span class="ring-stat-title"><span class="dot" style="background:#34C759"></span>${rings.isDil ? 'YDT' : 'AYT'} Hedefi</span>
+            <span class="ring-stat-val tabular" style="color:#248A3D;">%${rings.aytPct}</span>
+            <div style="font-size:11.5px;color:var(--text-secondary);" class="tabular">
+              ${rings.myAyt !== null ? `${formatNet(rings.myAyt)} / ${formatNet(rings.targetAyt)} net` : `${rings.isDil ? 'YDT' : 'AYT'} neti girilmedi`}
+            </div>
+            ${rings.aytPerWeek !== null && rings.aytPerWeek > 0
+              ? `<div style="font-size:11.5px;color:var(--green);font-weight:600;" class="tabular">Haftalık +${formatNet(rings.aytPerWeek)} net</div>`
+              : rings.myAyt !== null
+                ? `<div style="font-size:11.5px;color:var(--green);font-weight:600;">✓ Hedef netin üstündesin</div>`
+                : ''}
+          </div>
+
+          <div class="ring-stat-tile">
+            <span class="ring-stat-title"><span class="dot" style="background:#FF9F0A"></span>Bölüm Araştırması</span>
+            <span class="ring-stat-val tabular" style="color:var(--amber);">%${rings.researchPct}</span>
+            <div style="font-size:11.5px;color:var(--text-secondary);" class="tabular">${rings.doneChecks} / ${rings.totalChecks} madde tamam</div>
+            <div style="font-size:11.5px;color:var(--text-tertiary);">${rings.topProg ? `Hedef: ${escapeHtml(rings.topProg.university)}` : '1. tercih eklenmedi'}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div class="panel panel-full">
       <div class="panel-title">
         <span>Mevcut Netlerinle Tahmini YKS Sıralaman</span>
@@ -1486,6 +1750,207 @@ function renderProgressionPanel() {
       })}
       ${topProg && targetNet
         ? `<div style="font-size:12px;color:var(--text-tertiary);margin-top:8px;">Turuncu kesikli çizgi, 1. tercihin olan <strong>${escapeHtml(topProg.university)} — ${escapeHtml(topProg.department)}</strong> son yerleşen ortalama ${ui.progressionType} netini (${formatNet(targetNet)}) gösterir.</div>`
+        : ''}
+    </div>
+
+    <!-- Feature 1: Subject-Level Weak Link & Leverage Analysis -->
+    <div class="panel panel-full">
+      <div class="panel-title" style="flex-wrap:wrap;gap:8px;">
+        <span>Ders Bazlı Zayıf Halka & Kaldıraç Analizi</span>
+        <span style="font-size:12px;font-weight:500;color:var(--text-tertiary);">
+          ${topProg ? `Referans: 1. Tercih (${escapeHtml(topProg.university)})` : '1. tercih ekleyince hedef farkı hesaplanır'}
+        </span>
+      </div>
+      ${leverage.priority
+        ? `<div class="quota-alert-warn" style="margin-bottom:12px;">
+            ⚡ <strong>En Yüksek Kaldıraç: ${escapeHtml(leverage.priority.label)}</strong> — Hedefinin <strong class="tabular">${formatNet(Math.abs(leverage.priority.gap))} net</strong> gerisindesin. Bu açığı kapatmak sıralamanı tahmini <strong class="tabular">+${formatRank(leverage.priority.rankGain)} sıra</strong> öne çeker!
+          </div>`
+        : ''}
+      ${leverage.subjects.length
+        ? `<div class="subject-leverage-grid">
+            ${leverage.subjects
+              .map((s) => {
+                const isPri = leverage.priority && leverage.priority.key === s.key;
+                const gapHtml =
+                  s.gap !== null
+                    ? `<span class="${s.gap >= 0 ? 'net-delta-pos' : 'net-delta-neg'} tabular">${formatSignedNet(s.gap)} net</span>`
+                    : '';
+                return `<div class="subject-lev-card ${isPri ? 'priority' : ''}">
+                  <div style="min-width:0;">
+                    <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+                      <strong style="font-size:13px;">${escapeHtml(s.label)}</strong>
+                      ${gapHtml}
+                    </div>
+                    <div style="font-size:12px;color:var(--text-secondary);margin-top:3px;" class="tabular">
+                      Sen: <strong>${s.current !== null ? formatNet(s.current) : '—'}</strong> / ${s.max}
+                      ${s.target !== null ? ` · Hedef: <strong>${formatNet(s.target)}</strong>` : ''}
+                      ${s.avg !== null && s.history.length >= 2 ? ` · Ort: ${formatNet(s.avg)}` : ''}
+                    </div>
+                    ${s.rankGain > 0 ? `<div style="font-size:11.5px;color:var(--amber);font-weight:600;margin-top:2px;" class="tabular">Kapanırsa ≈ +${formatRank(s.rankGain)} sıra</div>` : ''}
+                  </div>
+                  <div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px;">
+                    ${renderMiniNetSparkline(s.history)}
+                    ${s.history.length >= 2 ? `<span style="font-size:10.5px;color:var(--text-tertiary);">${s.history.length} deneme</span>` : ''}
+                  </div>
+                </div>`;
+              })
+              .join('')}
+          </div>`
+        : `<div class="chart-empty">Ders bazlı kıyaslama için <strong>Netlerim / PDF</strong> penceresinden TYT veya AYT denemeni yükle.</div>`}
+    </div>
+  `;
+}
+
+// ============================================================================
+// Feature 2: "Sıralamamla Nereye Girerim?" Live YÖK Atlas Discovery Wizard
+// ============================================================================
+async function runDiscoverSearch() {
+  const est = estimateYksRankFromNets(state.myNets);
+  const pt = ui.discover.puanTuru || 'SAY';
+  const defaultRank = est?.[pt]?.rank || state.targetRank || 20000;
+  const rank = Math.max(100, Number(ui.discover.rank) || defaultRank);
+  ui.discover.rank = rank;
+  ui.discover.loading = true;
+  ui.discover.error = '';
+  renderAll();
+
+  try {
+    const common = {
+      q: ui.discover.q.trim(),
+      puanTuru: pt,
+      uniTuru: ui.discover.uniTuru || '',
+      size: 12,
+    };
+
+    const [hayalRes, hedefRes, guvRes] = await Promise.all([
+      searchProgramsFromApi({
+        ...common,
+        minRank: Math.max(1, Math.round(rank * 0.45)),
+        maxRank: Math.max(50, Math.round(rank * 0.82)),
+      }),
+      searchProgramsFromApi({
+        ...common,
+        minRank: Math.max(1, Math.round(rank * 0.82)),
+        maxRank: Math.round(rank * 1.25),
+      }),
+      searchProgramsFromApi({
+        ...common,
+        minRank: Math.round(rank * 1.25),
+        maxRank: Math.round(rank * 2.15),
+      }),
+    ]);
+
+    ui.discover.bands = {
+      usedRank: rank,
+      hayal: hayalRes.items || [],
+      hedef: hedefRes.items || [],
+      guvenli: guvRes.items || [],
+    };
+  } catch (err) {
+    ui.discover.error = err.message || 'YÖK Atlas keşif sorgusu başarısız oldu.';
+    ui.discover.bands = null;
+  } finally {
+    ui.discover.loading = false;
+    renderAll();
+  }
+}
+
+function renderDiscoverPanel() {
+  const est = estimateYksRankFromNets(state.myNets);
+  const pt = ui.discover.puanTuru || 'SAY';
+  const suggestedRank = ui.discover.rank || est?.[pt]?.rank || state.targetRank || 15000;
+  const bands = ui.discover.bands;
+
+  const renderBandCol = (title, riskKey, items, hint) => `
+    <div class="discover-band-col">
+      <div class="discover-band-head">
+        <div>
+          <span class="pill pill-risk-${riskKey}">${title}</span>
+          <div style="font-size:11.5px;color:var(--text-tertiary);margin-top:4px;">${hint}</div>
+        </div>
+        <span class="tabular" style="font-size:12px;font-weight:700;color:var(--text-secondary);">${items.length}</span>
+      </div>
+      ${items.length
+        ? items
+            .map((item) => {
+              const exists = state.programs.some((p) => p.code === item.code);
+              return `<div class="discover-item">
+                <div style="display:flex;align-items:center;gap:9px;min-width:0;">
+                  ${renderAvatar(item)}
+                  <div style="min-width:0;flex:1;">
+                    <div style="font-weight:650;font-size:13px;line-height:1.25;">${escapeHtml(item.department)}</div>
+                    <div style="font-size:11.5px;color:var(--text-secondary);">${escapeHtml(item.university)}</div>
+                  </div>
+                </div>
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+                  <div class="tabular" style="font-size:12px;">
+                    <strong>${formatRank(item.latestRank)}</strong>
+                    <span style="color:var(--text-tertiary);"> · ${escapeHtml(item.city)} · ${escapeHtml(item.language)}</span>
+                  </div>
+                  <button class="btn btn-sm ${exists ? 'btn-soft' : 'btn-primary'}" data-disc-add="${escapeHtml(item.code)}" data-disc-risk="${riskKey}" style="height:27px;padding:0 10px;font-size:11.5px;">
+                    ${exists ? `${SF.check} Var` : `${SF.plus} Ekle`}
+                  </button>
+                </div>
+              </div>`;
+            })
+            .join('')
+        : `<div style="font-size:12px;color:var(--text-tertiary);padding:8px 2px;">Bu bantta eşleşen bölüm bulunamadı.</div>`}
+    </div>`;
+
+  return `
+    <div class="panel panel-full">
+      <div class="panel-title" style="flex-wrap:wrap;gap:8px;">
+        <div>
+          <span>"Sıralamamla Nereye Girerim?" Canlı YÖK Atlas Keşif Sihirbazı</span>
+          <div style="font-size:12.5px;font-weight:400;color:var(--text-secondary);margin-top:2px;">
+            Sıralamana göre canlı YÖK Atlas'tan otomatik <strong>Hayal / Hedef / Güvenli</strong> öneri bantları oluşturur.
+          </div>
+        </div>
+        ${est?.[pt] ? `<span class="pill pill-accent tabular">Netlerinden tahmini ${pt}: ${formatRank(est[pt].rank)}</span>` : ''}
+      </div>
+
+      <form id="discoverForm" class="discover-form-grid">
+        <div>
+          <label class="field-label" for="discQuery">Bölüm veya Şehir</label>
+          <input id="discQuery" class="input" type="text" value="${escapeHtml(ui.discover.q)}" placeholder="Örn: Bilgisayar, Tıp, İstanbul Endüstri..." />
+        </div>
+        <div>
+          <label class="field-label" for="discRank">Baz Sıralama</label>
+          <input id="discRank" class="input tabular" type="number" min="100" step="500" value="${escapeHtml(suggestedRank)}" />
+        </div>
+        <div>
+          <label class="field-label" for="discPuan">Puan Türü</label>
+          <select id="discPuan" class="select">
+            ${['SAY', 'EA', 'SÖZ', 'DİL'].map((t) => `<option value="${t}" ${pt === t ? 'selected' : ''}>${t}</option>`).join('')}
+          </select>
+        </div>
+        <div>
+          <label class="field-label" for="discUniType">Üniversite</label>
+          <select id="discUniType" class="select">
+            <option value="" ${!ui.discover.uniTuru ? 'selected' : ''}>Devlet + Vakıf</option>
+            <option value="DEVLET" ${ui.discover.uniTuru === 'DEVLET' ? 'selected' : ''}>Sadece Devlet</option>
+            <option value="VAKIF" ${ui.discover.uniTuru === 'VAKIF' ? 'selected' : ''}>Sadece Vakıf</option>
+          </select>
+        </div>
+        <button class="btn btn-primary" type="submit" ${ui.discover.loading ? 'disabled' : ''}>
+          ${ui.discover.loading ? 'Taranıyor...' : 'Önerileri Getir'}
+        </button>
+      </form>
+
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px;">
+        ${['Bilgisayar', 'Elektrik-Elektronik', 'Endüstri', 'Makine', 'Tıp', 'Yapay Zeka', 'Ekonomi', 'Hukuk']
+          .map((chip) => `<button type="button" class="quick-chip" data-disc-chip="${chip}">${chip}</button>`)
+          .join('')}
+      </div>
+
+      ${ui.discover.error ? `<div class="error-banner" style="margin-top:14px;">${escapeHtml(ui.discover.error)}</div>` : ''}
+      ${ui.discover.loading ? `<div style="margin-top:16px;">${renderShimmerSkeleton(4)}</div>` : ''}
+      ${!ui.discover.loading && bands
+        ? `<div class="discover-bands">
+            ${renderBandCol('Hayal Bandı', 'hayal', bands.hayal, `${formatRank(Math.max(1, Math.round(bands.usedRank * 0.45)))} – ${formatRank(Math.round(bands.usedRank * 0.82))}`)}
+            ${renderBandCol('Hedef Bandı', 'hedef', bands.hedef, `${formatRank(Math.round(bands.usedRank * 0.82))} – ${formatRank(Math.round(bands.usedRank * 1.25))}`)}
+            ${renderBandCol('Güvenli Bandı', 'guvenli', bands.guvenli, `${formatRank(Math.round(bands.usedRank * 1.25))} – ${formatRank(Math.round(bands.usedRank * 2.15))}`)}
+          </div>`
         : ''}
     </div>
   `;
@@ -1571,6 +2036,7 @@ function renderAnalysisView() {
         ${[
           ['overview', 'Sağlık & Özet'],
           ['progression', 'Gelişim'],
+          ['discover', 'Keşfet'],
           ['decision', 'Karar Skoru'],
           ['map', 'Harita'],
           ['simulator', 'Simülatör'],
@@ -1588,6 +2054,10 @@ function renderAnalysisView() {
 
   if (ui.analysisSubTab === 'progression') {
     return `${headerHtml}<section class="analysis-grid">${renderProgressionPanel()}</section>`;
+  }
+
+  if (ui.analysisSubTab === 'discover') {
+    return `${headerHtml}<section class="analysis-grid">${renderDiscoverPanel()}</section>`;
   }
 
   if (ui.analysisSubTab === 'timeline') {
@@ -3113,6 +3583,31 @@ function bindAbroadEvents() {
       showToast('Program yurt dışı listesinden silindi.');
     });
   });
+
+  // Feature 6: Bavarian Formula + Sperrkonto + DSU/Exam tools
+  const bindAbroadToolNum = (id, key) => {
+    document.getElementById(id)?.addEventListener('change', (e) => {
+      const val = Number(e.target.value);
+      if (Number.isFinite(val)) {
+        state.abroadTools[key] = val;
+        saveState();
+        renderAll();
+      }
+    });
+  };
+  const bindAbroadToolText = (id, key) => {
+    document.getElementById(id)?.addEventListener('change', (e) => {
+      state.abroadTools[key] = e.target.value.trim();
+      saveState();
+    });
+  };
+  bindAbroadToolNum('abToolDiploma', 'diplomaScore');
+  bindAbroadToolNum('abToolYks', 'yksScore');
+  bindAbroadToolNum('abToolSperrSaved', 'sperrkontoSaved');
+  bindAbroadToolNum('abToolIsee', 'iseeEstimate');
+  bindAbroadToolText('abToolIelts', 'ieltsScore');
+  bindAbroadToolText('abToolTestdaf', 'testdafScore');
+  bindAbroadToolText('abToolTolc', 'tolcScore');
 }
 
 // ============================================================================
@@ -3285,6 +3780,17 @@ function bindPreferencesEvents() {
   document.getElementById('renameScenarioBtn')?.addEventListener('click', renameActiveScenario);
   document.getElementById('delScenarioBtn')?.addEventListener('click', deleteActiveScenario);
 
+  document.getElementById('openDiscoverShortcutBtn')?.addEventListener('click', () => {
+    ui.region = 'TR';
+    ui.tab = 'analysis';
+    ui.analysisSubTab = 'discover';
+    renderAll();
+  });
+  document.getElementById('refreshAllBtn')?.addEventListener('click', refreshAllProgramsLive);
+  document.getElementById('dismissRefreshDiffBtn')?.addEventListener('click', () => {
+    ui.refreshDiff = null;
+    renderAll();
+  });
   document.getElementById('openOsymBtn')?.addEventListener('click', openOsymModal);
   document.getElementById('printReportBtn')?.addEventListener('click', () => {
     if (!openPrintableReport(state)) showToast('Tarayıcı açılır pencereyi engelledi.', 'error');
@@ -3428,6 +3934,27 @@ function bindPreferencesEvents() {
 }
 
 function bindCompareEvents() {
+  document.querySelectorAll('[data-cmp-mode]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      ui.compareMode = btn.dataset.cmpMode;
+      renderAll();
+    });
+  });
+
+  document.getElementById('cmpCreateSecondScenarioBtn')?.addEventListener('click', () => {
+    createScenario({ duplicateCurrent: true });
+  });
+
+  document.getElementById('cmpScenarioASelect')?.addEventListener('change', (e) => {
+    ui.cmpScenarioA = e.target.value;
+    renderAll();
+  });
+
+  document.getElementById('cmpScenarioBSelect')?.addEventListener('change', (e) => {
+    ui.cmpScenarioB = e.target.value;
+    renderAll();
+  });
+
   document.getElementById('cmpOpenAddBtn')?.addEventListener('click', () => openAddModal());
   document.getElementById('cmpClearBtn')?.addEventListener('click', () => {
     state.compareCodes = [];
@@ -3457,6 +3984,45 @@ function bindAnalysisEvents() {
 
   document.getElementById('analysisAddBtn')?.addEventListener('click', () => openAddModal());
   document.getElementById('progOpenNetsBtn')?.addEventListener('click', openMyNetsModal);
+
+  // Feature 2: Discover Wizard bindings
+  document.getElementById('discoverForm')?.addEventListener('submit', (e) => {
+    e.preventDefault();
+    ui.discover.q = document.getElementById('discQuery')?.value || '';
+    ui.discover.rank = Number(document.getElementById('discRank')?.value) || state.targetRank || 15000;
+    ui.discover.puanTuru = document.getElementById('discPuan')?.value || 'SAY';
+    ui.discover.uniTuru = document.getElementById('discUniType')?.value || '';
+    runDiscoverSearch();
+  });
+
+  document.querySelectorAll('[data-disc-chip]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const q = btn.dataset.discChip;
+      ui.discover.q = q;
+      if (q === 'Ekonomi' || q === 'Hukuk') ui.discover.puanTuru = 'EA';
+      else ui.discover.puanTuru = 'SAY';
+      runDiscoverSearch();
+    });
+  });
+
+  document.querySelectorAll('[data-disc-add]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const code = btn.dataset.discAdd;
+      const risk = btn.dataset.discRisk || 'hedef';
+      btn.disabled = true;
+      btn.textContent = '...';
+      try {
+        const full = await fetchProgramFromApi(code);
+        addProgramToState(full, risk);
+        renderAll();
+        showToast(`${full.university} — ${full.department} eklendi.`, 'success');
+      } catch (err) {
+        btn.disabled = false;
+        btn.innerHTML = `${SF.plus} Ekle`;
+        showToast(err.message || 'Eklenemedi.', 'error');
+      }
+    });
+  });
 
   document.querySelectorAll('[data-prog-type]').forEach((btn) => {
     btn.addEventListener('click', () => {

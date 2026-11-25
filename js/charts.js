@@ -290,3 +290,65 @@ export function renderExamProgressionChart(exams, { examType = 'TYT', targetNet 
     ${nodes}
   </svg>`;
 }
+
+/**
+ * Tiny 72x22 inline sparkline for subject-level net progression.
+ */
+export function renderMiniNetSparkline(values, color = 'var(--accent)') {
+  const pts = (values || []).filter((v) => Number.isFinite(Number(v))).map(Number);
+  if (pts.length < 2) {
+    return `<span style="font-size:11px;color:var(--text-tertiary);">—</span>`;
+  }
+  const w = 72;
+  const h = 22;
+  const pad = 3;
+  const min = Math.min(...pts);
+  const max = Math.max(...pts);
+  const span = max - min || 1;
+  const coords = pts.map((v, i) => ({
+    x: pad + (i / (pts.length - 1)) * (w - pad * 2),
+    y: pad + (1 - (v - min) / span) * (h - pad * 2),
+  }));
+  const d = buildSmoothPath(coords);
+  const last = coords[coords.length - 1];
+  const trendUp = pts[pts.length - 1] >= pts[0];
+  const stroke = trendUp ? 'var(--green-bright)' : color;
+  return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" style="display:block;flex-shrink:0;" aria-hidden="true">
+    <path d="${d}" fill="none" stroke="${stroke}" stroke-width="2" stroke-linecap="round"/>
+    <circle cx="${last.x.toFixed(1)}" cy="${last.y.toFixed(1)}" r="2.6" fill="${stroke}"/>
+  </svg>`;
+}
+
+/**
+ * Authentic Concentric Apple Watch Fitness Activity Rings SVG.
+ * Outer: TYT Goal %, Middle: AYT Goal %, Inner: Research Checklist %.
+ */
+export function renderAppleActivityRings({ tytPct = 0, aytPct = 0, researchPct = 0, size = 132 } = {}) {
+  const cx = 66;
+  const cy = 66;
+  const rings = [
+    { r: 54, pct: Math.min(100, Math.max(0, tytPct)), color: '#0071E3', track: 'rgba(0, 113, 227, 0.16)' },
+    { r: 41, pct: Math.min(100, Math.max(0, aytPct)), color: '#34C759', track: 'rgba(52, 199, 89, 0.16)' },
+    { r: 28, pct: Math.min(100, Math.max(0, researchPct)), color: '#FF9F0A', track: 'rgba(255, 159, 10, 0.18)' },
+  ];
+
+  const svgs = rings
+    .map((rg) => {
+      const circ = 2 * Math.PI * rg.r;
+      const visualPct = rg.pct > 0 ? Math.max(4, rg.pct) : 0;
+      const offset = circ * (1 - visualPct / 100);
+      return `
+        <circle cx="${cx}" cy="${cy}" r="${rg.r}" fill="none" stroke="${rg.track}" stroke-width="10" />
+        <circle cx="${cx}" cy="${cy}" r="${rg.r}" fill="none" stroke="${rg.color}" stroke-width="10"
+          stroke-linecap="round"
+          stroke-dasharray="${circ.toFixed(2)}"
+          stroke-dashoffset="${offset.toFixed(2)}"
+          transform="rotate(-90 ${cx} ${cy})"
+          style="transition:stroke-dashoffset 600ms cubic-bezier(0.22, 1, 0.36, 1);" />`;
+    })
+    .join('');
+
+  return `<svg width="${size}" height="${size}" viewBox="0 0 132 132" role="img" aria-label="Hedef ilerleme halkaları" style="flex-shrink:0;">
+    ${svgs}
+  </svg>`;
+}

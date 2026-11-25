@@ -1,4 +1,4 @@
-const CACHE_NAME = 'tercihatlas-v8';
+const CACHE_NAME = 'tercihatlas-v9';
 const STATIC_ASSETS = [
   './',
   './index.html',

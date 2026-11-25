@@ -2288,3 +2288,194 @@ a { color: var(--accent); text-decoration: none; }
   color: var(--text-tertiary);
   padding: 2px 4px 6px;
 }
+
+/* ==========================================================================
+   v9 Features: Activity Rings, Subject Leverage, Discover Bands,
+   Scenario Comparison, Batch Refresh Diff & Abroad Tools
+   ========================================================================== */
+.rings-layout {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+
+.rings-legend {
+  flex: 1;
+  min-width: 240px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.ring-stat-tile {
+  background: var(--surface-secondary);
+  border-radius: var(--r-md);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ring-stat-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.ring-stat-val {
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+}
+
+.subject-leverage-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.subject-lev-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: var(--r-md);
+  background: var(--surface-secondary);
+}
+
+.subject-lev-card.priority {
+  background: var(--amber-soft);
+  box-shadow: 0 0 0 1px rgba(255, 159, 10, 0.35);
+}
+
+.discover-form-grid {
+  display: grid;
+  grid-template-columns: 1.6fr 1fr 0.85fr 0.95fr auto;
+  gap: 10px;
+  align-items: end;
+}
+
+.discover-bands {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 16px;
+}
+
+.discover-band-col {
+  background: var(--surface-secondary);
+  border-radius: var(--r-lg);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.discover-band-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-bottom: 8px;
+  border-bottom: 0.5px solid var(--separator);
+}
+
+.discover-item {
+  background: var(--surface);
+  border-radius: var(--r-md);
+  padding: 11px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03), 0 0 0 0.5px rgba(0, 0, 0, 0.04);
+}
+
+.scenario-cmp-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.scenario-cmp-card {
+  background: var(--surface);
+  border-radius: var(--r-lg);
+  padding: 20px;
+  box-shadow: var(--shadow-card);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.scenario-cmp-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.refresh-diff-banner {
+  background: var(--surface);
+  border-radius: var(--r-lg);
+  padding: 14px 18px;
+  margin-bottom: 16px;
+  box-shadow: var(--shadow-card);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.abroad-tools-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.bavarian-result-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.bavarian-tile {
+  background: var(--surface-secondary);
+  border-radius: var(--r-md);
+  padding: 12px 14px;
+}
+
+.bavarian-tile strong {
+  display: block;
+  font-family: var(--font-display);
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  margin-top: 2px;
+}
+
+.abroad-exam-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+@media (max-width: 1020px) {
+  .discover-form-grid { grid-template-columns: 1fr 1fr; }
+  .discover-bands { grid-template-columns: 1fr; }
+  .abroad-tools-grid { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 760px) {
+  .rings-legend,
+  .subject-leverage-grid,
+  .scenario-cmp-grid,
+  .bavarian-result-grid,
+  .abroad-exam-row {
+    grid-template-columns: 1fr;
+  }
+  .discover-form-grid { grid-template-columns: 1fr; }
+}
