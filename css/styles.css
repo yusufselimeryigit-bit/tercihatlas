@@ -4215,3 +4215,276 @@ body.presentation-mode .prog-card {
 @media (max-width: 520px) {
   .roadmap-countdown-grid { grid-template-columns: 1fr; }
 }
+
+/* ==========================================================================
+   v22: Apple Calm & Progressive Disclosure Declutter Pass
+   ========================================================================== */
+.page-header-calm {
+  margin-bottom: 14px;
+  align-items: center;
+}
+
+.page-title-cluster {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* Sleek Apple Title Dropdown for Scenarios (replaces bulky 5-pill bar) */
+.scenario-menu-wrap {
+  position: relative;
+}
+
+.scenario-trigger-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 11px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 150ms ease, color 150ms ease, border-color 150ms ease;
+}
+
+.scenario-trigger-pill:hover {
+  background: var(--surface-secondary);
+  color: var(--text);
+  border-color: var(--border-strong);
+}
+
+.scenario-dropdown {
+  left: 0;
+  right: auto;
+  min-width: 230px;
+}
+
+.dropdown-section-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-tertiary);
+  padding: 5px 10px 4px;
+}
+
+.scenario-dropdown .ctx-item.active {
+  color: var(--accent);
+  font-weight: 650;
+}
+
+.audit-whisper-link {
+  border: none;
+  background: transparent;
+  color: var(--rose);
+  font-size: 12.5px;
+  font-weight: 600;
+  padding: 4px 8px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 140ms ease;
+}
+
+.audit-whisper-link:hover {
+  background: var(--rose-soft);
+}
+
+/* Single-Row Slim Apple Summary Strip (replaces 4 bulky KPI boxes) */
+.summary-strip {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  padding: 12px 18px;
+  margin-bottom: 16px;
+  border-radius: var(--r-xl);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-xs);
+}
+
+.summary-cell {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 0 16px;
+}
+
+.summary-cell:first-child {
+  padding-left: 2px;
+}
+
+.summary-cell:last-child {
+  padding-right: 2px;
+}
+
+.summary-cell-btn {
+  background: transparent;
+  border: none;
+  text-align: left;
+  cursor: pointer;
+  border-radius: 10px;
+  padding: 4px 14px;
+  transition: background 140ms ease;
+}
+
+.summary-cell-btn:hover {
+  background: var(--surface-secondary);
+}
+
+.summary-divider {
+  width: 1px;
+  height: 30px;
+  background: var(--separator);
+  flex-shrink: 0;
+}
+
+.summary-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-tertiary);
+  letter-spacing: 0.02em;
+}
+
+.summary-val-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.summary-val {
+  font-family: var(--font-display);
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.summary-muted {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-tertiary);
+  margin-left: 1px;
+}
+
+.summary-mini-bar {
+  display: inline-flex;
+  width: 56px;
+  height: 5px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--surface-secondary);
+  gap: 1px;
+  flex-shrink: 0;
+}
+
+.summary-mini-bar i {
+  display: block;
+  height: 100%;
+}
+
+.summary-rank-input {
+  width: 112px;
+  border: none;
+  background: transparent;
+  padding: 0;
+  font-family: var(--font-display);
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  color: var(--text);
+  outline: none;
+  border-bottom: 1.5px dashed transparent;
+  transition: border-color 150ms ease;
+}
+
+.summary-rank-input:hover,
+.summary-rank-input:focus {
+  border-bottom-color: var(--accent);
+}
+
+/* Calmer Toolbar Spacing */
+.toolbar-calm {
+  margin-bottom: 18px;
+}
+
+/* Airy, Serene Apple Program Cards */
+.cards-grid-calm {
+  gap: 16px;
+}
+
+.prog-card-calm {
+  padding: 20px 22px 16px;
+  gap: 16px;
+}
+
+.card-metrics-calm {
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 0;
+  border-top: 0.5px solid var(--separator-subtle);
+  border-bottom: 0.5px solid var(--separator-subtle);
+}
+
+.metric-hero-col {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.metric-proj-sub {
+  font-size: 12px;
+  font-weight: 550;
+  color: var(--text-tertiary);
+  margin-top: 2px;
+}
+
+.card-footer-calm {
+  padding-top: 0;
+  border-top: none;
+  min-height: 28px;
+}
+
+.card-score-tag {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text-tertiary);
+  letter-spacing: 0.02em;
+}
+
+/* Quiet hover-revealed card controls on pointer devices (always gentle on touch) */
+@media (hover: hover) and (pointer: fine) {
+  .prog-card-calm .card-hover-actions {
+    opacity: 0.25;
+    transition: opacity 160ms ease;
+  }
+  .prog-card-calm:hover .card-hover-actions,
+  .prog-card-calm:focus-within .card-hover-actions,
+  .prog-card-calm.kbd-focused .card-hover-actions {
+    opacity: 1;
+  }
+}
+
+@media (max-width: 760px) {
+  .summary-strip {
+    padding: 11px 12px;
+    gap: 4px;
+    flex-wrap: wrap;
+  }
+  .summary-cell {
+    padding: 2px 8px;
+  }
+  .summary-val,
+  .summary-rank-input {
+    font-size: 15px;
+  }
+  .summary-hide-sm {
+    display: none;
+  }
+}

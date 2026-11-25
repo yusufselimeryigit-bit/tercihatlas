@@ -1,4 +1,4 @@
-const CACHE_NAME = 'tercihatlas-v21';
+const CACHE_NAME = 'tercihatlas-v22';
 
 self.addEventListener('install', () => {
   self.skipWaiting();
