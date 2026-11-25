@@ -1,18 +1,18 @@
-const CACHE_NAME = 'tercihatlas-v11';
+const CACHE_NAME = 'tercihatlas-v12';
 const STATIC_ASSETS = [
   './',
   './index.html',
   './manifest.json',
   './icon.svg',
-  './css/styles.css?v=11',
-  './js/app.js?v=11',
-  './js/api.js?v=11',
-  './js/analytics.js?v=11',
-  './js/abroad.js?v=11',
-  './js/charts.js?v=11',
-  './js/map-cost.js?v=11',
-  './js/pdf-parser.js?v=11',
-  './js/utils.js?v=11',
+  './css/styles.css?v=12',
+  './js/app.js?v=12',
+  './js/api.js?v=12',
+  './js/analytics.js?v=12',
+  './js/abroad.js?v=12',
+  './js/charts.js?v=12',
+  './js/map-cost.js?v=12',
+  './js/pdf-parser.js?v=12',
+  './js/utils.js?v=12',
 ];
 
 self.addEventListener('install', (event) => {

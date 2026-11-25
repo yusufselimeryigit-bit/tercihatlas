@@ -11,7 +11,7 @@
   <link rel="icon" type="image/svg+xml" href="icon.svg" />
   <link rel="apple-touch-icon" href="icon.svg" />
   <link rel="manifest" href="manifest.json" />
-  <link rel="stylesheet" href="css/styles.css?v=11" />
+  <link rel="stylesheet" href="css/styles.css?v=12" />
 </head>
 <body>
   <!-- macOS Tahoe / iPadOS Floating Liquid Glass Top Navigation -->
@@ -24,7 +24,8 @@
         </a>
       </div>
 
-      <nav class="nav-glass-capsule" id="desktopNav" aria-label="Ana sekmeler">
+      <nav class="nav-glass-capsule has-thumb" id="desktopNav" aria-label="Ana sekmeler">
+        <div class="nav-thumb" id="desktopNavThumb" aria-hidden="true"></div>
         <button class="nav-pill-btn active" data-tab="preferences">
           <span>Tercihlerim</span>
           <span class="nav-count tabular" id="prefCountBadge">0</span>
@@ -224,6 +225,6 @@
   <!-- Floating Pill Toasts -->
   <div class="toast-container" id="toastContainer"></div>
 
-  <script type="module" src="js/app.js?v=11"></script>
+  <script type="module" src="js/app.js?v=12"></script>
 </body>
 </html>

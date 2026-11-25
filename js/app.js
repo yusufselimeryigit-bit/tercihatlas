@@ -13,7 +13,7 @@ import {
   getAytFieldsForScoreType,
   generateSyncKey,
   exportProgramsToCsv,
-} from './utils.js?v=11';
+} from './utils.js?v=12';
 import {
   getApiBase,
   setCustomApiBase,
@@ -27,7 +27,7 @@ import {
   pushCloudSync,
   createShareSnapshot,
   fetchShareSnapshot,
-} from './api.js?v=11';
+} from './api.js?v=12';
 import {
   renderSparkline,
   renderDetailTrendChart,
@@ -35,7 +35,7 @@ import {
   renderExamProgressionChart,
   renderMiniNetSparkline,
   renderAppleActivityRings,
-} from './charts.js?v=11';
+} from './charts.js?v=12';
 import {
   compute2027Projection,
   compareWithMyNets,
@@ -48,15 +48,15 @@ import {
   analyzeSubjectLeverage,
   computeGoalRingsAndWeeklyPlan,
   compareScenarios,
-} from './analytics.js?v=11';
-import { ABROAD_PRESETS, DEFAULT_ABROAD_TOOLS, createAbroadRecord, renderAbroadView } from './abroad.js?v=11';
-import { parseExamPdfFile } from './pdf-parser.js?v=11';
+} from './analytics.js?v=12';
+import { ABROAD_PRESETS, DEFAULT_ABROAD_TOOLS, createAbroadRecord, renderAbroadView } from './abroad.js?v=12';
+import { parseExamPdfFile } from './pdf-parser.js?v=12';
 import {
   renderTurkeyCampusMap,
   renderCostCalculator,
   renderTimelineView,
   downloadTimelineIcs,
-} from './map-cost.js?v=11';
+} from './map-cost.js?v=12';
 
 const STATE_KEY = 'tercihatlas_state_v1';
 const SYNC_KEY_STORAGE = 'tercihatlas_sync_key';
@@ -769,39 +769,91 @@ function updateCollapsingHeader() {
   if (topbar) topbar.classList.toggle('scrolled', window.scrollY > 24);
 }
 
-function initSlidingSegmentedControls() {
-  requestAnimationFrame(() => {
-    // 1. Sliding Liquid Glass Pill on Desktop Top Navigation Capsule
-    const navCap = document.getElementById('desktopNav');
-    if (navCap && navCap.offsetWidth > 0) {
-      const activeNav = navCap.querySelector('.nav-pill-btn.active');
-      if (activeNav) {
-        let navThumb = navCap.querySelector('.nav-thumb');
-        if (!navThumb) {
-          navThumb = document.createElement('div');
-          navThumb.className = 'nav-thumb';
-          navCap.prepend(navThumb);
-        }
-        navCap.classList.add('has-thumb');
-        navThumb.style.width = `${activeNav.offsetWidth}px`;
-        navThumb.style.transform = `translateX(${activeNav.offsetLeft}px)`;
-      }
-    }
+const segPrevRects = new Map();
+let navGlideTimer = null;
 
-    // 2. Sliding Spring Thumbs on all .segmented controls
-    document.querySelectorAll('.segmented').forEach((seg) => {
+function updateDesktopNavThumb({ animate = true } = {}) {
+  const navCap = document.getElementById('desktopNav');
+  if (!navCap || navCap.offsetWidth === 0) return;
+  const activeNav = navCap.querySelector('.nav-pill-btn.active');
+  if (!activeNav) return;
+
+  let navThumb = document.getElementById('desktopNavThumb') || navCap.querySelector('.nav-thumb');
+  if (!navThumb) {
+    navThumb = document.createElement('div');
+    navThumb.id = 'desktopNavThumb';
+    navThumb.className = 'nav-thumb';
+    navCap.prepend(navThumb);
+  }
+  navCap.classList.add('has-thumb');
+
+  const capRect = navCap.getBoundingClientRect();
+  const btnRect = activeNav.getBoundingClientRect();
+  const targetLeft = Math.round((btnRect.left - capRect.left) * 10) / 10;
+  const targetWidth = Math.round(btnRect.width * 10) / 10;
+
+  const isFirst = !navThumb.classList.contains('ready');
+  if (isFirst || !animate) {
+    navThumb.style.transition = 'none';
+    navThumb.style.width = `${targetWidth}px`;
+    navThumb.style.transform = `translate3d(${targetLeft}px, 0, 0)`;
+    void navThumb.offsetWidth;
+    navThumb.classList.add('ready');
+    navThumb.style.transition = '';
+    return;
+  }
+
+  navThumb.classList.add('gliding');
+  navThumb.style.width = `${targetWidth}px`;
+  navThumb.style.transform = `translate3d(${targetLeft}px, 0, 0)`;
+  clearTimeout(navGlideTimer);
+  navGlideTimer = setTimeout(() => navThumb.classList.remove('gliding'), 360);
+}
+
+function initSlidingSegmentedControls() {
+  updateDesktopNavThumb({ animate: true });
+
+  requestAnimationFrame(() => {
+    document.querySelectorAll('.segmented').forEach((seg, idx) => {
       if (seg.offsetWidth === 0) return;
       const activeBtn = seg.querySelector('.seg-btn.active');
       if (!activeBtn) return;
+
+      const key = seg.id || seg.getAttribute('aria-label') || `seg-${idx}`;
+      const segRect = seg.getBoundingClientRect();
+      const btnRect = activeBtn.getBoundingClientRect();
+      const targetLeft = Math.round((btnRect.left - segRect.left) * 10) / 10;
+      const targetWidth = Math.round(btnRect.width * 10) / 10;
+
       let thumb = seg.querySelector('.seg-thumb');
+      const isNewThumb = !thumb;
       if (!thumb) {
         thumb = document.createElement('div');
         thumb.className = 'seg-thumb';
         seg.prepend(thumb);
       }
       seg.classList.add('has-thumb');
-      thumb.style.width = `${activeBtn.offsetWidth}px`;
-      thumb.style.transform = `translateX(${activeBtn.offsetLeft}px)`;
+
+      const prev = segPrevRects.get(key);
+      if (isNewThumb && prev && (Math.abs(prev.left - targetLeft) > 1 || Math.abs(prev.width - targetWidth) > 1)) {
+        thumb.style.transition = 'none';
+        thumb.style.width = `${prev.width}px`;
+        thumb.style.transform = `translate3d(${prev.left}px, 0, 0)`;
+        void thumb.offsetWidth;
+        thumb.style.transition = '';
+      } else if (isNewThumb) {
+        thumb.style.transition = 'none';
+        thumb.style.width = `${targetWidth}px`;
+        thumb.style.transform = `translate3d(${targetLeft}px, 0, 0)`;
+        void thumb.offsetWidth;
+        thumb.style.transition = '';
+        segPrevRects.set(key, { left: targetLeft, width: targetWidth });
+        return;
+      }
+
+      thumb.style.width = `${targetWidth}px`;
+      thumb.style.transform = `translate3d(${targetLeft}px, 0, 0)`;
+      segPrevRects.set(key, { left: targetLeft, width: targetWidth });
     });
   });
 }
@@ -940,6 +992,7 @@ function updateHeaderBadges() {
   document.querySelectorAll('#mobileNav .mobile-nav-btn').forEach((btn) => {
     btn.classList.toggle('active', btn.dataset.mobileTab === activeNavKey);
   });
+  updateDesktopNavThumb({ animate: true });
   updateCollapsingHeader();
 }
 
@@ -4347,8 +4400,14 @@ async function init() {
   document.getElementById('drawerBackdrop')?.addEventListener('click', closeDrawer);
 
   window.addEventListener('scroll', updateCollapsingHeader, { passive: true });
-  window.addEventListener('resize', initSlidingSegmentedControls);
-  document.fonts?.ready?.then?.(() => initSlidingSegmentedControls());
+  window.addEventListener('resize', () => {
+    updateDesktopNavThumb({ animate: false });
+    initSlidingSegmentedControls();
+  });
+  document.fonts?.ready?.then?.(() => {
+    updateDesktopNavThumb({ animate: false });
+    initSlidingSegmentedControls();
+  });
   document.addEventListener('click', () => {
     closeContextMenu();
     closeAppearancePopover();
@@ -4374,7 +4433,7 @@ async function init() {
 
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker
-      .register('./sw.js?v=11')
+      .register('./sw.js?v=12')
       .then((reg) => reg.update().catch(() => {}))
       .catch(() => {});
   }
