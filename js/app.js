@@ -13,7 +13,7 @@ import {
   getAytFieldsForScoreType,
   generateSyncKey,
   exportProgramsToCsv,
-} from './utils.js?v=17';
+} from './utils.js?v=18';
 import {
   getApiBase,
   setCustomApiBase,
@@ -23,11 +23,16 @@ import {
   checkApiHealth,
   fetchProgramFromApi,
   searchProgramsFromApi,
-  pullCloudSync,
-  pushCloudSync,
   createShareSnapshot,
   fetchShareSnapshot,
-} from './api.js?v=17';
+} from './api.js?v=18';
+import {
+  getFirebaseRoom,
+  setFirebaseRoom,
+  pushStateToFirebase,
+  pullStateOnceFromFirebase,
+  startFirebaseLiveSync,
+} from './firebase-sync.js?v=18';
 import {
   renderSparkline,
   renderDetailTrendChart,
@@ -35,7 +40,7 @@ import {
   renderExamProgressionChart,
   renderMiniNetSparkline,
   renderAppleActivityRings,
-} from './charts.js?v=17';
+} from './charts.js?v=18';
 import {
   compute2027Projection,
   compareWithMyNets,
@@ -50,15 +55,15 @@ import {
   compareScenarios,
   computeExamPersonalRecords,
   diffProgramLists,
-} from './analytics.js?v=17';
-import { ABROAD_PRESETS, DEFAULT_ABROAD_TOOLS, createAbroadRecord, renderAbroadView } from './abroad.js?v=17';
-import { parseExamPdfFile } from './pdf-parser.js?v=17';
+} from './analytics.js?v=18';
+import { ABROAD_PRESETS, DEFAULT_ABROAD_TOOLS, createAbroadRecord, renderAbroadView } from './abroad.js?v=18';
+import { parseExamPdfFile } from './pdf-parser.js?v=18';
 import {
   renderTurkeyCampusMap,
   renderCostCalculator,
   renderTimelineView,
   downloadTimelineIcs,
-} from './map-cost.js?v=17';
+} from './map-cost.js?v=18';
 
 const STATE_KEY = 'tercihatlas_state_v1';
 const SYNC_KEY_STORAGE = 'tercihatlas_sync_key';
@@ -348,8 +353,19 @@ function loadLocalState() {
   }
 }
 
-function getSyncKey() {
-  return localStorage.getItem(SYNC_KEY_STORAGE) || '';
+function isStateMeaningful(st) {
+  if (!st) return false;
+  const hasProgs = (st.programs?.length || 0) > 0 || (st.scenarios || []).some((sc) => (sc.programs?.length || 0) > 0);
+  const hasAbroad = (st.abroadPrograms?.length || 0) > 0;
+  const hasExams = (st.examHistory?.length || 0) > 0;
+  const hasSnaps = (st.snapshots?.length || 0) > 0;
+  const mn = st.myNets || {};
+  const hasNets =
+    mn.obp != null ||
+    mn.ydt != null ||
+    Object.values(mn.tyt || {}).some((v) => v != null) ||
+    Object.values(mn.ayt || {}).some((v) => v != null);
+  return hasProgs || hasAbroad || hasExams || hasSnaps || hasNets;
 }
 
 function saveState({ triggerCloud = true } = {}) {
@@ -357,7 +373,7 @@ function saveState({ triggerCloud = true } = {}) {
   syncActiveScenarioPointers();
   state.updatedAt = new Date().toISOString();
   localStorage.setItem(STATE_KEY, JSON.stringify(state));
-  if (triggerCloud && getSyncKey() && hasConfiguredApi()) {
+  if (triggerCloud) {
     scheduleCloudPush();
   }
 }
@@ -366,78 +382,60 @@ function updateSyncIndicator(status, label) {
   ui.syncStatus = status;
   ui.syncMessage = label;
   const dotClass = 'status-dot' + (status === 'synced' ? ' synced' : status === 'syncing' ? ' syncing' : status === 'error' ? ' error' : '');
-  for (const id of ['syncDot', 'sidebarSyncDot']) {
-    const el = document.getElementById(id);
-    if (el) el.className = dotClass;
-  }
-  for (const id of ['syncLabel', 'sidebarSyncLabel']) {
-    const el = document.getElementById(id);
-    if (el) el.textContent = label;
-  }
+  const el = document.getElementById('syncDot');
+  if (el) el.className = dotClass;
+  const lbl = document.getElementById('syncLabel');
+  if (lbl) lbl.textContent = label;
 }
 
 function scheduleCloudPush() {
   clearTimeout(syncTimer);
   updateSyncIndicator('syncing', 'Eşitleniyor');
-  syncTimer = setTimeout(() => syncPushNow({ silent: true }), 1100);
+  syncTimer = setTimeout(() => syncPushNow({ silent: true }), 450);
 }
 
 async function syncPushNow({ silent = false } = {}) {
   if (ui.readOnlyShare) return false;
-  const key = getSyncKey();
-  if (!key || !hasConfiguredApi()) {
-    updateSyncIndicator('local', 'Yerel');
-    return false;
-  }
   try {
     syncActiveScenarioPointers();
     updateSyncIndicator('syncing', 'Eşitleniyor');
-    const res = await pushCloudSync(key, state);
-    ui.lastSyncedAt = res.syncedAt || new Date().toISOString();
-    updateSyncIndicator('synced', 'Bulutta Güncel');
-    if (!silent) showToast('Bulut eşitleme tamamlandı.', 'success');
+    const env = await pushStateToFirebase(state, getFirebaseRoom());
+    ui.lastSyncedAt = env.updatedAt || new Date().toISOString();
+    updateSyncIndicator('synced', 'Firebase Canlı');
+    if (!silent) showToast('Firebase buluta kaydedildi.', 'success');
     return true;
   } catch (err) {
-    updateSyncIndicator('error', 'Hata');
-    if (!silent) showToast(err.message || 'Buluta kaydedilemedi.', 'error');
+    updateSyncIndicator('error', 'Çevrimdışı');
+    if (!silent) showToast(err.message || 'Firebase bağlantısı başarısız.', 'error');
     return false;
   }
 }
 
-async function syncPullOnStartup({ forceOverwrite = false, silent = true } = {}) {
+function startRealtimeFirebaseSync() {
   if (ui.readOnlyShare) return;
-  const key = getSyncKey();
-  if (!key || !hasConfiguredApi()) {
-    updateSyncIndicator('local', 'Yerel');
-    return;
-  }
-  try {
-    updateSyncIndicator('syncing', 'Bağlanıyor');
-    const res = await pullCloudSync(key);
-    if (res.exists && res.data) {
-      const cloudTime = new Date(res.data.updatedAt || res.data.syncedAt || 0).getTime();
-      const localTime = new Date(state.updatedAt || 0).getTime();
-      const isLocalEmpty = state.programs.length === 0 && state.abroadPrograms.length === 0;
-      if (forceOverwrite || cloudTime > localTime || isLocalEmpty) {
-        state = normalizeState(res.data);
-        localStorage.setItem(STATE_KEY, JSON.stringify(state));
-        renderAll();
-      } else if (localTime > cloudTime) {
-        await pushCloudSync(key, state);
+  const room = getFirebaseRoom();
+  startFirebaseLiveSync({
+    room,
+    getLocalState: () => {
+      syncActiveScenarioPointers();
+      return state;
+    },
+    isLocalMeaningful: isStateMeaningful,
+    onRemoteState: (remoteData, meta) => {
+      state = normalizeState(remoteData);
+      localStorage.setItem(STATE_KEY, JSON.stringify(state));
+      ui.lastSyncedAt = meta?.updatedAt || new Date().toISOString();
+      renderAll();
+      if (ui.drawerCode) renderDrawer();
+      if (!meta?.initial) {
+        showToast('Diğer cihazdaki değişiklik canlı eşitlendi.', 'success');
       }
-      ui.lastSyncedAt = res.data.syncedAt || new Date().toISOString();
-      updateSyncIndicator('synced', 'Bulutta Güncel');
-      if (!silent) showToast('Buluttaki listen eşitlendi.', 'success');
-    } else {
-      await pushCloudSync(key, state);
-      ui.lastSyncedAt = new Date().toISOString();
-      updateSyncIndicator('synced', 'Bulutta Güncel');
-      if (!silent) showToast('Bulut kasası oluşturuldu ve eşitlendi.', 'success');
-    }
-  } catch (err) {
-    updateSyncIndicator('error', 'Çevrimdışı');
-    if (!silent) showToast(err.message || 'Bulut bağlantısı kurulamadı.', 'error');
-  }
+    },
+    onStatus: (status, label) => {
+      if (status === 'synced') ui.lastSyncedAt = ui.lastSyncedAt || new Date().toISOString();
+      updateSyncIndicator(status, label);
+    },
+  });
 }
 
 // ============================================================================
@@ -4289,42 +4287,53 @@ function closeSyncModal() {
 
 function renderSyncModal() {
   const body = document.getElementById('syncModalBody');
-  const currentKey = getSyncKey();
+  const currentRoom = getFirebaseRoom();
   const apiBase = getApiBase();
+  const statusTone = ui.syncStatus === 'synced' ? 'green' : ui.syncStatus === 'error' ? 'rose' : 'amber';
 
   body.innerHTML = `
     <div class="info-banner">
-      Aynı <strong>Kişisel Anahtarı</strong> Mac, iPhone ve iPad'de girdiğinde tüm senaryoların, netlerin, deneme geçmişin ve yurt dışı hedeflerin otomatik eşitlenir.
+      <strong>Firebase Realtime Database (tercihatlas-2027)</strong> aktif! Mac, iPad ve iPhone'dan uygulamayı açtığın anda tüm tercihlerin, senaryoların, PDF denemelerin, netlerin ve yurt dışı hedeflerin <strong>anında canlı</strong> eşitlenir — anahtar girmene gerek yok.
+    </div>
+
+    <div class="sheet-card" style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+      <div style="display:flex;align-items:center;gap:9px;">
+        <span class="status-dot ${ui.syncStatus === 'synced' ? 'synced' : ui.syncStatus === 'syncing' ? 'syncing' : ui.syncStatus === 'error' ? 'error' : ''}"></span>
+        <div>
+          <div style="font-weight:650;font-size:13.5px;color:var(--${statusTone});">${escapeHtml(ui.syncMessage || 'Firebase Canlı')}</div>
+          <div style="font-size:11.5px;color:var(--text-tertiary);">
+            ${ui.lastSyncedAt ? `Son eşitleme · ${formatRelativeTime(ui.lastSyncedAt)}` : 'Gerçek zamanlı WebSocket bağlantısı'}
+          </div>
+        </div>
+      </div>
+      <span class="pill mono">Oda: ${escapeHtml(currentRoom)}</span>
     </div>
 
     <div>
-      <label class="field-label" for="syncKeyInput">Kişisel Senkronizasyon Anahtarın</label>
+      <label class="field-label" for="fbRoomInput">Firebase Eşitleme Odası (Varsayılan: main)</label>
       <div style="display:flex;gap:8px;">
-        <input id="syncKeyInput" class="input mono" type="text" value="${escapeHtml(currentKey)}" placeholder="Örn: atlas-hedef-9f4a21c8" />
-        <button class="btn" type="button" id="genSyncKeyBtn">Üret</button>
+        <input id="fbRoomInput" class="input mono" type="text" value="${escapeHtml(currentRoom)}" placeholder="main" />
+        <button class="btn btn-primary" type="button" id="saveFbRoomBtn">Bağlan</button>
       </div>
-      <div class="field-hint">
-        ${ui.lastSyncedAt ? `Son bulut eşitleme · ${formatRelativeTime(ui.lastSyncedAt)}` : 'En az 6 karakter. Anahtarın SHA-256 ile özetlenerek saklanır.'}
-      </div>
+      <div class="field-hint">Tüm cihazlarında aynı oda adı (varsayılan <strong>main</strong>) seçili olduğu sürece otomatik canlı eşitlenir.</div>
     </div>
 
     <div style="display:flex;gap:8px;flex-wrap:wrap;">
-      <button class="btn btn-primary" id="saveAndSyncBtn">Kaydet & Eşitle</button>
-      <button class="btn" id="forcePushSyncBtn" ${!currentKey ? 'disabled' : ''}>Buluta Gönder</button>
-      ${currentKey ? `<button class="btn btn-ghost" id="disconnectSyncBtn">Bağlantıyı Kes</button>` : ''}
+      <button class="btn btn-sm" id="forcePushSyncBtn">Şimdi Buluta Gönder</button>
+      <button class="btn btn-sm" id="forcePullSyncBtn">Buluttan Zorla Çek</button>
     </div>
 
     <hr style="border:none;border-top:0.5px solid var(--separator);margin:2px 0;" />
 
     <div>
-      <label class="field-label" for="apiBaseInput">Cloudflare API Adresi</label>
+      <label class="field-label" for="apiBaseInput">YÖK Atlas Canlı Veri API (Cloudflare)</label>
       <div style="display:flex;gap:8px;">
         <input id="apiBaseInput" class="input mono" type="url" value="${escapeHtml(apiBase)}"
           placeholder="${isLocalDev() ? 'Yerel sunucu aktif' : 'https://tercihatlas-api.yusuf-kriptobot.workers.dev'}" />
         <button class="btn" type="button" id="testApiBtn">Test Et</button>
       </div>
       <div id="apiTestResult" class="field-hint">
-        ${isLocalDev() ? 'Yerel geliştirme sunucusu bağlı.' : hasConfiguredApi() ? 'Canlı Cloudflare Worker bağlı.' : 'API adresi girilmedi.'}
+        ${isLocalDev() ? 'Yerel geliştirme sunucusu bağlı.' : hasConfiguredApi() ? 'Canlı YÖK Atlas API bağlı.' : 'API adresi girilmedi.'}
       </div>
     </div>
 
@@ -4345,33 +4354,40 @@ function renderSyncModal() {
     </div>
   `;
 
-  document.getElementById('genSyncKeyBtn')?.addEventListener('click', () => {
-    document.getElementById('syncKeyInput').value = generateSyncKey();
-  });
-
-  document.getElementById('saveAndSyncBtn')?.addEventListener('click', async () => {
-    const rawKey = document.getElementById('syncKeyInput').value.trim();
+  document.getElementById('saveFbRoomBtn')?.addEventListener('click', () => {
+    const raw = document.getElementById('fbRoomInput').value.trim();
+    const nextRoom = setFirebaseRoom(raw || 'main');
     setCustomApiBase(document.getElementById('apiBaseInput').value.trim());
-    if (rawKey.length < 6) {
-      showToast('Kişisel anahtar en az 6 karakter olmalıdır.', 'error');
-      return;
-    }
-    localStorage.setItem(SYNC_KEY_STORAGE, rawKey);
-    await syncPullOnStartup({ forceOverwrite: false, silent: false });
+    startRealtimeFirebaseSync();
     renderSyncModal();
+    showToast(`Firebase "${nextRoom}" odasına canlı bağlanıldı.`, 'success');
   });
 
   document.getElementById('forcePushSyncBtn')?.addEventListener('click', async () => {
-    setCustomApiBase(document.getElementById('apiBaseInput').value.trim());
     await syncPushNow({ silent: false });
     renderSyncModal();
   });
 
-  document.getElementById('disconnectSyncBtn')?.addEventListener('click', () => {
-    localStorage.removeItem(SYNC_KEY_STORAGE);
-    updateSyncIndicator('local', 'Yerel');
-    showToast('Bulut bağlantısı kaldırıldı.');
-    renderSyncModal();
+  document.getElementById('forcePullSyncBtn')?.addEventListener('click', async () => {
+    try {
+      updateSyncIndicator('syncing', 'Çekiliyor...');
+      const res = await pullStateOnceFromFirebase(getFirebaseRoom());
+      if (res?.data) {
+        state = normalizeState(res.data);
+        localStorage.setItem(STATE_KEY, JSON.stringify(state));
+        ui.lastSyncedAt = res.updatedAt || new Date().toISOString();
+        updateSyncIndicator('synced', 'Firebase Canlı');
+        renderAll();
+        renderSyncModal();
+        showToast('Firebase buluttaki güncel verilerin çekildi!', 'success');
+      } else {
+        updateSyncIndicator('synced', 'Firebase Canlı');
+        showToast('Bulutta henüz kayıtlı veri yok; önce Mac\'ten gönderebilirsin.', 'info');
+      }
+    } catch (err) {
+      updateSyncIndicator('error', 'Hata');
+      showToast(err.message || 'Buluttan çekilemedi.', 'error');
+    }
   });
 
   document.getElementById('testApiBtn')?.addEventListener('click', async () => {
@@ -5011,7 +5027,7 @@ async function init() {
   renderAll();
   const loadedShare = await loadSharedLinkIfPresent();
   if (!loadedShare) {
-    syncPullOnStartup({ silent: true });
+    startRealtimeFirebaseSync();
   }
 }
 

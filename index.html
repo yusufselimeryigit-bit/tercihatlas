@@ -8,10 +8,11 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <meta name="apple-mobile-web-app-title" content="TercihAtlas" />
   <title>TercihAtlas — YKS 2027 Tercih & Üniversite Rehberi</title>
-  <link rel="icon" type="image/png" sizes="64x64" href="favicon.png?v=17" />
-  <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png?v=17" />
-  <link rel="manifest" href="manifest.json?v=17" />
-  <link rel="stylesheet" href="css/styles.css?v=17" />
+  <link rel="preconnect" href="https://tercihatlas-2027-default-rtdb.firebaseio.com" crossorigin />
+  <link rel="icon" type="image/png" sizes="64x64" href="favicon.png?v=18" />
+  <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png?v=18" />
+  <link rel="manifest" href="manifest.json?v=18" />
+  <link rel="stylesheet" href="css/styles.css?v=18" />
 </head>
 <body>
   <!-- macOS Tahoe / iPadOS Floating Liquid Glass Top Navigation -->
@@ -46,9 +47,9 @@
           <svg class="sf-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 19h16"/><path d="M7 15V9"/><path d="M12 15V5"/><path d="M17 15v-3"/></svg>
           <span class="sync-label">Netlerim</span>
         </button>
-        <button class="glass-icon-btn" id="openSyncBtn" title="Bulut Eşitleme ve Yedekleme">
+        <button class="glass-icon-btn" id="openSyncBtn" title="Firebase Canlı Eşitleme ve Yedekleme">
           <span class="status-dot" id="syncDot"></span>
-          <span class="sync-label" id="syncLabel">Yerel</span>
+          <span class="sync-label" id="syncLabel">Firebase</span>
         </button>
         <button class="glass-icon-btn circle" id="themeToggleBtn" title="Görünüm, Tema ve Vurgu Rengi" aria-label="Görünüm Ayarları">
           <svg id="themeIcon" class="sf-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"></svg>
@@ -249,6 +250,6 @@
   <!-- Floating Pill Toasts -->
   <div class="toast-container" id="toastContainer"></div>
 
-  <script type="module" src="js/app.js?v=17"></script>
+  <script type="module" src="js/app.js?v=18"></script>
 </body>
 </html>
