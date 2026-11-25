@@ -5250,3 +5250,44 @@ button, a, input, select, textarea, .prog-card, .apple-list-row {
     grid-template-columns: 1fr !important;
   }
 }
+
+/* v28: Live Per-Subject ÖSYM Coefficient Chips */
+.yks-field-coeff {
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
+.yks-coeff-strip {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding-top: 10px;
+  border-top: 0.5px solid var(--separator);
+}
+
+.yks-coeff-label {
+  font-size: 11px;
+  font-weight: 650;
+  color: var(--text-tertiary);
+  margin-right: 2px;
+}
+
+.yks-coeff-pill {
+  font-size: 11px;
+  color: var(--text-secondary);
+  background: var(--surface);
+  padding: 3px 8px;
+  border-radius: 999px;
+  box-shadow: var(--shadow-xs);
+}
+
+.yks-coeff-pill strong {
+  color: var(--accent);
+  font-weight: 700;
+}

@@ -15,7 +15,7 @@ import {
   computeOsymStandardRawScore,
   interpolateRankLinear,
   YKS_RANK_TABLES,
-} from './yks-calculator.js?v=27';
+} from './yks-calculator.js?v=28';
 
 /**
  * Computes a realistic 2027 rank projection range & quota change warning
@@ -586,9 +586,16 @@ export function estimateYksRankFromNets(myNets) {
     tyt_mat: tMat || 0,
     tyt_fen: tFen || 0,
     ayt_mat: aMat || 0,
-    ayt_fen: (aFiz || 0) + (aKim || 0) + (aBio || 0),
-    ayt_edsos1: (aEdb || 0) + (aTr1 || 0) + (aCg1 || 0),
-    ayt_sos2: (aTr2 || 0) + (aCg2 || 0) + (aFel || 0) + (aDin || 0),
+    ayt_fiz: aFiz || 0,
+    ayt_kim: aKim || 0,
+    ayt_bio: aBio || 0,
+    ayt_edb: aEdb || 0,
+    ayt_tr1: aTr1 || 0,
+    ayt_cg1: aCg1 || 0,
+    ayt_tr2: aTr2 || 0,
+    ayt_cg2: aCg2 || 0,
+    ayt_fel: aFel || 0,
+    ayt_din: aDin || 0,
     ydt: ydt || 0,
   };
 

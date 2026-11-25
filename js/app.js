@@ -60,7 +60,7 @@ import {
   auditPreferenceOrder,
   SUBJECT_BOOST_PRESETS,
   simulateSubjectNetBoost,
-} from './analytics.js?v=27';
+} from './analytics.js?v=28';
 import { ABROAD_PRESETS, DEFAULT_ABROAD_TOOLS, createAbroadRecord, renderAbroadView } from './abroad.js?v=26';
 import { parseExamPdfFile } from './pdf-parser.js?v=26';
 import {
@@ -80,12 +80,14 @@ import {
   DEFAULT_YKS_CALC_INPUT,
   CALC_TYT_FIELDS,
   CALC_AYT_FIELDS,
+  normalizeCalcInput,
+  getEffectiveSubjectCoefficients,
   sanitizeFieldPair,
   calculateYksResults,
   buildCalcInputFromMyNets,
   renderYksCalculatorPanel,
   renderYksResultsBlockHtml,
-} from './yks-calculator.js?v=27';
+} from './yks-calculator.js?v=28';
 import {
   translateBkCondition,
   deriveProgramBkTags,
@@ -279,12 +281,7 @@ function normalizeState(parsed) {
     decisionWeights: { ...structuredClone(DEFAULT_DECISION_WEIGHTS), ...(parsed?.decisionWeights || {}) },
     roadmapChecks: parsed?.roadmapChecks && typeof parsed.roadmapChecks === 'object' ? { ...parsed.roadmapChecks } : {},
     customMilestones: Array.isArray(parsed?.customMilestones) ? parsed.customMilestones : [],
-    yksCalculator: {
-      ...structuredClone(DEFAULT_YKS_CALC_INPUT),
-      ...(parsed?.yksCalculator || {}),
-      tyt: { ...structuredClone(DEFAULT_YKS_CALC_INPUT.tyt), ...(parsed?.yksCalculator?.tyt || {}) },
-      ayt: { ...structuredClone(DEFAULT_YKS_CALC_INPUT.ayt), ...(parsed?.yksCalculator?.ayt || {}) },
-    },
+    yksCalculator: normalizeCalcInput(parsed?.yksCalculator),
     myNets: {
       ...structuredClone(DEFAULT_MY_NETS),
       ...(parsed?.myNets || {}),
@@ -6190,9 +6187,7 @@ function bindYksCalculatorEvents() {
   };
 
   const ensureCalcState = () => {
-    if (!state.yksCalculator) state.yksCalculator = structuredClone(DEFAULT_YKS_CALC_INPUT);
-    if (!state.yksCalculator.tyt) state.yksCalculator.tyt = structuredClone(DEFAULT_YKS_CALC_INPUT.tyt);
-    if (!state.yksCalculator.ayt) state.yksCalculator.ayt = structuredClone(DEFAULT_YKS_CALC_INPUT.ayt);
+    state.yksCalculator = normalizeCalcInput(state.yksCalculator);
     return state.yksCalculator;
   };
 
@@ -6258,11 +6253,29 @@ function bindYksCalculatorEvents() {
         </span>`;
     }
 
-    // Update TYT total net pill
+    // Update TYT & AYT sub-group total net pills
     const tytBadge = document.getElementById('calcTytTotalBadge');
     if (tytBadge) {
       tytBadge.innerHTML = `Toplam: <strong>${res.tytTotalNet.toFixed(2).replace('.', ',')}</strong> net`;
     }
+    const sayBadge = document.getElementById('calcAytSayTotalBadge');
+    if (sayBadge) sayBadge.innerHTML = `<strong>Toplam: ${res.aytSayTotal.toFixed(2).replace('.', ',')}</strong> net`;
+    const edBadge = document.getElementById('calcAytEdSos1TotalBadge');
+    if (edBadge) edBadge.innerHTML = `<strong>Toplam: ${res.aytEdSos1Total.toFixed(2).replace('.', ',')}</strong> net`;
+    const sos2Badge = document.getElementById('calcAytSos2TotalBadge');
+    if (sos2Badge) sos2Badge.innerHTML = `<strong>Sos-2: ${res.aytSos2Total.toFixed(2).replace('.', ',')}</strong> net`;
+
+    // Update live per-subject effective ÖSYM coefficient pills
+    const liveCoeffs = getEffectiveSubjectCoefficients(calc.selectedType || 'SAY', calc.selectedYear || 2026);
+    document.querySelectorAll('[data-calc-coeff]').forEach((el) => {
+      const val = liveCoeffs[el.dataset.calcCoeff];
+      if (val) {
+        el.textContent = `×${val.toFixed(2).replace('.', ',')}`;
+        el.style.display = '';
+      } else {
+        el.style.display = 'none';
+      }
+    });
 
     // Update each row net badge & progress hairline
     const updateGroup = (fields, group) => {
@@ -6371,29 +6384,35 @@ function bindYksCalculatorEvents() {
       ayt: {
         ...(state.myNets?.ayt || {}),
         matematik: res.ayt.matematik.net || null,
-        fizik: res.ayt.fen.net ? Number(((res.ayt.fen.net * 14) / 40).toFixed(2)) : null,
-        kimya: res.ayt.fen.net ? Number(((res.ayt.fen.net * 13) / 40).toFixed(2)) : null,
-        biyoloji: res.ayt.fen.net ? Number(((res.ayt.fen.net * 13) / 40).toFixed(2)) : null,
-        edebiyat: res.ayt.edSos1.net ? Number(((res.ayt.edSos1.net * 24) / 40).toFixed(2)) : null,
-        tarih1: res.ayt.edSos1.net ? Number(((res.ayt.edSos1.net * 10) / 40).toFixed(2)) : null,
-        cografya1: res.ayt.edSos1.net ? Number(((res.ayt.edSos1.net * 6) / 40).toFixed(2)) : null,
+        fizik: res.ayt.fizik.net || null,
+        kimya: res.ayt.kimya.net || null,
+        biyoloji: res.ayt.biyoloji.net || null,
+        edebiyat: res.ayt.edebiyat.net || null,
+        tarih1: res.ayt.tarih1.net || null,
+        cografya1: res.ayt.cografya1.net || null,
+        tarih2: res.ayt.tarih2.net || null,
+        cografya2: res.ayt.cografya2.net || null,
+        felsefe: res.ayt.felsefe.net || null,
+        din: res.ayt.din.net || null,
       },
       ydt: res.ayt.ydt.net || null,
     };
     saveState();
     renderAll();
-    showToast('Hesaplanan netler ve OBP "Netlerim" profiline kaydedildi.', 'success');
+    showToast('16 ders neti ve OBP "Netlerim" profiline kaydedildi.', 'success');
   });
 
   // Reset all fields to zero
   document.getElementById('calcResetBtn')?.addEventListener('click', () => {
+    const emptyAyt = {};
+    for (const f of CALC_AYT_FIELDS) emptyAyt[f.key] = { d: 0, y: 0 };
     state.yksCalculator = {
       diploma: 85,
       obpBroken: false,
       selectedType: ensureCalcState().selectedType || 'SAY',
       selectedYear: ensureCalcState().selectedYear || 2026,
       tyt: { turkce: { d: 0, y: 0 }, sosyal: { d: 0, y: 0 }, matematik: { d: 0, y: 0 }, fen: { d: 0, y: 0 } },
-      ayt: { matematik: { d: 0, y: 0 }, fen: { d: 0, y: 0 }, edSos1: { d: 0, y: 0 }, sos2: { d: 0, y: 0 }, ydt: { d: 0, y: 0 } },
+      ayt: emptyAyt,
     };
     saveState();
     renderAll();
