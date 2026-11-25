@@ -39,8 +39,8 @@ export function hasConfiguredApi() {
 
 export function getLogoUrl(universityId) {
   if (!universityId) return null;
-  if (!hasConfiguredApi()) return null;
-  return `${getApiBase()}/api/logo/${universityId}`;
+  // Served directly from GitHub Pages (works 100% on Mac, iPad, iPhone & offline without workers.dev dependency)
+  return `./logos/${encodeURIComponent(universityId)}.png`;
 }
 
 async function apiRequest(path, options = {}) {

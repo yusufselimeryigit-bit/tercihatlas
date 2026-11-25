@@ -379,18 +379,18 @@ export function renderAppleActivityRings({ tytPct = 0, aytPct = 0, researchPct =
   ];
 
   const svgs = rings
-    .map((rg) => {
+    .map((rg, idx) => {
       const circ = 2 * Math.PI * rg.r;
       const visualPct = rg.pct > 0 ? Math.max(4, rg.pct) : 0;
       const offset = circ * (1 - visualPct / 100);
       return `
         <circle cx="${cx}" cy="${cy}" r="${rg.r}" fill="none" stroke="${rg.track}" stroke-width="10" />
-        <circle cx="${cx}" cy="${cy}" r="${rg.r}" fill="none" stroke="${rg.color}" stroke-width="10"
+        <circle class="activity-ring-progress" cx="${cx}" cy="${cy}" r="${rg.r}" fill="none" stroke="${rg.color}" stroke-width="10"
           stroke-linecap="round"
           stroke-dasharray="${circ.toFixed(2)}"
           stroke-dashoffset="${offset.toFixed(2)}"
           transform="rotate(-90 ${cx} ${cy})"
-          style="transition:stroke-dashoffset 600ms cubic-bezier(0.22, 1, 0.36, 1);" />`;
+          style="--ring-circ:${circ.toFixed(2)};--ring-offset:${offset.toFixed(2)};animation-delay:${idx * 90}ms;" />`;
     })
     .join('');
 

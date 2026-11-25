@@ -13,7 +13,7 @@ import {
   getAytFieldsForScoreType,
   generateSyncKey,
   exportProgramsToCsv,
-} from './utils.js?v=18';
+} from './utils.js?v=19';
 import {
   getApiBase,
   setCustomApiBase,
@@ -25,14 +25,14 @@ import {
   searchProgramsFromApi,
   createShareSnapshot,
   fetchShareSnapshot,
-} from './api.js?v=18';
+} from './api.js?v=19';
 import {
   getFirebaseRoom,
   setFirebaseRoom,
   pushStateToFirebase,
   pullStateOnceFromFirebase,
   startFirebaseLiveSync,
-} from './firebase-sync.js?v=18';
+} from './firebase-sync.js?v=19';
 import {
   renderSparkline,
   renderDetailTrendChart,
@@ -40,7 +40,7 @@ import {
   renderExamProgressionChart,
   renderMiniNetSparkline,
   renderAppleActivityRings,
-} from './charts.js?v=18';
+} from './charts.js?v=19';
 import {
   compute2027Projection,
   compareWithMyNets,
@@ -55,20 +55,21 @@ import {
   compareScenarios,
   computeExamPersonalRecords,
   diffProgramLists,
-} from './analytics.js?v=18';
-import { ABROAD_PRESETS, DEFAULT_ABROAD_TOOLS, createAbroadRecord, renderAbroadView } from './abroad.js?v=18';
-import { parseExamPdfFile } from './pdf-parser.js?v=18';
+} from './analytics.js?v=19';
+import { ABROAD_PRESETS, DEFAULT_ABROAD_TOOLS, createAbroadRecord, renderAbroadView } from './abroad.js?v=19';
+import { parseExamPdfFile } from './pdf-parser.js?v=19';
 import {
   renderTurkeyCampusMap,
   renderCostCalculator,
   renderTimelineView,
   downloadTimelineIcs,
-} from './map-cost.js?v=18';
+} from './map-cost.js?v=19';
 
 const STATE_KEY = 'tercihatlas_state_v1';
 const SYNC_KEY_STORAGE = 'tercihatlas_sync_key';
 const THEME_STORAGE = 'tercihatlas_theme_v2';
 const ACCENT_STORAGE = 'tercihatlas_accent_v1';
+const SURFACE_STORAGE = 'tercihatlas_surface_v1';
 
 const PROGRAM_CHECKLIST_ITEMS = [
   { key: 'mufredat', label: 'Ders Müfredatı' },
@@ -446,12 +447,14 @@ const systemDarkQuery = window.matchMedia ? window.matchMedia('(prefers-color-sc
 function initTheme() {
   const savedMode = localStorage.getItem(THEME_STORAGE) || 'light';
   const savedAccent = localStorage.getItem(ACCENT_STORAGE) || 'blue';
-  applyThemeMode(savedMode, { silent: true });
-  applyAccent(savedAccent, { silent: true });
+  const savedSurface = localStorage.getItem(SURFACE_STORAGE) || 'classic';
+  applyThemeMode(savedMode);
+  applyAccent(savedAccent);
+  applySurfaceStyle(savedSurface);
 
   systemDarkQuery?.addEventListener?.('change', () => {
     if ((localStorage.getItem(THEME_STORAGE) || 'light') === 'auto') {
-      applyThemeMode('auto', { silent: true });
+      applyThemeMode('auto');
     }
   });
 }
@@ -495,6 +498,28 @@ function applyAccent(accent) {
   document.querySelectorAll('#accentSwatches [data-accent-pick]').forEach((btn) => {
     btn.classList.toggle('active', btn.dataset.accentPick === chosen);
   });
+}
+
+function applySurfaceStyle(surface) {
+  const valid = ['classic', 'aurora', 'contrast'];
+  const chosen = valid.includes(surface) ? surface : 'classic';
+  localStorage.setItem(SURFACE_STORAGE, chosen);
+  if (chosen === 'classic') {
+    document.documentElement.removeAttribute('data-surface');
+  } else {
+    document.documentElement.setAttribute('data-surface', chosen);
+  }
+  document.querySelectorAll('#surfaceStyleSegmented [data-surface-pick]').forEach((btn) => {
+    btn.classList.toggle('active', btn.dataset.surfacePick === chosen);
+  });
+  initSlidingSegmentedControls();
+}
+
+function setPresentationMode(enabled) {
+  document.body.classList.toggle('presentation-mode', Boolean(enabled));
+  if (enabled) {
+    showToast('Sunum modu açıldı. Çıkmak için sağ üstteki Çık veya Esc kullan.', 'info');
+  }
 }
 
 function closeAppearancePopover() {
@@ -1364,6 +1389,7 @@ function renderPreferencesView() {
               ? `<button class="ctx-item" id="refreshAllBtn" ${ui.refreshBusy ? 'disabled' : ''}>${SF.refresh} Tümünü Canlı Güncelle</button>
                  <button class="ctx-item" id="openSnapshotsBtn"><svg class="sf-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg> Zaman Makinesi (${state.snapshots.length})</button>`
               : ''}
+            <button class="ctx-item" id="openPresentationBtn"><svg class="sf-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg> Sunum / Okuma Modu</button>
             <button class="ctx-item" id="openOsymBtn">${SF.share} ÖSYM AİS & Paylaşım Linki</button>
             <button class="ctx-item" id="printReportBtn">${SF.print} PDF Raporu / Yazdır</button>
           </div>`
@@ -2574,10 +2600,27 @@ function closeDrawer() {
   drawer.setAttribute('aria-hidden', 'true');
 }
 
-function renderDrawer() {
+function stepDrawerProgram(delta) {
+  if (!ui.drawerCode) return;
+  const list = getFilteredPrograms();
+  const pool = list.length ? list : state.programs;
+  const idx = pool.findIndex((item) => item.code === ui.drawerCode);
+  if (idx === -1 || pool.length < 2) return;
+  const next = pool[(idx + delta + pool.length) % pool.length];
+  if (!next) return;
+  ui.drawerCode = next.code;
+  ui.drawerNetYear = next.nets?.[0]?.year || null;
+  renderDrawer({ animateSwap: true });
+}
+
+function renderDrawer({ animateSwap = false } = {}) {
   const container = document.getElementById('drawerContent');
   const p = state.programs.find((item) => item.code === ui.drawerCode);
   if (!container || !p) return;
+
+  const list = getFilteredPrograms();
+  const pool = list.length ? list : state.programs;
+  const curIdx = pool.findIndex((item) => item.code === p.code);
 
   document.getElementById('detailDrawer')?.setAttribute('data-risk', p.risk || 'hedef');
 
@@ -2630,6 +2673,17 @@ function renderDrawer() {
         </div>
       </div>
       <div class="drawer-header-actions">
+        ${pool.length > 1 && curIdx !== -1
+          ? `<div class="drawer-nav-cluster" title="Önceki / Sonraki bölüm (← →)">
+              <button class="btn btn-ghost btn-icon btn-sm" id="drawerPrevBtn" aria-label="Önceki bölüm" style="width:26px;height:26px;">
+                <svg class="sf-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="m15 18-6-6 6-6"/></svg>
+              </button>
+              <span class="drawer-nav-pos tabular">${curIdx + 1}/${pool.length}</span>
+              <button class="btn btn-ghost btn-icon btn-sm" id="drawerNextBtn" aria-label="Sonraki bölüm" style="width:26px;height:26px;">
+                <svg class="sf-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="m9 18 6-6-6-6"/></svg>
+              </button>
+            </div>`
+          : ''}
         <a class="btn btn-sm" href="${escapeHtml(p.yokAtlasUrl)}" target="_blank" rel="noopener">YÖK Atlas ${SF.external}</a>
         ${!ui.readOnlyShare ? `<button class="btn btn-sm" id="drawerRefreshBtn">${SF.refresh} Güncelle</button>` : ''}
         <button class="btn btn-sm ${state.compareCodes.includes(p.code) ? 'btn-soft' : ''}" id="drawerCompareBtn">
@@ -2901,12 +2955,18 @@ function renderDrawer() {
     </div>
   `;
 
+  if (animateSwap) {
+    const bodyEl = container.querySelector('.drawer-body');
+    bodyEl?.classList.add('drawer-swap-in');
+  }
   bindDrawerEvents(p);
   bindInteractiveCharts(container);
   initSlidingSegmentedControls();
 }
 
 function bindDrawerEvents(p) {
+  document.getElementById('drawerPrevBtn')?.addEventListener('click', () => stepDrawerProgram(-1));
+  document.getElementById('drawerNextBtn')?.addEventListener('click', () => stepDrawerProgram(1));
   const drawerBody = document.querySelector('#drawerContent .drawer-body');
   const drawerHeader = document.getElementById('drawerHeaderBar');
   const progressBar = document.getElementById('drawerScrollProgress');
@@ -4480,6 +4540,10 @@ function bindPreferencesEvents() {
     prefDropdown?.classList.remove('open');
     openSnapshotModal();
   });
+  document.getElementById('openPresentationBtn')?.addEventListener('click', () => {
+    prefDropdown?.classList.remove('open');
+    setPresentationMode(true);
+  });
   document.getElementById('dismissRefreshDiffBtn')?.addEventListener('click', () => {
     ui.refreshDiff = null;
     renderAll();
@@ -4887,6 +4951,12 @@ async function init() {
     btn.addEventListener('click', () => applyAccent(btn.dataset.accentPick));
   });
 
+  document.querySelectorAll('#surfaceStyleSegmented [data-surface-pick]').forEach((btn) => {
+    btn.addEventListener('click', () => applySurfaceStyle(btn.dataset.surfacePick));
+  });
+
+  document.getElementById('exitPresentationBtn')?.addEventListener('click', () => setPresentationMode(false));
+
   document.getElementById('openAddBtn')?.addEventListener('click', () => openAddModal());
   document.getElementById('closeAddModalBtn')?.addEventListener('click', closeAddModal);
   document.getElementById('addModalOverlay')?.addEventListener('click', (e) => {
@@ -4991,10 +5061,19 @@ async function init() {
     if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
       e.preventDefault();
       openAddModal();
+    } else if (ui.drawerCode && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
+      const tag = document.activeElement?.tagName;
+      if (tag !== 'INPUT' && tag !== 'TEXTAREA' && tag !== 'SELECT') {
+        e.preventDefault();
+        stepDrawerProgram(e.key === 'ArrowLeft' ? -1 : 1);
+      }
     } else if (e.key === 'Escape') {
       if (activeDialogClose) {
         activeDialogClose();
         return;
+      }
+      if (document.body.classList.contains('presentation-mode') && !ui.drawerCode) {
+        setPresentationMode(false);
       }
       closeContextMenu();
       closeAppearancePopover();
