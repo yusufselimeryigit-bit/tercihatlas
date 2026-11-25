@@ -1,6 +1,8 @@
 /**
- * TercihAtlas — Backend API & Cloud Sync Client
+ * TercihAtlas — Backend API, Local YÖK Atlas Catalog & Share Client
  */
+
+import { lookupProgramInCatalog, searchProgramsInCatalog } from './catalog.js?v=20';
 
 // Will be set automatically after Cloudflare Worker deployment.
 // On localhost/127.0.0.1, same-origin dev-server.mjs is used automatically.
@@ -71,18 +73,40 @@ export async function checkApiHealth() {
 
 export async function fetchProgramFromApi(code, { refresh = false } = {}) {
   const q = refresh ? '?refresh=1' : '';
-  return apiRequest(`/api/program/${encodeURIComponent(code)}${q}`, { method: 'GET' });
+  const timeoutMs = isLocalDev() ? 8000 : 3500;
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const live = await apiRequest(`/api/program/${encodeURIComponent(code)}${q}`, {
+        method: 'GET',
+        signal: controller.signal,
+      });
+      return live;
+    } finally {
+      clearTimeout(timer);
+    }
+  } catch (err) {
+    // Seamless offline / Turkish-ISP fallback to full 12,239-program built-in YÖK Atlas 2026 catalog
+    const fallback = await lookupProgramInCatalog(code).catch(() => null);
+    if (fallback) return fallback;
+    throw err;
+  }
 }
 
 export async function searchProgramsFromApi({ q = '', puanTuru = '', uniTuru = '', minRank = '', maxRank = '', size = 20 } = {}) {
-  const sp = new URLSearchParams();
-  if (q) sp.set('q', q);
-  if (puanTuru) sp.set('puanTuru', puanTuru);
-  if (uniTuru) sp.set('uniTuru', uniTuru);
-  if (minRank) sp.set('minRank', String(minRank));
-  if (maxRank) sp.set('maxRank', String(maxRank));
-  if (size) sp.set('size', String(size));
-  return apiRequest(`/api/search?${sp.toString()}`, { method: 'GET' });
+  try {
+    return await searchProgramsInCatalog({ q, puanTuru, uniTuru, minRank, maxRank, size });
+  } catch {
+    const sp = new URLSearchParams();
+    if (q) sp.set('q', q);
+    if (puanTuru) sp.set('puanTuru', puanTuru);
+    if (uniTuru) sp.set('uniTuru', uniTuru);
+    if (minRank) sp.set('minRank', String(minRank));
+    if (maxRank) sp.set('maxRank', String(maxRank));
+    if (size) sp.set('size', String(size));
+    return apiRequest(`/api/search?${sp.toString()}`, { method: 'GET' });
+  }
 }
 
 export async function pullCloudSync(syncKey) {

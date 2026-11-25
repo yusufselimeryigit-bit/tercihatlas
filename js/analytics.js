@@ -1013,3 +1013,81 @@ export function diffProgramLists(currentPrograms, snapshotPrograms) {
   const identical = addedSince === 0 && removedSince === 0 && movedCount === 0;
   return { identical, addedSince, removedSince, movedCount };
 }
+
+// ============================================================================
+// ÖSYM Placement Simulation ("If my rank is X, which preference do I get?")
+// ============================================================================
+export function simulateOsymPlacement(programs, actualRank) {
+  const rank = Number(actualRank);
+  if (!Array.isArray(programs) || !programs.length || !Number.isFinite(rank) || rank <= 0) {
+    return null;
+  }
+
+  let placedIndex = -1;
+  const rows = programs.map((p, idx) => {
+    const latest = Number(p.latestRank) || null;
+    const proj = compute2027Projection(p);
+    const low = proj?.low || (latest ? Math.round(latest * 0.9) : null);
+    const high = proj?.high || (latest ? Math.round(latest * 1.1) : null);
+
+    let chance = 'bilinmiyor';
+    let label = 'Veri Yok';
+    let tone = 'accent';
+    let qualifies = false;
+
+    if (latest) {
+      if (rank <= low * 0.85) {
+        chance = 'kesin';
+        label = 'Kesin Gibi';
+        tone = 'green';
+        qualifies = true;
+      } else if (rank <= latest) {
+        chance = 'yuksek';
+        label = 'Yüksek İhtimal';
+        tone = 'green';
+        qualifies = true;
+      } else if (rank <= high * 1.05) {
+        chance = 'sinirda';
+        label = 'Sınırda';
+        tone = 'amber';
+        qualifies = false;
+      } else {
+        chance = 'zor';
+        label = 'Zor / Hayal';
+        tone = 'rose';
+        qualifies = false;
+      }
+    }
+
+    let isWinner = false;
+    if (placedIndex === -1 && qualifies) {
+      placedIndex = idx;
+      isWinner = true;
+    }
+
+    return {
+      order: idx + 1,
+      program: p,
+      latest,
+      proj,
+      chance,
+      label,
+      tone,
+      isWinner,
+    };
+  });
+
+  // If no definite/high match, check if any borderline slot could be a plausible placement
+  let borderlineWinner = null;
+  if (placedIndex === -1) {
+    borderlineWinner = rows.find((r) => r.chance === 'sinirda') || null;
+  }
+
+  return {
+    actualRank: rank,
+    placedIndex,
+    winner: placedIndex !== -1 ? rows[placedIndex] : null,
+    borderlineWinner,
+    rows,
+  };
+}

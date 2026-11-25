@@ -13,7 +13,7 @@ import {
   getAytFieldsForScoreType,
   generateSyncKey,
   exportProgramsToCsv,
-} from './utils.js?v=19';
+} from './utils.js?v=20';
 import {
   getApiBase,
   setCustomApiBase,
@@ -25,14 +25,14 @@ import {
   searchProgramsFromApi,
   createShareSnapshot,
   fetchShareSnapshot,
-} from './api.js?v=19';
+} from './api.js?v=20';
 import {
   getFirebaseRoom,
   setFirebaseRoom,
   pushStateToFirebase,
   pullStateOnceFromFirebase,
   startFirebaseLiveSync,
-} from './firebase-sync.js?v=19';
+} from './firebase-sync.js?v=20';
 import {
   renderSparkline,
   renderDetailTrendChart,
@@ -40,7 +40,7 @@ import {
   renderExamProgressionChart,
   renderMiniNetSparkline,
   renderAppleActivityRings,
-} from './charts.js?v=19';
+} from './charts.js?v=20';
 import {
   compute2027Projection,
   compareWithMyNets,
@@ -55,15 +55,16 @@ import {
   compareScenarios,
   computeExamPersonalRecords,
   diffProgramLists,
-} from './analytics.js?v=19';
-import { ABROAD_PRESETS, DEFAULT_ABROAD_TOOLS, createAbroadRecord, renderAbroadView } from './abroad.js?v=19';
-import { parseExamPdfFile } from './pdf-parser.js?v=19';
+  simulateOsymPlacement,
+} from './analytics.js?v=20';
+import { ABROAD_PRESETS, DEFAULT_ABROAD_TOOLS, createAbroadRecord, renderAbroadView } from './abroad.js?v=20';
+import { parseExamPdfFile } from './pdf-parser.js?v=20';
 import {
   renderTurkeyCampusMap,
   renderCostCalculator,
   renderTimelineView,
   downloadTimelineIcs,
-} from './map-cost.js?v=19';
+} from './map-cost.js?v=20';
 
 const STATE_KEY = 'tercihatlas_state_v1';
 const SYNC_KEY_STORAGE = 'tercihatlas_sync_key';
@@ -76,6 +77,13 @@ const PROGRAM_CHECKLIST_ITEMS = [
   { key: 'kampusYurt', label: 'Kampüs & Yurt' },
   { key: 'mezun', label: 'Mezun Yorumları' },
   { key: 'erasmus', label: 'Erasmus & Staj' },
+];
+
+const PROGRAM_SUBRATING_ITEMS = [
+  { key: 'academic', label: 'Akademik Kadro' },
+  { key: 'campus', label: 'Kampüs & Şehir' },
+  { key: 'career', label: 'Kariyer & Staj' },
+  { key: 'living', label: 'Yurt & Ulaşım' },
 ];
 
 const DEFAULT_MY_NETS = {
@@ -177,6 +185,7 @@ const ui = {
   selectedMapCity: null,
   simTytBoost: 0,
   simAytBoost: 0,
+  simPlacementRank: null,
   viewMode: localStorage.getItem('tercihatlas_view_mode') || 'cards',
   search: '',
   filterRisk: 'all',
@@ -727,8 +736,12 @@ function addProgramToState(rawProgram, chosenRisk) {
     const prev = state.programs[existingIdx];
     state.programs[existingIdx] = {
       ...rawProgram,
+      nets: rawProgram.nets?.length ? rawProgram.nets : prev.nets || [],
+      conditions: rawProgram.conditions?.length ? rawProgram.conditions : prev.conditions || [],
       risk: chosenRisk || prev.risk,
       rating: prev.rating || 0,
+      subRatings: prev.subRatings || {},
+      questions: prev.questions || [],
       pros: prev.pros || [],
       cons: prev.cons || [],
       notes: prev.notes || '',
@@ -741,6 +754,8 @@ function addProgramToState(rawProgram, chosenRisk) {
       ...rawProgram,
       risk,
       rating: 0,
+      subRatings: {},
+      questions: [],
       pros: [],
       cons: [],
       notes: '',
@@ -752,27 +767,62 @@ function addProgramToState(rawProgram, chosenRisk) {
   saveState();
 }
 
+function captureProgramRects() {
+  const map = new Map();
+  document.querySelectorAll('#programList [data-code]').forEach((el) => {
+    map.set(el.dataset.code, el.getBoundingClientRect());
+  });
+  return map;
+}
+
+function animateProgramFlip(prevRects) {
+  if (!prevRects || !prevRects.size) return;
+  requestAnimationFrame(() => {
+    document.querySelectorAll('#programList [data-code]').forEach((el) => {
+      const prev = prevRects.get(el.dataset.code);
+      if (!prev) return;
+      const next = el.getBoundingClientRect();
+      const dx = prev.left - next.left;
+      const dy = prev.top - next.top;
+      if (Math.abs(dx) < 1 && Math.abs(dy) < 1) return;
+      el.style.transition = 'none';
+      el.style.transform = `translate3d(${dx}px, ${dy}px, 0)`;
+      void el.offsetWidth;
+      el.style.transition = 'transform 360ms cubic-bezier(0.22, 1, 0.36, 1)';
+      el.style.transform = 'translate3d(0, 0, 0)';
+      setTimeout(() => {
+        el.style.transition = '';
+        el.style.transform = '';
+      }, 380);
+    });
+  });
+}
+
 function reorderPrograms(fromCode, toCode) {
   if (!fromCode || !toCode || fromCode === toCode) return;
   const fromIdx = state.programs.findIndex((p) => p.code === fromCode);
   const toIdx = state.programs.findIndex((p) => p.code === toCode);
   if (fromIdx === -1 || toIdx === -1) return;
+  const prevRects = captureProgramRects();
   const [moved] = state.programs.splice(fromIdx, 1);
   state.programs.splice(toIdx, 0, moved);
   ui.sortBy = 'manual';
   saveState();
   renderAll();
+  animateProgramFlip(prevRects);
 }
 
 function moveProgramStep(code, delta) {
   const idx = state.programs.findIndex((p) => p.code === code);
   const next = idx + delta;
   if (idx === -1 || next < 0 || next >= state.programs.length) return;
+  const prevRects = captureProgramRects();
   const [moved] = state.programs.splice(idx, 1);
   state.programs.splice(next, 0, moved);
   ui.sortBy = 'manual';
   saveState();
   renderAll();
+  animateProgramFlip(prevRects);
 }
 
 function toggleCompare(code) {
@@ -1548,6 +1598,7 @@ function renderCardsView(programs) {
         }
 
         const checkDone = PROGRAM_CHECKLIST_ITEMS.filter((it) => p.checklist?.[it.key]).length;
+        const medalCls = p._order === 1 ? 'order-gold' : p._order === 2 ? 'order-silver' : p._order === 3 ? 'order-bronze' : '';
 
         return `<article class="prog-card" data-code="${escapeHtml(p.code)}" draggable="${manualMode ? 'true' : 'false'}">
           <div class="card-top">
@@ -1561,7 +1612,7 @@ function renderCardsView(programs) {
             </div>
             <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0;">
               <span class="pill pill-risk-${escapeHtml(p.risk || 'hedef')}">${escapeHtml(riskMeta.label)}</span>
-              <span class="order-pill tabular" title="${manualMode ? 'Sürükleyerek sırala' : 'Tercih sıran'}">
+              <span class="order-pill ${medalCls} tabular" title="${manualMode ? 'Sürükleyerek sırala' : 'Tercih sıran'}">
                 ${manualMode ? SF.grip : ''}#${String(p._order).padStart(2, '0')}
               </span>
             </div>
@@ -1631,11 +1682,12 @@ function renderTableView(programs) {
         const isCompared = state.compareCodes.includes(p.code);
         const isReachable = isProgramCurrentlyReachable(p, est);
         const riskMeta = RISK_META[p.risk] || RISK_META.hedef;
+        const medalCls = p._order === 1 ? 'order-gold' : p._order === 2 ? 'order-silver' : p._order === 3 ? 'order-bronze' : '';
         const subMeta = [p.university, p.city, p.scoreType, p.language, p.scholarship].filter(Boolean).join(' · ');
 
         return `<div class="apple-list-row" role="listitem" data-code="${escapeHtml(p.code)}" draggable="${manualMode ? 'true' : 'false'}">
           <div class="apple-list-left">
-            <span class="apple-list-ord tabular">${String(p._order).padStart(2, '0')}</span>
+            <span class="apple-list-ord ${medalCls} tabular">${String(p._order).padStart(2, '0')}</span>
             ${renderAvatar(p)}
             <div class="apple-list-titles">
               <div class="apple-list-dept">${escapeHtml(p.department)}</div>
@@ -1931,7 +1983,13 @@ function renderCompareView() {
 // Analysis Hub (Genel & Sağlık | Harita | Net Simülatörü | Maliyet | Takvim)
 // ============================================================================
 function renderSimulatorPanel() {
+  const est = estimateYksRankFromNets(state.myNets);
+  const primaryScoreType = state.programs[0]?.scoreType || 'SAY';
+  const estRank = est?.[primaryScoreType]?.rank || est?.SAY?.rank || est?.EA?.rank || null;
   const baseTarget = Number(state.targetRank) || 15000;
+  const placementRank = Number(ui.simPlacementRank) || estRank || baseTarget;
+  const simPlace = simulateOsymPlacement(state.programs, placementRank);
+
   // Empirical YKS sensitivity: +1 TYT net improves rank by ~1.9%, +1 AYT net by ~4.4%
   const factor = Math.pow(0.981, ui.simTytBoost) * Math.pow(0.956, ui.simAytBoost);
   const simulatedRank = Math.max(1, Math.round(baseTarget * factor));
@@ -1946,7 +2004,71 @@ function renderSimulatorPanel() {
 
   const unlockedCount = evaluated.filter((e) => e.upgraded).length;
 
+  let verdictHtml = '';
+  if (simPlace?.winner) {
+    const w = simPlace.winner;
+    verdictHtml = `<div class="osym-sim-verdict">
+      <div>
+        <div style="font-size:12px;font-weight:600;opacity:0.85;">ÖSYM Yerleştirme Tahmini (${formatRank(placementRank)} sıralama ile)</div>
+        <strong style="font-size:16px;">🎉 #${w.order} tercihin olan ${escapeHtml(w.program.university)} — ${escapeHtml(w.program.department)} bölümüne yerleşiyorsun!</strong>
+      </div>
+      <span class="pill pill-risk-guvenli tabular">Son Taban: ${formatRank(w.latest)}</span>
+    </div>`;
+  } else if (simPlace?.borderlineWinner) {
+    const b = simPlace.borderlineWinner;
+    verdictHtml = `<div class="osym-sim-verdict warn">
+      <div>
+        <div style="font-size:12px;font-weight:600;opacity:0.85;">Sınırda Senaryo (${formatRank(placementRank)} sıralama ile)</div>
+        <strong style="font-size:15.5px;">⚖️ #${b.order} tercihin (${escapeHtml(b.program.university)} — ${escapeHtml(b.program.department)}) sınırda görünüyor.</strong>
+      </div>
+      <span class="pill pill-risk-hedef tabular">Son Taban: ${formatRank(b.latest)}</span>
+    </div>`;
+  } else if (simPlace) {
+    verdictHtml = `<div class="osym-sim-verdict danger">
+      <div>
+        <div style="font-size:12px;font-weight:600;opacity:0.85;">Açıkta Kalma Riski (${formatRank(placementRank)} sıralama ile)</div>
+        <strong style="font-size:15.5px;">⚠️ Mevcut listedeki tüm bölümler bu sıralamanın üstünde kapatmış — altına güvenli tercih eklemelisin.</strong>
+      </div>
+    </div>`;
+  }
+
   return `
+    <!-- Feature 2: ÖSYM Placement Simulation -->
+    <div class="panel panel-full">
+      <div class="panel-title" style="flex-wrap:wrap;gap:10px;">
+        <span>ÖSYM Yerleştirme Simülasyonu ("Sıralamam Bu Gelirse Nereye Girerim?")</span>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          <input id="simPlacementRankInput" class="input tabular" type="number" min="1" max="3000000" step="500"
+            value="${escapeHtml(placementRank)}" placeholder="Sıralaman..." style="width:145px;height:32px;padding:0 12px;font-weight:700;" />
+          ${estRank ? `<button class="btn btn-sm" id="useEstRankSimBtn" type="button">Net Tahminimi Kullan (${formatRank(estRank)})</button>` : ''}
+        </div>
+      </div>
+
+      ${verdictHtml}
+
+      ${simPlace
+        ? `<div class="sim-unlock-list">
+            ${simPlace.rows
+              .map(
+                (r) => `<div class="sim-unlock-row ${r.isWinner ? 'winner' : ''}" style="cursor:pointer;" data-open-code="${escapeHtml(r.program.code)}">
+                  <div style="display:flex;align-items:center;gap:10px;min-width:0;">
+                    <span class="mono" style="font-weight:700;color:${r.isWinner ? 'var(--green)' : 'var(--text-tertiary)'};width:26px;">#${String(r.order).padStart(2, '0')}</span>
+                    <div style="min-width:0;">
+                      <strong style="font-size:13.5px;">${escapeHtml(r.program.department)}</strong>
+                      <div style="font-size:12px;color:var(--text-secondary);">${escapeHtml(r.program.university)} · Son Sıra: <strong class="tabular">${formatRank(r.latest)}</strong>${r.proj ? ` · 2027: ${formatRank(r.proj.low)}–${formatRank(r.proj.high)}` : ''}</div>
+                    </div>
+                  </div>
+                  <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">
+                    ${r.isWinner ? `<span class="reachable-pill">${SF.check} Yerleşiyorsun</span>` : ''}
+                    <span class="pill" style="background:var(--${r.tone}-soft);color:var(--${r.tone});font-weight:600;">${escapeHtml(r.label)}</span>
+                  </div>
+                </div>`,
+              )
+              .join('')}
+          </div>`
+        : ''}
+    </div>
+
     <div class="panel panel-full">
       <div class="panel-title">
         <span>"Ne Olursa?" Net & Sıralama Simülatörü</span>
@@ -2806,21 +2928,48 @@ function renderDrawer({ animateSwap = false } = {}) {
 
         <div class="detail-col">
           <section class="drawer-section">
-            <div class="section-heading"><span>Kişisel Değerlendirmen</span></div>
-            <div class="sheet-card" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
-              <div class="segmented">
-                ${['hayal', 'hedef', 'guvenli']
-                  .map(
-                    (rk) => `<button class="seg-btn seg-btn-sm ${p.risk === rk ? 'active' : ''}" data-set-risk="${rk}">${RISK_META[rk].label}</button>`,
-                  )
-                  .join('')}
+            <div class="section-heading">
+              <span>Kişisel Değerlendirmen</span>
+              ${(() => {
+                const vals = PROGRAM_SUBRATING_ITEMS.map((it) => Number(p.subRatings?.[it.key]) || 0).filter((v) => v > 0);
+                if (!vals.length) return '';
+                const avg = (vals.reduce((a, b) => a + b, 0) / vals.length).toFixed(1).replace('.', ',');
+                return `<span class="tabular" style="color:var(--amber);font-weight:700;">★ ${avg} / 5</span>`;
+              })()}
+            </div>
+            <div class="sheet-card" style="display:flex;flex-direction:column;gap:12px;">
+              <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
+                <div class="segmented">
+                  ${['hayal', 'hedef', 'guvenli']
+                    .map(
+                      (rk) => `<button class="seg-btn seg-btn-sm ${p.risk === rk ? 'active' : ''}" data-set-risk="${rk}">${RISK_META[rk].label}</button>`,
+                    )
+                    .join('')}
+                </div>
+                <div class="rating-stars" aria-label="Genel yıldız puanı">
+                  ${[1, 2, 3, 4, 5]
+                    .map(
+                      (n) => `<button class="star-btn ${(p.rating || 0) >= n ? 'filled' : ''}" data-set-star="${n}" title="${n} yıldız">${(p.rating || 0) >= n ? SF.starFilled(18) : SF.starEmpty(18)}</button>`,
+                    )
+                    .join('')}
+                </div>
               </div>
-              <div class="rating-stars" aria-label="Yıldız puanı">
-                ${[1, 2, 3, 4, 5]
-                  .map(
-                    (n) => `<button class="star-btn ${(p.rating || 0) >= n ? 'filled' : ''}" data-set-star="${n}" title="${n} yıldız">${(p.rating || 0) >= n ? SF.starFilled(18) : SF.starEmpty(18)}</button>`,
-                  )
-                  .join('')}
+
+              <!-- 4 Sub-Criteria Ratings -->
+              <div class="subrating-grid">
+                ${PROGRAM_SUBRATING_ITEMS.map((it) => {
+                  const v = Number(p.subRatings?.[it.key]) || 0;
+                  return `<div class="subrating-row">
+                    <span>${escapeHtml(it.label)}</span>
+                    <div class="subrating-stars">
+                      ${[1, 2, 3, 4, 5]
+                        .map(
+                          (n) => `<button class="star-btn ${v >= n ? 'filled' : ''}" data-sub-key="${it.key}" data-sub-val="${n}" title="${it.label}: ${n}/5">${v >= n ? SF.starFilled(13) : SF.starEmpty(13)}</button>`,
+                        )
+                        .join('')}
+                    </div>
+                  </div>`;
+                }).join('')}
               </div>
             </div>
 
@@ -2854,6 +3003,29 @@ function renderDrawer({ animateSwap = false } = {}) {
                   <button class="btn btn-sm btn-icon" type="submit">${SF.plus}</button>
                 </form>
               </div>
+            </div>
+
+            <div class="sheet-card" style="display:flex;flex-direction:column;gap:9px;">
+              <label class="field-label" style="margin:0;">Tanıtım / Öğrenciye Sorulacak Sorular</label>
+              ${(p.questions || []).length
+                ? `<div style="display:flex;flex-direction:column;gap:6px;">
+                    ${p.questions
+                      .map(
+                        (qItem, idx) => `<div class="question-row ${qItem.done ? 'done' : ''}">
+                          <button type="button" class="btn-ghost" data-toggle-question="${idx}" style="display:flex;align-items:center;gap:7px;padding:0;text-align:left;flex:1;color:inherit;">
+                            <span style="color:${qItem.done ? 'var(--green)' : 'var(--text-tertiary)'};font-weight:700;">${qItem.done ? '✓' : '○'}</span>
+                            <span>${escapeHtml(qItem.text)}</span>
+                          </button>
+                          <button type="button" class="btn-ghost" data-del-question="${idx}" title="Sil">${SF.close}</button>
+                        </div>`,
+                      )
+                      .join('')}
+                  </div>`
+                : ''}
+              <form class="pc-add-row" id="addQuestionForm">
+                <input class="input" id="addQuestionInput" placeholder="Örn: Yurt çıkma oranı ve staj imkânları nasıl?" />
+                <button class="btn btn-sm btn-icon" type="submit" title="Soru ekle">${SF.plus}</button>
+              </form>
             </div>
 
             <div class="sheet-card">
@@ -3024,6 +3196,49 @@ function bindDrawerEvents(p) {
       p.rating = p.rating === val ? 0 : val;
       saveState();
       renderAll();
+      renderDrawer();
+    });
+  });
+
+  document.querySelectorAll('[data-sub-key]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const k = btn.dataset.subKey;
+      const val = Number(btn.dataset.subVal);
+      p.subRatings = { ...(p.subRatings || {}) };
+      p.subRatings[k] = p.subRatings[k] === val ? 0 : val;
+      const vals = PROGRAM_SUBRATING_ITEMS.map((it) => Number(p.subRatings[it.key]) || 0).filter((x) => x > 0);
+      if (vals.length) {
+        p.rating = Math.round(vals.reduce((a, b) => a + b, 0) / vals.length);
+      }
+      saveState();
+      renderAll();
+      renderDrawer();
+    });
+  });
+
+  document.getElementById('addQuestionForm')?.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const val = document.getElementById('addQuestionInput')?.value.trim();
+    if (!val) return;
+    p.questions = [...(p.questions || []), { text: val, done: false }];
+    saveState();
+    renderDrawer();
+  });
+
+  document.querySelectorAll('[data-toggle-question]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const idx = Number(btn.dataset.toggleQuestion);
+      if (!p.questions?.[idx]) return;
+      p.questions[idx].done = !p.questions[idx].done;
+      saveState();
+      renderDrawer();
+    });
+  });
+
+  document.querySelectorAll('[data-del-question]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      p.questions.splice(Number(btn.dataset.delQuestion), 1);
+      saveState();
       renderDrawer();
     });
   });
@@ -4838,6 +5053,19 @@ function bindAnalysisEvents() {
   });
   document.getElementById('clearMapCityBtn')?.addEventListener('click', () => {
     ui.selectedMapCity = null;
+    renderAll();
+  });
+
+  // ÖSYM placement simulator rank input
+  document.getElementById('simPlacementRankInput')?.addEventListener('change', (e) => {
+    const v = Number(e.target.value);
+    if (v > 0) {
+      ui.simPlacementRank = v;
+      renderAll();
+    }
+  });
+  document.getElementById('useEstRankSimBtn')?.addEventListener('click', () => {
+    ui.simPlacementRank = null;
     renderAll();
   });
 
