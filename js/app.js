@@ -622,21 +622,11 @@ function renderShareBanner() {
 }
 
 // ============================================================================
-// Native macOS Sidebar, Sliding Segmented Thumbs, Collapsing Title, Context Menu
+// Scroll-Aware Topbar, Sliding Segmented Thumbs, Swipe-to-Dismiss, Context Menu
 // ============================================================================
 function updateCollapsingHeader() {
-  const titleMap = {
-    preferences: 'Tercihlerim',
-    compare: 'Karşılaştır',
-    analysis: 'Analiz',
-    abroad: 'Yurt Dışı',
-  };
-  const key = ui.region === 'ABROAD' ? 'abroad' : ui.tab;
-  const titleEl = document.getElementById('collapseTitle');
-  if (titleEl) titleEl.textContent = titleMap[key] || 'TercihAtlas';
-
-  const topbar = document.getElementById('collapseTopbar');
-  if (topbar) topbar.classList.toggle('scrolled', window.scrollY > 48);
+  const topbar = document.getElementById('mainTopbar');
+  if (topbar) topbar.classList.toggle('scrolled', window.scrollY > 24);
 }
 
 function initSlidingSegmentedControls() {
@@ -776,135 +766,21 @@ function initSheetSwipeDismiss() {
   });
 }
 
-function renderSidebar() {
-  const host = document.getElementById('sidebarDynamic');
-  if (!host) return;
-  const activeNavKey = ui.region === 'ABROAD' ? 'abroad' : ui.tab;
-  const est = estimateYksRankFromNets(state.myNets);
-  const reachableCount = est ? state.programs.filter((p) => isProgramCurrentlyReachable(p, est)).length : 0;
-
-  const estBadge = document.getElementById('sidebarEstBadge');
-  if (estBadge) {
-    const primaryEst = est?.SAY || est?.EA || est?.SÖZ || est?.DİL;
-    estBadge.textContent = primaryEst ? `~${formatRank(primaryEst.rank)}` : '';
-  }
-
-  const hayalCnt = state.programs.filter((p) => p.risk === 'hayal').length;
-  const hedefCnt = state.programs.filter((p) => p.risk === 'hedef').length;
-  const guvCnt = state.programs.filter((p) => p.risk === 'guvenli').length;
-
-  host.innerHTML = `
-    <div class="sidebar-section">
-      <div class="sidebar-section-title"><span>Keşfet & Yönet</span></div>
-      <button class="sidebar-item ${activeNavKey === 'preferences' ? 'active' : ''}" data-sb-nav="preferences">
-        <span class="sidebar-item-left">${SF.listBadge} Tercihlerim</span>
-        <span class="sidebar-count tabular">${state.programs.length}</span>
-      </button>
-      <button class="sidebar-item ${activeNavKey === 'compare' ? 'active' : ''}" data-sb-nav="compare">
-        <span class="sidebar-item-left">${SF.pieBadge} Karşılaştır</span>
-        <span class="sidebar-count tabular">${state.compareCodes.length}</span>
-      </button>
-      <button class="sidebar-item ${activeNavKey === 'analysis' ? 'active' : ''}" data-sb-nav="analysis">
-        <span class="sidebar-item-left">${SF.chartBadge} Analiz & Gelişim</span>
-      </button>
-      <button class="sidebar-item ${activeNavKey === 'abroad' ? 'active' : ''}" data-sb-nav="abroad">
-        <span class="sidebar-item-left">
-          <svg class="sf-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M3.5 12h17M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>
-          Yurt Dışı (DE / IT)
-        </span>
-        <span class="sidebar-count tabular">${state.abroadPrograms.length}</span>
-      </button>
-    </div>
-
-    ${!ui.readOnlyShare
-      ? `<div class="sidebar-section">
-          <div class="sidebar-section-title">
-            <span>Senaryolarım</span>
-            <button class="btn-ghost" id="sbNewScenarioBtn" title="Yeni plan" style="padding:0 4px;color:var(--accent);">${SF.plus}</button>
-          </div>
-          ${state.scenarios
-            .map(
-              (sc) => `<button class="sidebar-item ${sc.id === state.activeScenarioId && activeNavKey === 'preferences' ? 'active' : ''}" data-sb-scenario="${escapeHtml(sc.id)}">
-                <span class="sidebar-item-left">${escapeHtml(sc.name)}</span>
-                <span class="sidebar-count tabular">${sc.programs.length}</span>
-              </button>`,
-            )
-            .join('')}
-        </div>`
-      : ''}
-
-    <div class="sidebar-section">
-      <div class="sidebar-section-title"><span>Hızlı Filtre</span></div>
-      <button class="sidebar-item ${activeNavKey === 'preferences' && ui.filterRisk === 'all' && !ui.filterReachable ? 'active' : ''}" data-sb-filter="all">
-        <span class="sidebar-item-left">Tümü</span>
-        <span class="sidebar-count tabular">${state.programs.length}</span>
-      </button>
-      <button class="sidebar-item ${activeNavKey === 'preferences' && ui.filterRisk === 'hayal' ? 'active' : ''}" data-sb-filter="hayal">
-        <span class="sidebar-item-left"><span class="dot" style="background:var(--rose)"></span> Hayal</span>
-        <span class="sidebar-count tabular">${hayalCnt}</span>
-      </button>
-      <button class="sidebar-item ${activeNavKey === 'preferences' && ui.filterRisk === 'hedef' ? 'active' : ''}" data-sb-filter="hedef">
-        <span class="sidebar-item-left"><span class="dot" style="background:var(--accent)"></span> Hedef</span>
-        <span class="sidebar-count tabular">${hedefCnt}</span>
-      </button>
-      <button class="sidebar-item ${activeNavKey === 'preferences' && ui.filterRisk === 'guvenli' ? 'active' : ''}" data-sb-filter="guvenli">
-        <span class="sidebar-item-left"><span class="dot" style="background:var(--green-bright)"></span> Güvenli</span>
-        <span class="sidebar-count tabular">${guvCnt}</span>
-      </button>
-      ${est
-        ? `<button class="sidebar-item ${activeNavKey === 'preferences' && ui.filterReachable ? 'active' : ''}" data-sb-filter="reachable">
-            <span class="sidebar-item-left"><span class="dot" style="background:var(--green)"></span> Şu An Giriyorsun</span>
-            <span class="sidebar-count tabular">${reachableCount}</span>
-          </button>`
-        : ''}
-    </div>
-  `;
-
-  host.querySelectorAll('[data-sb-nav]').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const t = btn.dataset.sbNav;
-      if (t === 'abroad') ui.region = 'ABROAD';
-      else {
-        ui.region = 'TR';
-        ui.tab = t;
-      }
-      renderAll();
-    });
-  });
-
-  host.querySelectorAll('[data-sb-scenario]').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      ui.region = 'TR';
-      ui.tab = 'preferences';
-      switchScenario(btn.dataset.sbScenario);
-    });
-  });
-
-  document.getElementById('sbNewScenarioBtn')?.addEventListener('click', () => createScenario({ duplicateCurrent: false }));
-
-  host.querySelectorAll('[data-sb-filter]').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const f = btn.dataset.sbFilter;
-      ui.region = 'TR';
-      ui.tab = 'preferences';
-      if (f === 'reachable') {
-        ui.filterRisk = 'all';
-        ui.filterReachable = !ui.filterReachable;
-      } else {
-        ui.filterReachable = false;
-        ui.filterRisk = f;
-      }
-      renderAll();
-    });
-  });
-}
-
 function updateHeaderBadges() {
+  const prefBadge = document.getElementById('prefCountBadge');
+  const cmpBadge = document.getElementById('compareCountBadge');
+  const abroadBadge = document.getElementById('abroadCountBadge');
+  if (prefBadge) prefBadge.textContent = String(state.programs.length);
+  if (cmpBadge) cmpBadge.textContent = String(state.compareCodes.length);
+  if (abroadBadge) abroadBadge.textContent = String(state.abroadPrograms.length);
+
   const activeNavKey = ui.region === 'ABROAD' ? 'abroad' : ui.tab;
+  document.querySelectorAll('#desktopNav .nav-pill-btn').forEach((btn) => {
+    btn.classList.toggle('active', btn.dataset.tab === activeNavKey);
+  });
   document.querySelectorAll('#mobileNav .mobile-nav-btn').forEach((btn) => {
     btn.classList.toggle('active', btn.dataset.mobileTab === activeNavKey);
   });
-  renderSidebar();
   updateCollapsingHeader();
 }
 
@@ -3703,14 +3579,25 @@ async function init() {
   initTheme();
   initSheetSwipeDismiss();
 
-  const goHome = (e) => {
+  document.getElementById('brandHome')?.addEventListener('click', (e) => {
     e.preventDefault();
     ui.region = 'TR';
     ui.tab = 'preferences';
     renderAll();
-  };
-  document.getElementById('brandHome')?.addEventListener('click', goHome);
-  document.getElementById('mobileBrandHome')?.addEventListener('click', goHome);
+  });
+
+  document.querySelectorAll('#desktopNav .nav-pill-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const target = btn.dataset.tab;
+      if (target === 'abroad') {
+        ui.region = 'ABROAD';
+      } else {
+        ui.region = 'TR';
+        ui.tab = target;
+      }
+      renderAll();
+    });
+  });
 
   document.querySelectorAll('#mobileNav .mobile-nav-btn').forEach((btn) => {
     btn.addEventListener('click', () => {
@@ -3725,15 +3612,10 @@ async function init() {
     });
   });
 
-  const toggleTheme = () => {
+  document.getElementById('themeToggleBtn')?.addEventListener('click', () => {
     const cur = document.documentElement.getAttribute('data-theme');
     applyTheme(cur === 'dark' ? 'light' : 'dark');
-  };
-  document.getElementById('themeToggleBtn')?.addEventListener('click', toggleTheme);
-  document.getElementById('sidebarThemeBtn')?.addEventListener('click', toggleTheme);
-  document.getElementById('sidebarSpotlightBtn')?.addEventListener('click', () => openAddModal());
-  document.getElementById('sidebarNetsBtn')?.addEventListener('click', openMyNetsModal);
-  document.getElementById('sidebarSyncBtn')?.addEventListener('click', openSyncModal);
+  });
 
   document.getElementById('openAddBtn')?.addEventListener('click', () => openAddModal());
   document.getElementById('closeAddModalBtn')?.addEventListener('click', closeAddModal);

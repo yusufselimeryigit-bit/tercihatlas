@@ -11,89 +11,62 @@
   <link rel="icon" type="image/svg+xml" href="icon.svg" />
   <link rel="apple-touch-icon" href="icon.svg" />
   <link rel="manifest" href="manifest.json" />
-  <link rel="stylesheet" href="css/styles.css?v=7" />
+  <link rel="stylesheet" href="css/styles.css?v=8" />
 </head>
 <body>
-  <div class="app-shell">
-    <!-- Native macOS / iPadOS Liquid Glass Sidebar -->
-    <aside class="mac-sidebar" id="macSidebar" aria-label="Kenar çubuğu">
-      <div class="sidebar-brand">
-        <a href="#" class="sidebar-brand-link" id="brandHome">
+  <!-- macOS Tahoe / iPadOS Floating Liquid Glass Top Navigation -->
+  <header class="topbar" id="mainTopbar">
+    <div class="topbar-inner">
+      <div class="brand-group">
+        <a href="#" class="brand" id="brandHome">
           <img src="icon.svg" alt="TercihAtlas" class="brand-logo" />
           <span>TercihAtlas</span>
         </a>
-        <button class="btn btn-ghost btn-icon btn-sm" id="sidebarThemeBtn" title="Açık / Koyu Mod" aria-label="Tema Değiştir">
-          <svg id="sidebarThemeIcon" class="sf-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"></svg>
-        </button>
       </div>
 
-      <button class="sidebar-spotlight-btn" id="sidebarSpotlightBtn" title="Spotlight Arama ve Bölüm Ekle">
-        <span style="display:inline-flex;align-items:center;gap:8px;">
-          <svg class="sf-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7.5"/><path d="m20 20-3.8-3.8"/></svg>
-          <span>Ara veya Ekle...</span>
-        </span>
-        <span class="sidebar-kbd">⌘K</span>
-      </button>
-
-      <!-- Dynamic Sidebar Sections rendered by app.js -->
-      <div id="sidebarDynamic" style="display:flex;flex-direction:column;gap:16px;flex:1;"></div>
-
-      <div class="sidebar-footer">
-        <button class="sidebar-item" id="sidebarNetsBtn">
-          <span class="sidebar-item-left">
-            <svg class="sf-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 19h16"/><path d="M7 15V9"/><path d="M12 15V5"/><path d="M17 15v-3"/></svg>
-            <span>Netlerim & PDF</span>
-          </span>
-          <span class="sidebar-count tabular" id="sidebarEstBadge"></span>
+      <nav class="nav-glass-capsule" id="desktopNav" aria-label="Ana sekmeler">
+        <button class="nav-pill-btn active" data-tab="preferences">
+          <span>Tercihlerim</span>
+          <span class="nav-count tabular" id="prefCountBadge">0</span>
         </button>
-        <button class="sidebar-item" id="sidebarSyncBtn">
-          <span class="sidebar-item-left">
-            <span class="status-dot" id="sidebarSyncDot"></span>
-            <span id="sidebarSyncLabel">Yerel Mod</span>
-          </span>
+        <button class="nav-pill-btn" data-tab="compare">
+          <span>Karşılaştır</span>
+          <span class="nav-count tabular" id="compareCountBadge">0</span>
+        </button>
+        <button class="nav-pill-btn" data-tab="analysis">Analiz</button>
+        <button class="nav-pill-btn" data-tab="abroad">
+          <span>Yurt Dışı</span>
+          <span class="nav-count tabular" id="abroadCountBadge">0</span>
+        </button>
+      </nav>
+
+      <div class="topbar-actions">
+        <button class="glass-icon-btn" id="openMyNetsBtn" title="Netlerim & Dershane PDF Yükle">
+          <svg class="sf-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 19h16"/><path d="M7 15V9"/><path d="M12 15V5"/><path d="M17 15v-3"/></svg>
+          <span class="sync-label">Netlerim</span>
+        </button>
+        <button class="glass-icon-btn" id="openSyncBtn" title="Bulut Eşitleme ve Yedekleme">
+          <span class="status-dot" id="syncDot"></span>
+          <span class="sync-label" id="syncLabel">Yerel</span>
+        </button>
+        <button class="glass-icon-btn circle" id="themeToggleBtn" title="Açık / Koyu Mod" aria-label="Tema Değiştir">
+          <svg id="themeIcon" class="sf-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"></svg>
+        </button>
+        <button class="btn btn-primary btn-primary-nav" id="openAddBtn" title="Spotlight Arama ve Bölüm Ekle (⌘K)">
+          <svg class="sf-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round">
+            <path d="M12 5v14M5 12h14"/>
+          </svg>
+          <span>Ekle</span>
         </button>
       </div>
-    </aside>
-
-    <!-- Main Content Column -->
-    <div class="app-content">
-      <!-- Scroll-Aware Collapsing Large Title Bar -->
-      <header class="collapse-topbar" id="collapseTopbar">
-        <div style="display:flex;align-items:center;gap:10px;">
-          <a href="#" class="mobile-brand-only" id="mobileBrandHome">
-            <img src="icon.svg" alt="TercihAtlas" class="brand-logo" />
-            <span>TercihAtlas</span>
-          </a>
-        </div>
-
-        <div class="collapse-title" id="collapseTitle">Tercihlerim</div>
-
-        <div style="display:flex;align-items:center;gap:7px;">
-          <button class="glass-icon-btn" id="openMyNetsBtn" title="Netlerim & Dershane PDF Yükle" style="height:34px;padding:0 12px;font-size:12.5px;">
-            <svg class="sf-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 19h16"/><path d="M7 15V9"/><path d="M12 15V5"/><path d="M17 15v-3"/></svg>
-            <span class="sync-label">Netlerim</span>
-          </button>
-          <button class="glass-icon-btn" id="openSyncBtn" title="Bulut Eşitleme ve Yedek" style="height:34px;padding:0 12px;font-size:12.5px;">
-            <span class="status-dot" id="syncDot"></span>
-            <span class="sync-label" id="syncLabel">Yerel</span>
-          </button>
-          <button class="glass-icon-btn circle" id="themeToggleBtn" title="Açık / Koyu Mod" aria-label="Tema Değiştir" style="width:34px;height:34px;">
-            <svg id="themeIcon" class="sf-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"></svg>
-          </button>
-          <button class="btn btn-primary btn-sm" id="openAddBtn" style="height:34px;padding:0 14px;">
-            <svg class="sf-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
-            <span>Ekle</span>
-          </button>
-        </div>
-      </header>
-
-      <!-- Read-Only Share Mode Banner Host -->
-      <div id="shareBannerHost"></div>
-
-      <!-- Main Workspace -->
-      <main class="main" id="mainRoot" style="width:100%;"></main>
     </div>
-  </div>
+  </header>
+
+  <!-- Read-Only Share Mode Banner Host -->
+  <div id="shareBannerHost"></div>
+
+  <!-- Main Workspace -->
+  <main class="main" id="mainRoot"></main>
 
   <!-- iOS 26 Floating Liquid Glass Bottom Tab Capsule (Mobile / Portrait Tablet) -->
   <nav class="mobile-nav" id="mobileNav" aria-label="Mobil navigasyon">
@@ -227,6 +200,6 @@
   <!-- Floating Pill Toasts -->
   <div class="toast-container" id="toastContainer"></div>
 
-  <script type="module" src="js/app.js?v=7"></script>
+  <script type="module" src="js/app.js?v=8"></script>
 </body>
 </html>
