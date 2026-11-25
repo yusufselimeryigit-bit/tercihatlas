@@ -199,3 +199,94 @@ export function renderRankSpectrum(programs, targetRank) {
     </div>
   </div>`;
 }
+
+/**
+ * Apple Health / Stocks style Exam Progression Chart for uploaded TYT / AYT PDFs.
+ * Optionally overlays a horizontal dashed goal line for the #1 preference's average net!
+ */
+export function renderExamProgressionChart(exams, { examType = 'TYT', targetNet = null, targetLabel = '' } = {}) {
+  const list = [...(exams || [])]
+    .filter((e) => e.examType === examType && Number.isFinite(Number(e.total)))
+    .reverse(); // chronological oldest -> newest
+
+  if (!list.length) {
+    return `<div class="chart-empty">Henüz ${examType} deneme PDF'i yüklemedin. Sağ üstteki <strong>Netlerim</strong> penceresinden dershane PDF'lerini yükledikçe gelişim grafiğin burada otomatik çizilir.</div>`;
+  }
+
+  const width = 620;
+  const height = 220;
+  const padL = 38;
+  const padR = 32;
+  const padT = 32;
+  const padB = 42;
+  const innerW = width - padL - padR;
+  const innerH = height - padT - padB;
+
+  const vals = list.map((e) => Number(e.total));
+  if (targetNet !== null && Number.isFinite(Number(targetNet))) vals.push(Number(targetNet));
+  const minV = Math.max(0, Math.floor(Math.min(...vals) - 6));
+  const maxV = Math.ceil(Math.max(...vals) + 6);
+  const span = maxV - minV || 1;
+
+  const yFor = (v) => padT + (1 - (v - minV) / span) * innerH;
+
+  const coords = list.map((e, i) => ({
+    x: list.length === 1 ? padL + innerW / 2 : padL + (i / (list.length - 1)) * innerW,
+    y: yFor(Number(e.total)),
+    e,
+  }));
+
+  const linePath = buildSmoothPath(coords);
+  const areaPath =
+    coords.length > 1
+      ? `${linePath} L${coords[coords.length - 1].x.toFixed(1)},${height - padB} L${coords[0].x.toFixed(1)},${height - padB} Z`
+      : '';
+
+  const color = examType === 'TYT' ? 'var(--accent)' : 'var(--green-bright)';
+  const gradId = `ep-${examType}-${Math.random().toString(36).slice(2, 7)}`;
+
+  const gridLines = [0, 0.5, 1]
+    .map((f) => {
+      const gy = (padT + f * innerH).toFixed(1);
+      return `<line x1="${padL}" y1="${gy}" x2="${width - padR}" y2="${gy}" stroke="var(--separator)" stroke-width="1" stroke-dasharray="2 5"/>`;
+    })
+    .join('');
+
+  let targetLineSvg = '';
+  if (targetNet !== null && Number.isFinite(Number(targetNet))) {
+    const ty = yFor(Number(targetNet)).toFixed(1);
+    targetLineSvg = `
+      <line x1="${padL}" y1="${ty}" x2="${width - padR}" y2="${ty}" stroke="var(--amber-bright)" stroke-width="1.8" stroke-dasharray="5 5"/>
+      <text x="${width - padR}" y="${Math.max(14, Number(ty) - 6)}" text-anchor="end" fill="var(--amber)" font-size="11" font-weight="650" font-family="var(--font-sans)">
+        Hedef (${targetLabel || '1. Tercih'}): ${Number(targetNet).toLocaleString('tr-TR', { maximumFractionDigits: 1 })} net
+      </text>`;
+  }
+
+  const nodes = coords
+    .map((c, idx) => {
+      const isLast = idx === coords.length - 1;
+      const valTxt = Number(c.e.total).toLocaleString('tr-TR', { maximumFractionDigits: 2 });
+      const shortLbl = (c.e.examDate || c.e.examName || `#${idx + 1}`).slice(0, 12);
+      return `<g>
+        ${isLast ? `<circle cx="${c.x.toFixed(1)}" cy="${c.y.toFixed(1)}" r="9" fill="${color}" fill-opacity="0.18"/>` : ''}
+        <circle cx="${c.x.toFixed(1)}" cy="${c.y.toFixed(1)}" r="${isLast ? '5' : '4'}" fill="var(--surface)" stroke="${color}" stroke-width="2.4"/>
+        <text x="${c.x.toFixed(1)}" y="${Math.max(16, c.y - 12).toFixed(1)}" text-anchor="middle" class="chart-val-label ${isLast ? 'latest' : ''}">${valTxt}</text>
+        <text x="${c.x.toFixed(1)}" y="${height - 12}" text-anchor="middle" class="chart-year-label">${shortLbl}</text>
+      </g>`;
+    })
+    .join('');
+
+  return `<svg class="detail-chart" viewBox="0 0 ${width} ${height}" width="100%" role="img" aria-label="${examType} deneme gelişim grafiği">
+    <defs>
+      <linearGradient id="${gradId}" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="${color}" stop-opacity="0.24"/>
+        <stop offset="100%" stop-color="${color}" stop-opacity="0.01"/>
+      </linearGradient>
+    </defs>
+    ${gridLines}
+    ${targetLineSvg}
+    ${areaPath ? `<path d="${areaPath}" fill="url(#${gradId})"/>` : ''}
+    ${coords.length > 1 ? `<path d="${linePath}" fill="none" stroke="${color}" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>` : ''}
+    ${nodes}
+  </svg>`;
+}

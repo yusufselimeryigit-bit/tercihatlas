@@ -28,12 +28,21 @@ import {
   createShareSnapshot,
   fetchShareSnapshot,
 } from './api.js';
-import { renderSparkline, renderDetailTrendChart, renderRankSpectrum } from './charts.js';
+import {
+  renderSparkline,
+  renderDetailTrendChart,
+  renderRankSpectrum,
+  renderExamProgressionChart,
+} from './charts.js';
 import {
   compute2027Projection,
   compareWithMyNets,
   analyzePreferenceHealth,
   openPrintableReport,
+  estimateYksRankFromNets,
+  isProgramCurrentlyReachable,
+  DEFAULT_DECISION_WEIGHTS,
+  computeDecisionScores,
 } from './analytics.js';
 import { ABROAD_PRESETS, createAbroadRecord, renderAbroadView } from './abroad.js';
 import { parseExamPdfFile } from './pdf-parser.js';
@@ -97,6 +106,7 @@ const DEFAULT_STATE = {
   examHistory: [],
   abroadPrograms: [],
   costSettings: structuredClone(DEFAULT_COST_SETTINGS),
+  decisionWeights: structuredClone(DEFAULT_DECISION_WEIGHTS),
 };
 
 // Uniform SF Symbols-style inline SVGs
@@ -131,13 +141,15 @@ const SF = {
 const ui = {
   region: 'TR',
   tab: 'preferences',
-  analysisSubTab: 'overview', // 'overview' | 'map' | 'simulator' | 'cost' | 'timeline'
+  analysisSubTab: 'overview', // 'overview' | 'progression' | 'decision' | 'map' | 'simulator' | 'cost' | 'timeline'
+  progressionType: 'TYT',
   selectedMapCity: null,
   simTytBoost: 0,
   simAytBoost: 0,
   viewMode: localStorage.getItem('tercihatlas_view_mode') || 'cards',
   search: '',
   filterRisk: 'all',
+  filterReachable: false,
   filterScoreType: 'all',
   sortBy: 'manual',
   abroadFilter: 'ALL',
@@ -168,6 +180,7 @@ function normalizeState(parsed) {
     abroadPrograms: Array.isArray(parsed?.abroadPrograms) ? parsed.abroadPrograms : [],
     examHistory: Array.isArray(parsed?.examHistory) ? parsed.examHistory : [],
     costSettings: { ...structuredClone(DEFAULT_COST_SETTINGS), ...(parsed?.costSettings || {}) },
+    decisionWeights: { ...structuredClone(DEFAULT_DECISION_WEIGHTS), ...(parsed?.decisionWeights || {}) },
     myNets: {
       ...structuredClone(DEFAULT_MY_NETS),
       ...(parsed?.myNets || {}),
@@ -306,12 +319,15 @@ function saveState({ triggerCloud = true } = {}) {
 function updateSyncIndicator(status, label) {
   ui.syncStatus = status;
   ui.syncMessage = label;
-  const dot = document.getElementById('syncDot');
-  const text = document.getElementById('syncLabel');
-  if (dot) {
-    dot.className = 'status-dot' + (status === 'synced' ? ' synced' : status === 'syncing' ? ' syncing' : status === 'error' ? ' error' : '');
+  const dotClass = 'status-dot' + (status === 'synced' ? ' synced' : status === 'syncing' ? ' syncing' : status === 'error' ? ' error' : '');
+  for (const id of ['syncDot', 'sidebarSyncDot']) {
+    const el = document.getElementById(id);
+    if (el) el.className = dotClass;
   }
-  if (text) text.textContent = label;
+  for (const id of ['syncLabel', 'sidebarSyncLabel']) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = label;
+  }
 }
 
 function scheduleCloudPush() {
@@ -393,12 +409,13 @@ function applyTheme(theme) {
   if (meta) meta.setAttribute('content', theme === 'dark' ? '#000000' : '#F5F5F7');
   const statusMeta = document.querySelector('meta[name="apple-mobile-web-app-status-bar-style"]');
   if (statusMeta) statusMeta.setAttribute('content', theme === 'dark' ? 'black-translucent' : 'default');
-  const icon = document.getElementById('themeIcon');
-  if (icon) {
-    icon.innerHTML =
-      theme === 'dark'
-        ? '<circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2.5 12h2M19.5 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/>'
-        : '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>';
+  const svgInner =
+    theme === 'dark'
+      ? '<circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2.5 12h2M19.5 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/>'
+      : '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>';
+  for (const id of ['themeIcon', 'sidebarThemeIcon']) {
+    const icon = document.getElementById(id);
+    if (icon) icon.innerHTML = svgInner;
   }
 }
 
@@ -472,6 +489,10 @@ function getFilteredPrograms() {
 
   if (ui.filterRisk !== 'all') list = list.filter((p) => p.risk === ui.filterRisk);
   if (ui.filterScoreType !== 'all') list = list.filter((p) => p.scoreType === ui.filterScoreType);
+  if (ui.filterReachable) {
+    const est = estimateYksRankFromNets(state.myNets);
+    list = list.filter((p) => isProgramCurrentlyReachable(p, est));
+  }
 
   if (ui.sortBy === 'rank-asc') list.sort((a, b) => (a.latestRank ?? 9e9) - (b.latestRank ?? 9e9));
   else if (ui.sortBy === 'rank-desc') list.sort((a, b) => (b.latestRank ?? -1) - (a.latestRank ?? -1));
@@ -600,21 +621,291 @@ function renderShareBanner() {
   });
 }
 
-function updateHeaderBadges() {
-  const prefBadge = document.getElementById('prefCountBadge');
-  const cmpBadge = document.getElementById('compareCountBadge');
-  const abroadBadge = document.getElementById('abroadCountBadge');
-  if (prefBadge) prefBadge.textContent = String(state.programs.length);
-  if (cmpBadge) cmpBadge.textContent = String(state.compareCodes.length);
-  if (abroadBadge) abroadBadge.textContent = String(state.abroadPrograms.length);
+// ============================================================================
+// Native macOS Sidebar, Sliding Segmented Thumbs, Collapsing Title, Context Menu
+// ============================================================================
+function updateCollapsingHeader() {
+  const titleMap = {
+    preferences: 'Tercihlerim',
+    compare: 'Karşılaştır',
+    analysis: 'Analiz',
+    abroad: 'Yurt Dışı',
+  };
+  const key = ui.region === 'ABROAD' ? 'abroad' : ui.tab;
+  const titleEl = document.getElementById('collapseTitle');
+  if (titleEl) titleEl.textContent = titleMap[key] || 'TercihAtlas';
 
-  const activeNavKey = ui.region === 'ABROAD' ? 'abroad' : ui.tab;
-  document.querySelectorAll('#desktopNav .nav-pill-btn').forEach((btn) => {
-    btn.classList.toggle('active', btn.dataset.tab === activeNavKey);
+  const topbar = document.getElementById('collapseTopbar');
+  if (topbar) topbar.classList.toggle('scrolled', window.scrollY > 48);
+}
+
+function initSlidingSegmentedControls() {
+  requestAnimationFrame(() => {
+    document.querySelectorAll('.segmented').forEach((seg) => {
+      const activeBtn = seg.querySelector('.seg-btn.active');
+      if (!activeBtn) return;
+      let thumb = seg.querySelector('.seg-thumb');
+      if (!thumb) {
+        thumb = document.createElement('div');
+        thumb.className = 'seg-thumb';
+        seg.prepend(thumb);
+      }
+      seg.classList.add('has-thumb');
+      thumb.style.width = `${activeBtn.offsetWidth}px`;
+      thumb.style.transform = `translateX(${activeBtn.offsetLeft}px)`;
+    });
   });
+}
+
+function renderShimmerSkeleton(count = 4) {
+  return `<div class="search-results-list">
+    ${Array.from({ length: count })
+      .map(
+        () => `<div class="shimmer-row">
+          <div class="shimmer-block" style="width:40px;height:40px;border-radius:12px;flex-shrink:0;"></div>
+          <div style="flex:1;display:flex;flex-direction:column;gap:7px;">
+            <div class="shimmer-block" style="width:62%;height:13px;"></div>
+            <div class="shimmer-block" style="width:42%;height:11px;"></div>
+          </div>
+          <div class="shimmer-block" style="width:68px;height:28px;border-radius:999px;"></div>
+        </div>`,
+      )
+      .join('')}
+  </div>`;
+}
+
+function closeContextMenu() {
+  const menu = document.getElementById('contextMenu');
+  if (!menu) return;
+  menu.classList.remove('open');
+  menu.setAttribute('aria-hidden', 'true');
+}
+
+function openContextMenu(e, code) {
+  e.preventDefault();
+  e.stopPropagation();
+  const p = state.programs.find((item) => item.code === code);
+  const menu = document.getElementById('contextMenu');
+  if (!p || !menu) return;
+
+  const isCmp = state.compareCodes.includes(code);
+  menu.innerHTML = `
+    <button class="ctx-item" data-ctx="open">${SF.external} Detayı Aç</button>
+    <button class="ctx-item" data-ctx="compare">${isCmp ? SF.check : SF.plus} ${isCmp ? 'Karşılaştırmadan Çıkar' : 'Karşılaştır'}</button>
+    <div class="ctx-sep"></div>
+    <button class="ctx-item" data-ctx="risk-hayal"><span class="dot" style="background:var(--rose)"></span> Hayal Yap</button>
+    <button class="ctx-item" data-ctx="risk-hedef"><span class="dot" style="background:var(--accent)"></span> Hedef Yap</button>
+    <button class="ctx-item" data-ctx="risk-guvenli"><span class="dot" style="background:var(--green-bright)"></span> Güvenli Yap</button>
+    <div class="ctx-sep"></div>
+    <button class="ctx-item" data-ctx="copy">${SF.copy} Kodu Kopyala (${escapeHtml(p.code)})</button>
+    <button class="ctx-item" data-ctx="yokatlas">${SF.external} YÖK Atlas'ta Aç</button>
+    ${!ui.readOnlyShare ? `<button class="ctx-item" data-ctx="refresh">${SF.refresh} Canlı Güncelle</button>` : ''}
+    ${!ui.readOnlyShare ? `<div class="ctx-sep"></div><button class="ctx-item danger" data-ctx="delete">${SF.trash} Listeden Çıkar</button>` : ''}
+  `;
+
+  const menuW = 225;
+  const menuH = 320;
+  const left = Math.min(e.clientX, window.innerWidth - menuW - 12);
+  const top = Math.min(e.clientY, window.innerHeight - menuH - 12);
+  menu.style.left = `${Math.max(10, left)}px`;
+  menu.style.top = `${Math.max(10, top)}px`;
+  menu.classList.add('open');
+  menu.setAttribute('aria-hidden', 'false');
+
+  menu.querySelectorAll('[data-ctx]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const act = btn.dataset.ctx;
+      closeContextMenu();
+      if (act === 'open') openDrawer(code);
+      else if (act === 'compare') toggleCompare(code);
+      else if (act.startsWith('risk-')) {
+        p.risk = act.replace('risk-', '');
+        saveState();
+        renderAll();
+      } else if (act === 'copy') {
+        navigator.clipboard?.writeText(p.code);
+        showToast(`${p.code} kopyalandı.`, 'success');
+      } else if (act === 'yokatlas') {
+        window.open(p.yokAtlasUrl, '_blank', 'noopener');
+      } else if (act === 'refresh') {
+        refreshProgramLive(code);
+      } else if (act === 'delete') {
+        removeProgram(code);
+      }
+    });
+  });
+}
+
+function initSheetSwipeDismiss() {
+  const drawer = document.getElementById('detailDrawer');
+  if (!drawer) return;
+  let startY = 0;
+  let currentDy = 0;
+  let dragging = false;
+
+  drawer.addEventListener('touchstart', (e) => {
+    if (window.innerWidth > 760) return;
+    const target = e.target;
+    const inHandle = target.closest('.sheet-grabber') || target.closest('.drawer-header');
+    if (!inHandle) return;
+    startY = e.touches[0].clientY;
+    currentDy = 0;
+    dragging = true;
+    drawer.style.transition = 'none';
+  }, { passive: true });
+
+  drawer.addEventListener('touchmove', (e) => {
+    if (!dragging) return;
+    const dy = e.touches[0].clientY - startY;
+    if (dy > 0) {
+      currentDy = dy;
+      drawer.style.transform = `translateY(${dy}px)`;
+    }
+  }, { passive: true });
+
+  drawer.addEventListener('touchend', () => {
+    if (!dragging) return;
+    dragging = false;
+    drawer.style.transition = '';
+    if (currentDy > 110) {
+      drawer.style.transform = '';
+      closeDrawer();
+    } else {
+      drawer.style.transform = '';
+    }
+  });
+}
+
+function renderSidebar() {
+  const host = document.getElementById('sidebarDynamic');
+  if (!host) return;
+  const activeNavKey = ui.region === 'ABROAD' ? 'abroad' : ui.tab;
+  const est = estimateYksRankFromNets(state.myNets);
+  const reachableCount = est ? state.programs.filter((p) => isProgramCurrentlyReachable(p, est)).length : 0;
+
+  const estBadge = document.getElementById('sidebarEstBadge');
+  if (estBadge) {
+    const primaryEst = est?.SAY || est?.EA || est?.SÖZ || est?.DİL;
+    estBadge.textContent = primaryEst ? `~${formatRank(primaryEst.rank)}` : '';
+  }
+
+  const hayalCnt = state.programs.filter((p) => p.risk === 'hayal').length;
+  const hedefCnt = state.programs.filter((p) => p.risk === 'hedef').length;
+  const guvCnt = state.programs.filter((p) => p.risk === 'guvenli').length;
+
+  host.innerHTML = `
+    <div class="sidebar-section">
+      <div class="sidebar-section-title"><span>Keşfet & Yönet</span></div>
+      <button class="sidebar-item ${activeNavKey === 'preferences' ? 'active' : ''}" data-sb-nav="preferences">
+        <span class="sidebar-item-left">${SF.listBadge} Tercihlerim</span>
+        <span class="sidebar-count tabular">${state.programs.length}</span>
+      </button>
+      <button class="sidebar-item ${activeNavKey === 'compare' ? 'active' : ''}" data-sb-nav="compare">
+        <span class="sidebar-item-left">${SF.pieBadge} Karşılaştır</span>
+        <span class="sidebar-count tabular">${state.compareCodes.length}</span>
+      </button>
+      <button class="sidebar-item ${activeNavKey === 'analysis' ? 'active' : ''}" data-sb-nav="analysis">
+        <span class="sidebar-item-left">${SF.chartBadge} Analiz & Gelişim</span>
+      </button>
+      <button class="sidebar-item ${activeNavKey === 'abroad' ? 'active' : ''}" data-sb-nav="abroad">
+        <span class="sidebar-item-left">
+          <svg class="sf-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M3.5 12h17M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>
+          Yurt Dışı (DE / IT)
+        </span>
+        <span class="sidebar-count tabular">${state.abroadPrograms.length}</span>
+      </button>
+    </div>
+
+    ${!ui.readOnlyShare
+      ? `<div class="sidebar-section">
+          <div class="sidebar-section-title">
+            <span>Senaryolarım</span>
+            <button class="btn-ghost" id="sbNewScenarioBtn" title="Yeni plan" style="padding:0 4px;color:var(--accent);">${SF.plus}</button>
+          </div>
+          ${state.scenarios
+            .map(
+              (sc) => `<button class="sidebar-item ${sc.id === state.activeScenarioId && activeNavKey === 'preferences' ? 'active' : ''}" data-sb-scenario="${escapeHtml(sc.id)}">
+                <span class="sidebar-item-left">${escapeHtml(sc.name)}</span>
+                <span class="sidebar-count tabular">${sc.programs.length}</span>
+              </button>`,
+            )
+            .join('')}
+        </div>`
+      : ''}
+
+    <div class="sidebar-section">
+      <div class="sidebar-section-title"><span>Hızlı Filtre</span></div>
+      <button class="sidebar-item ${activeNavKey === 'preferences' && ui.filterRisk === 'all' && !ui.filterReachable ? 'active' : ''}" data-sb-filter="all">
+        <span class="sidebar-item-left">Tümü</span>
+        <span class="sidebar-count tabular">${state.programs.length}</span>
+      </button>
+      <button class="sidebar-item ${activeNavKey === 'preferences' && ui.filterRisk === 'hayal' ? 'active' : ''}" data-sb-filter="hayal">
+        <span class="sidebar-item-left"><span class="dot" style="background:var(--rose)"></span> Hayal</span>
+        <span class="sidebar-count tabular">${hayalCnt}</span>
+      </button>
+      <button class="sidebar-item ${activeNavKey === 'preferences' && ui.filterRisk === 'hedef' ? 'active' : ''}" data-sb-filter="hedef">
+        <span class="sidebar-item-left"><span class="dot" style="background:var(--accent)"></span> Hedef</span>
+        <span class="sidebar-count tabular">${hedefCnt}</span>
+      </button>
+      <button class="sidebar-item ${activeNavKey === 'preferences' && ui.filterRisk === 'guvenli' ? 'active' : ''}" data-sb-filter="guvenli">
+        <span class="sidebar-item-left"><span class="dot" style="background:var(--green-bright)"></span> Güvenli</span>
+        <span class="sidebar-count tabular">${guvCnt}</span>
+      </button>
+      ${est
+        ? `<button class="sidebar-item ${activeNavKey === 'preferences' && ui.filterReachable ? 'active' : ''}" data-sb-filter="reachable">
+            <span class="sidebar-item-left"><span class="dot" style="background:var(--green)"></span> Şu An Giriyorsun</span>
+            <span class="sidebar-count tabular">${reachableCount}</span>
+          </button>`
+        : ''}
+    </div>
+  `;
+
+  host.querySelectorAll('[data-sb-nav]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const t = btn.dataset.sbNav;
+      if (t === 'abroad') ui.region = 'ABROAD';
+      else {
+        ui.region = 'TR';
+        ui.tab = t;
+      }
+      renderAll();
+    });
+  });
+
+  host.querySelectorAll('[data-sb-scenario]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      ui.region = 'TR';
+      ui.tab = 'preferences';
+      switchScenario(btn.dataset.sbScenario);
+    });
+  });
+
+  document.getElementById('sbNewScenarioBtn')?.addEventListener('click', () => createScenario({ duplicateCurrent: false }));
+
+  host.querySelectorAll('[data-sb-filter]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const f = btn.dataset.sbFilter;
+      ui.region = 'TR';
+      ui.tab = 'preferences';
+      if (f === 'reachable') {
+        ui.filterRisk = 'all';
+        ui.filterReachable = !ui.filterReachable;
+      } else {
+        ui.filterReachable = false;
+        ui.filterRisk = f;
+      }
+      renderAll();
+    });
+  });
+}
+
+function updateHeaderBadges() {
+  const activeNavKey = ui.region === 'ABROAD' ? 'abroad' : ui.tab;
   document.querySelectorAll('#mobileNav .mobile-nav-btn').forEach((btn) => {
     btn.classList.toggle('active', btn.dataset.mobileTab === activeNavKey);
   });
+  renderSidebar();
+  updateCollapsingHeader();
 }
 
 function renderAll() {
@@ -626,23 +917,27 @@ function renderAll() {
   if (ui.region === 'ABROAD') {
     root.innerHTML = renderAbroadView(state.abroadPrograms, ui.abroadFilter);
     bindAbroadEvents();
+    initSlidingSegmentedControls();
     return;
   }
 
   if (ui.tab === 'compare') {
     root.innerHTML = renderCompareView();
     bindCompareEvents();
+    initSlidingSegmentedControls();
     return;
   }
 
   if (ui.tab === 'analysis') {
     root.innerHTML = renderAnalysisView();
     bindAnalysisEvents();
+    initSlidingSegmentedControls();
     return;
   }
 
   root.innerHTML = renderPreferencesView();
   bindPreferencesEvents();
+  initSlidingSegmentedControls();
 }
 
 function renderScenarioBar() {
@@ -726,6 +1021,8 @@ function renderKpiStrip() {
 function renderPreferencesView() {
   const scoreTypes = [...new Set(state.programs.map((p) => p.scoreType).filter(Boolean))];
   const filtered = getFilteredPrograms();
+  const est = estimateYksRankFromNets(state.myNets);
+  const reachableCount = est ? state.programs.filter((p) => isProgramCurrentlyReachable(p, est)).length : 0;
 
   const headerHtml = `<div class="page-header">
     <div>
@@ -789,9 +1086,12 @@ function renderPreferencesView() {
         ${['all', 'hayal', 'hedef', 'guvenli']
           .map((rk) => {
             const label = rk === 'all' ? 'Tümü' : RISK_META[rk].label;
-            return `<button class="filter-pill ${ui.filterRisk === rk ? 'active' : ''}" data-filter-risk="${rk}">${label}</button>`;
+            return `<button class="filter-pill ${ui.filterRisk === rk && !ui.filterReachable ? 'active' : ''}" data-filter-risk="${rk}">${label}</button>`;
           })
           .join('')}
+        ${est
+          ? `<button class="filter-pill ${ui.filterReachable ? 'active' : ''}" data-filter-reachable="1" title="Mevcut netlerinle şu an girebildiğin bölümler">✓ Şu An Giriyorsun (${reachableCount})</button>`
+          : ''}
         ${scoreTypes.length > 1
           ? scoreTypes
               .map(
@@ -838,7 +1138,14 @@ function renderPreferencesView() {
 }
 
 function renderCardsView(programs) {
-  const manualMode = !ui.readOnlyShare && ui.sortBy === 'manual' && !ui.search && ui.filterRisk === 'all' && ui.filterScoreType === 'all';
+  const manualMode =
+    !ui.readOnlyShare &&
+    ui.sortBy === 'manual' &&
+    !ui.search &&
+    ui.filterRisk === 'all' &&
+    ui.filterScoreType === 'all' &&
+    !ui.filterReachable;
+  const est = estimateYksRankFromNets(state.myNets);
   return `<section class="cards-grid" id="programList">
     ${programs
       .map((p) => {
@@ -846,6 +1153,7 @@ function renderCardsView(programs) {
         const gap = compareWithMyNets(p, state.myNets);
         const proj = compute2027Projection(p);
         const isCompared = state.compareCodes.includes(p.code);
+        const isReachable = isProgramCurrentlyReachable(p, est);
         const riskMeta = RISK_META[p.risk] || RISK_META.hedef;
         const metaParts = [p.scoreType, p.city, p.language, p.scholarship, p.accreditation].filter(Boolean);
         const netSummary = net0
@@ -901,6 +1209,7 @@ function renderCardsView(programs) {
 
           <div class="card-footer">
             <div class="card-footer-left">
+              ${isReachable ? `<span class="reachable-pill">${SF.check} Şu an giriyorsun</span>` : ''}
               <span class="tabular" style="font-weight:500;">${escapeHtml(netSummary)}</span>
               ${netGapChip}
               ${renderStarsInline(p.rating)}
@@ -924,7 +1233,14 @@ function renderCardsView(programs) {
 }
 
 function renderTableView(programs) {
-  const manualMode = !ui.readOnlyShare && ui.sortBy === 'manual' && !ui.search && ui.filterRisk === 'all' && ui.filterScoreType === 'all';
+  const manualMode =
+    !ui.readOnlyShare &&
+    ui.sortBy === 'manual' &&
+    !ui.search &&
+    ui.filterRisk === 'all' &&
+    ui.filterScoreType === 'all' &&
+    !ui.filterReachable;
+  const est = estimateYksRankFromNets(state.myNets);
   return `<section class="table-wrap">
     <table class="prog-table">
       <thead>
@@ -947,6 +1263,7 @@ function renderTableView(programs) {
             const net0 = p.nets?.[0];
             const proj = compute2027Projection(p);
             const isCompared = state.compareCodes.includes(p.code);
+            const isReachable = isProgramCurrentlyReachable(p, est);
             const riskMeta = RISK_META[p.risk] || RISK_META.hedef;
             return `<tr data-code="${escapeHtml(p.code)}" draggable="${manualMode ? 'true' : 'false'}">
               <td class="tabular" style="color:var(--text-tertiary);font-weight:600;">${String(p._order).padStart(2, '0')}</td>
@@ -963,7 +1280,12 @@ function renderTableView(programs) {
                 <div>${escapeHtml(p.city)} · ${escapeHtml(p.scoreType)}</div>
                 <div style="font-size:12px;color:var(--text-tertiary);">${escapeHtml(p.language)} · ${escapeHtml(p.scholarship)}</div>
               </td>
-              <td><span class="pill pill-risk-${escapeHtml(p.risk || 'hedef')}">${escapeHtml(riskMeta.label)}</span></td>
+              <td>
+                <div style="display:flex;flex-direction:column;align-items:flex-start;gap:4px;">
+                  <span class="pill pill-risk-${escapeHtml(p.risk || 'hedef')}">${escapeHtml(riskMeta.label)}</span>
+                  ${isReachable ? `<span class="reachable-pill">${SF.check} Giriyorsun</span>` : ''}
+                </div>
+              </td>
               <td class="tabular" style="font-weight:700;">${formatRank(p.latestRank)}</td>
               <td class="tabular" style="color:var(--accent);font-weight:600;">${proj ? `${formatRank(proj.low)}–${formatRank(proj.high)}` : '—'}</td>
               <td>${renderSparkline(p.history, { width: 76, height: 24 })}</td>
@@ -1212,19 +1534,170 @@ function renderSimulatorPanel() {
   `;
 }
 
+function renderProgressionPanel() {
+  const est = estimateYksRankFromNets(state.myNets);
+  const reachableCount = est ? state.programs.filter((p) => isProgramCurrentlyReachable(p, est)).length : 0;
+  const scoreTypes = ['SAY', 'EA', 'SÖZ', 'DİL'].filter((k) => est?.[k]);
+
+  const topProg = state.programs[0];
+  const topNet0 = topProg?.nets?.[0];
+  const targetNet =
+    ui.progressionType === 'TYT'
+      ? topNet0?.tytTotal ?? null
+      : topProg?.scoreType === 'DİL'
+        ? topNet0?.ydt ?? null
+        : topNet0?.aytTotal ?? null;
+  const targetLabel = topProg ? `${topProg.university}` : '';
+
+  const typedExams = (state.examHistory || [])
+    .filter((e) => e.examType === ui.progressionType && Number.isFinite(Number(e.total)))
+    .reverse();
+  const delta =
+    typedExams.length >= 2
+      ? Number((Number(typedExams[typedExams.length - 1].total) - Number(typedExams[0].total)).toFixed(2))
+      : null;
+
+  return `
+    <div class="panel panel-full">
+      <div class="panel-title">
+        <span>Mevcut Netlerinle Tahmini YKS Sıralaman</span>
+        <button class="btn btn-sm" id="progOpenNetsBtn">Netlerim / PDF Yükle</button>
+      </div>
+      ${est && scoreTypes.length
+        ? `<div class="detail-hero-metrics tabular" style="margin-bottom:10px;">
+            ${scoreTypes
+              .map(
+                (st) => `<div class="detail-metric-tile">
+                  <span>Tahmini Y-${st} Sıralama</span>
+                  <strong style="color:var(--accent)">${formatRank(est[st].rank)}</strong>
+                  <div style="font-size:12px;color:var(--text-tertiary);margin-top:3px;">~${formatScore(est[st].score)} puan</div>
+                </div>`,
+              )
+              .join('')}
+            ${state.programs.length
+              ? `<div class="detail-metric-tile">
+                  <span>Şu An Girdiğin Tercih</span>
+                  <strong style="color:var(--green)">${reachableCount} <span style="font-size:15px;font-weight:500;color:var(--text-tertiary)">/ ${state.programs.length}</span></strong>
+                  <div style="font-size:12px;color:var(--text-tertiary);margin-top:3px;">%5 güven bandı dahil</div>
+                </div>`
+              : ''}
+          </div>
+          <div style="font-size:12px;color:var(--text-tertiary);">
+            OBP ${est.obpUsed}${est.obpEstimated ? ' (varsayılan, Netlerim penceresinden kendi OBP\'ni girebilirsin)' : ''} üzerinden YÖK Atlas katsayılarıyla tahmin edilir.
+          </div>`
+        : `<div class="chart-empty" style="margin-top:6px;">
+            Tahmini Türkiye sıralamanı ve <strong>"Şu An Giriyorsun"</strong> rozetlerini görmek için <strong>Netlerim & PDF</strong> penceresinden TYT + AYT netlerini gir veya dershane deneme PDF'ini yükle.
+          </div>`}
+    </div>
+
+    <div class="panel panel-full">
+      <div class="panel-title" style="flex-wrap:wrap;gap:10px;">
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+          <span>Deneme Net Gelişim Grafiği</span>
+          ${delta !== null
+            ? `<span class="${delta >= 0 ? 'net-delta-pos' : 'net-delta-neg'} tabular">${delta >= 0 ? '+' : ''}${formatNet(delta)} net gelişim (${typedExams.length} deneme)</span>`
+            : ''}
+        </div>
+        <div class="segmented" role="tablist" aria-label="Sınav türü">
+          <button class="seg-btn seg-btn-sm ${ui.progressionType === 'TYT' ? 'active' : ''}" data-prog-type="TYT">TYT</button>
+          <button class="seg-btn seg-btn-sm ${ui.progressionType === 'AYT' ? 'active' : ''}" data-prog-type="AYT">AYT</button>
+        </div>
+      </div>
+      ${renderExamProgressionChart(state.examHistory, {
+        examType: ui.progressionType,
+        targetNet,
+        targetLabel,
+      })}
+      ${topProg && targetNet
+        ? `<div style="font-size:12px;color:var(--text-tertiary);margin-top:8px;">Turuncu kesikli çizgi, 1. tercihin olan <strong>${escapeHtml(topProg.university)} — ${escapeHtml(topProg.department)}</strong> son yerleşen ortalama ${ui.progressionType} netini (${formatNet(targetNet)}) gösterir.</div>`
+        : ''}
+    </div>
+  `;
+}
+
+function renderDecisionRankedListHtml(ranked) {
+  return ranked
+    .map((item, idx) => {
+      const p = item.program;
+      const b = item.breakdown;
+      const tone = item.fitScore >= 75 ? 'var(--green)' : item.fitScore >= 55 ? 'var(--accent)' : 'var(--amber)';
+      return `<div class="sim-unlock-row" style="cursor:pointer;" data-open-code="${escapeHtml(p.code)}">
+        <div style="display:flex;align-items:center;gap:12px;min-width:0;flex:1;">
+          <span class="mono" style="font-weight:700;color:var(--text-tertiary);width:26px;">#${String(idx + 1).padStart(2, '0')}</span>
+          ${renderAvatar(p)}
+          <div style="min-width:0;">
+            <strong style="font-size:14px;">${escapeHtml(p.department)}</strong>
+            <div style="font-size:12px;color:var(--text-secondary);">${escapeHtml(p.university)} · ${escapeHtml(p.city)} · <span class="tabular">${formatRank(p.latestRank)}</span></div>
+            <div style="font-size:11.5px;color:var(--text-tertiary);margin-top:2px;" class="tabular">
+              Sıra ${b.rankScore} · Kadro ${b.academicScore} · Dil ${b.languageScore} · Maliyet ${b.costScore} · Kişisel ${b.personalScore}
+            </div>
+          </div>
+        </div>
+        <span class="fit-score-pill tabular" style="color:${tone};">${item.fitScore}<span style="font-size:11px;font-weight:500;opacity:0.7;">/100</span></span>
+      </div>`;
+    })
+    .join('');
+}
+
+function renderDecisionScorePanel() {
+  const w = { ...DEFAULT_DECISION_WEIGHTS, ...(state.decisionWeights || {}) };
+  const ranked = computeDecisionScores(state.programs, w, state.costSettings);
+  const weightItems = [
+    { key: 'rank', label: 'Sıralama & Prestij' },
+    { key: 'academic', label: 'Kadro & Akreditasyon' },
+    { key: 'language', label: 'Yabancı Dil' },
+    { key: 'cost', label: 'Bütçe / Maliyet' },
+    { key: 'personal', label: 'Yıldız & Artı/Eksi' },
+  ];
+
+  return `
+    <div class="panel panel-full">
+      <div class="panel-title" style="flex-wrap:wrap;gap:10px;">
+        <div>
+          <span>Ağırlıklı Kişisel Karar Skoru (Fit Score)</span>
+          <div style="font-size:12.5px;font-weight:400;color:var(--text-secondary);margin-top:2px;">Senin için hangi kriter daha önemliyse ağırlığını artır; tüm tercihlerin 0–100 arası puanlansın.</div>
+        </div>
+        ${!ui.readOnlyShare
+          ? `<button class="btn btn-primary btn-sm" id="applyDecisionOrderBtn">${SF.check} Tercih Sıramı Bu Skora Göre Diz</button>`
+          : ''}
+      </div>
+
+      <div class="weights-grid">
+        ${weightItems
+          .map(
+            (it) => `<div class="sim-slider-card">
+              <div style="display:flex;justify-content:space-between;align-items:center;">
+                <strong style="font-size:12.5px;">${it.label}</strong>
+                <span class="pill pill-accent tabular" id="weightVal_${it.key}">${w[it.key]}</span>
+              </div>
+              <input class="apple-slider" type="range" min="0" max="50" step="5" value="${w[it.key]}" data-weight-key="${it.key}" />
+            </div>`,
+          )
+          .join('')}
+      </div>
+
+      <div class="sim-unlock-list" id="decisionRankedList" style="margin-top:16px;">
+        ${renderDecisionRankedListHtml(ranked)}
+      </div>
+    </div>
+  `;
+}
+
 function renderAnalysisView() {
   const headerHtml = `<div class="page-header">
     <div>
-      <div class="page-eyebrow">Strateji · Harita · Simülatör · Maliyet · Takvim</div>
+      <div class="page-eyebrow">Strateji · Gelişim · Karar Skoru · Harita · Maliyet</div>
       <h1 class="page-title">Analiz</h1>
-      <p class="page-subtitle">ÖSYM sağlık kontrolü, Türkiye kampüs haritası, net simülatörü ve 4 yıllık bütçe</p>
+      <p class="page-subtitle">ÖSYM sağlık kontrolü, deneme gelişim grafiği, ağırlıklı karar skoru, harita ve bütçe</p>
     </div>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
       <div class="segmented" role="tablist" aria-label="Analiz alt sekmeleri">
         ${[
           ['overview', 'Sağlık & Özet'],
+          ['progression', 'Gelişim'],
+          ['decision', 'Karar Skoru'],
           ['map', 'Harita'],
-          ['simulator', 'Net Simülatörü'],
+          ['simulator', 'Simülatör'],
           ['cost', 'Maliyet'],
           ['timeline', 'Takvim'],
         ]
@@ -1237,6 +1710,10 @@ function renderAnalysisView() {
     </div>
   </div>`;
 
+  if (ui.analysisSubTab === 'progression') {
+    return `${headerHtml}<section class="analysis-grid">${renderProgressionPanel()}</section>`;
+  }
+
   if (ui.analysisSubTab === 'timeline') {
     return `${headerHtml}<section class="analysis-grid">${renderTimelineView(state.abroadPrograms)}</section>`;
   }
@@ -1248,9 +1725,13 @@ function renderAnalysisView() {
   if (!state.programs.length) {
     return `${headerHtml}<div class="empty-state">
       <h2>Analiz için program ekle</h2>
-      <p>Listene eklediğin bölümlerin ÖSYM sağlık kontrolü, kampüs haritası ve net simülatörü burada otomatik oluşur.</p>
+      <p>Listene eklediğin bölümlerin ÖSYM sağlık kontrolü, ağırlıklı karar skoru, kampüs haritası ve net simülatörü burada otomatik oluşur.</p>
       <button class="btn btn-primary" id="analysisAddBtn">${SF.plus} Program Ekle</button>
     </div>`;
+  }
+
+  if (ui.analysisSubTab === 'decision') {
+    return `${headerHtml}<section class="analysis-grid">${renderDecisionScorePanel()}</section>`;
   }
 
   if (ui.analysisSubTab === 'map') {
@@ -1679,6 +2160,7 @@ function renderDrawer() {
   `;
 
   bindDrawerEvents(p);
+  initSlidingSegmentedControls();
 }
 
 function bindDrawerEvents(p) {
@@ -1816,14 +2298,124 @@ function openAddModal(prefillText = '') {
   const input = document.getElementById('programCodeInput');
   document.getElementById('addModalFeedback').innerHTML = '';
   document.getElementById('addModalPreview').innerHTML = '';
+  const localHits = document.getElementById('spotlightLocalHits');
+  if (localHits) localHits.innerHTML = '';
   if (input) {
     input.value = prefillText;
     autoSizeSpotlightInput(input);
+    renderSpotlightLocalHits(prefillText);
     setTimeout(() => input.focus(), 60);
   }
   overlay.classList.add('open');
   overlay.setAttribute('aria-hidden', 'false');
   if (prefillText) handleSpotlightAction();
+}
+
+function renderSpotlightLocalHits(rawQuery) {
+  const host = document.getElementById('spotlightLocalHits');
+  if (!host) return;
+  const q = String(rawQuery || '').trim().toLocaleLowerCase('tr');
+  if (q.length < 2) {
+    host.innerHTML = '';
+    return;
+  }
+
+  const trHits = state.programs
+    .filter((p) => {
+      const hay = [
+        p.code,
+        p.university,
+        p.department,
+        p.city,
+        p.notes,
+        ...(p.pros || []),
+        ...(p.cons || []),
+        ...(p.links || []).map((l) => `${l.title} ${l.url}`),
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLocaleLowerCase('tr');
+      return hay.includes(q);
+    })
+    .slice(0, 5);
+
+  const abHits = state.abroadPrograms
+    .filter((a) => {
+      const hay = [a.university, a.department, a.city, a.country, a.portal, a.notes]
+        .filter(Boolean)
+        .join(' ')
+        .toLocaleLowerCase('tr');
+      return hay.includes(q);
+    })
+    .slice(0, 3);
+
+  if (!trHits.length && !abHits.length) {
+    host.innerHTML = '';
+    return;
+  }
+
+  host.innerHTML = `
+    <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:6px;">
+      ${trHits.length
+        ? `<div>
+            <div class="spotlight-group-label">Listendeki Tercihler & Notların (${trHits.length})</div>
+            <div class="search-results-list" style="max-height:210px;">
+              ${trHits
+                .map(
+                  (p) => `<div class="search-result-row" style="cursor:pointer;" data-spot-local-tr="${escapeHtml(p.code)}">
+                    <div style="display:flex;align-items:center;gap:10px;min-width:0;">
+                      ${renderAvatar(p)}
+                      <div style="min-width:0;">
+                        <div style="font-weight:650;font-size:13.5px;">${escapeHtml(p.department)}</div>
+                        <div style="font-size:12px;color:var(--text-secondary);">${escapeHtml(p.university)} · ${escapeHtml(p.city)}${p.notes ? ` · "${escapeHtml(p.notes.slice(0, 48))}"` : ''}</div>
+                      </div>
+                    </div>
+                    <span class="pill pill-accent tabular">${formatRank(p.latestRank)}</span>
+                  </div>`,
+                )
+                .join('')}
+            </div>
+          </div>`
+        : ''}
+      ${abHits.length
+        ? `<div>
+            <div class="spotlight-group-label">Yurt Dışı Hedeflerin (${abHits.length})</div>
+            <div class="search-results-list" style="max-height:150px;">
+              ${abHits
+                .map(
+                  (a) => `<div class="search-result-row" style="cursor:pointer;" data-spot-local-abroad="1">
+                    <div style="min-width:0;">
+                      <div style="font-weight:650;font-size:13.5px;">${escapeHtml(a.university)} — ${escapeHtml(a.department)}</div>
+                      <div style="font-size:12px;color:var(--text-secondary);">${escapeHtml(a.city)} · ${escapeHtml(a.country)}${a.notes ? ` · "${escapeHtml(a.notes.slice(0, 42))}"` : ''}</div>
+                    </div>
+                    <span class="pill">Yurt Dışı</span>
+                  </div>`,
+                )
+                .join('')}
+            </div>
+          </div>`
+        : ''}
+    </div>
+  `;
+
+  host.querySelectorAll('[data-spot-local-tr]').forEach((row) => {
+    row.addEventListener('click', () => {
+      const code = row.dataset.spotLocalTr;
+      closeAddModal();
+      ui.region = 'TR';
+      ui.tab = 'preferences';
+      renderAll();
+      openDrawer(code);
+    });
+  });
+
+  host.querySelectorAll('[data-spot-local-abroad]').forEach((row) => {
+    row.addEventListener('click', () => {
+      closeAddModal();
+      ui.region = 'ABROAD';
+      renderAll();
+    });
+  });
 }
 
 function closeAddModal() {
@@ -1861,12 +2453,13 @@ async function handleLiveSearch(params) {
   btn.disabled = true;
   btn.textContent = 'Aranıyor...';
   feedback.innerHTML = '';
-  preview.innerHTML = '';
+  preview.innerHTML = renderShimmerSkeleton(4);
 
   try {
     const res = await searchProgramsFromApi({ ...params, size: 20 });
     const items = res.items || [];
     if (!items.length) {
+      preview.innerHTML = '';
       feedback.innerHTML = `<div class="error-banner">Eşleşen lisans programı bulunamadı. Daha genel bir ifade dene (ör. "İstanbul Bilgisayar" veya "Ankara Tıp").</div>`;
       return;
     }
@@ -1927,10 +2520,11 @@ async function handleLiveSearch(params) {
       });
     });
   } catch (err) {
+    preview.innerHTML = '';
     feedback.innerHTML = `<div class="error-banner">${escapeHtml(err.message || 'Arama sırasında hata oluştu.')}</div>`;
   } finally {
     btn.disabled = false;
-    btn.textContent = 'Ara / Getir';
+    btn.textContent = 'YÖK Atlas';
   }
 }
 
@@ -1942,7 +2536,7 @@ async function handleCodePreview(codes) {
   btn.disabled = true;
   btn.textContent = codes.length > 1 ? `Çekiliyor (${codes.length})...` : 'Çekiliyor...';
   feedback.innerHTML = '';
-  preview.innerHTML = '';
+  preview.innerHTML = renderShimmerSkeleton(Math.min(4, codes.length));
 
   const found = [];
   const errors = [];
@@ -1958,10 +2552,13 @@ async function handleCodePreview(codes) {
   }
 
   btn.disabled = false;
-  btn.textContent = 'Ara / Getir';
+  btn.textContent = 'YÖK Atlas';
 
   if (errors.length) feedback.innerHTML = `<div class="error-banner">${errors.map(escapeHtml).join('<br/>')}</div>`;
-  if (!found.length) return;
+  if (!found.length) {
+    preview.innerHTML = '';
+    return;
+  }
 
   if (found.length === 1) {
     const p = found[0];
@@ -2059,6 +2656,9 @@ function renderMyNetsModal() {
   const body = document.getElementById('myNetsModalBody');
   const mn = state.myNets || DEFAULT_MY_NETS;
   const valAttr = (v) => (v !== null && v !== undefined && v !== '' ? `value="${escapeHtml(v)}"` : '');
+  const est = estimateYksRankFromNets(mn);
+  const estTypes = ['SAY', 'EA', 'SÖZ', 'DİL'].filter((k) => est?.[k]);
+  const reachableCount = est ? state.programs.filter((p) => isProgramCurrentlyReachable(p, est)).length : 0;
 
   const field = (id, label, max, val) => `
     <div>
@@ -2067,6 +2667,24 @@ function renderMyNetsModal() {
     </div>`;
 
   body.innerHTML = `
+    ${est && estTypes.length
+      ? `<div class="sheet-card" style="display:flex;flex-direction:column;gap:8px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;">
+            <strong style="font-size:13px;">Mevcut Netlerinle Tahmini Sıralama</strong>
+            ${state.programs.length
+              ? `<span class="reachable-pill">${SF.check} ${reachableCount} / ${state.programs.length} tercihine şu an giriyorsun</span>`
+              : ''}
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;" class="tabular">
+            ${estTypes
+              .map(
+                (st) => `<span class="pill pill-accent">${st}: <strong>${formatRank(est[st].rank)}</strong> (~${formatScore(est[st].score)})</span>`,
+              )
+              .join('')}
+          </div>
+        </div>`
+      : ''}
+
     <!-- Dershane PDF Otomatik Net Okuyucu (TYT & AYT Ayrı) -->
     <div style="display:flex;flex-direction:column;gap:10px;">
       <div>
@@ -2806,6 +3424,7 @@ function bindPreferencesEvents() {
     ui.search = '';
     ui.filterRisk = 'all';
     ui.filterScoreType = 'all';
+    ui.filterReachable = false;
     renderAll();
   });
 
@@ -2836,6 +3455,15 @@ function bindPreferencesEvents() {
   document.querySelectorAll('[data-filter-risk]').forEach((btn) => {
     btn.addEventListener('click', () => {
       ui.filterRisk = btn.dataset.filterRisk;
+      ui.filterReachable = false;
+      renderAll();
+    });
+  });
+
+  document.querySelectorAll('[data-filter-reachable]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      ui.filterReachable = !ui.filterReachable;
+      if (ui.filterReachable) ui.filterRisk = 'all';
       renderAll();
     });
   });
@@ -2892,6 +3520,7 @@ function bindPreferencesEvents() {
   listEl.querySelectorAll('[data-code]').forEach((item) => {
     const code = item.dataset.code;
     item.addEventListener('click', () => openDrawer(code));
+    item.addEventListener('contextmenu', (e) => openContextMenu(e, code));
 
     item.addEventListener('dragstart', (e) => {
       ui.dragCode = code;
@@ -2951,6 +3580,46 @@ function bindAnalysisEvents() {
   });
 
   document.getElementById('analysisAddBtn')?.addEventListener('click', () => openAddModal());
+  document.getElementById('progOpenNetsBtn')?.addEventListener('click', openMyNetsModal);
+
+  document.querySelectorAll('[data-prog-type]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      ui.progressionType = btn.dataset.progType;
+      renderAll();
+    });
+  });
+
+  // Weighted Decision Score sliders (smooth live update without losing focus)
+  document.querySelectorAll('[data-weight-key]').forEach((slider) => {
+    const key = slider.dataset.weightKey;
+    slider.addEventListener('input', (e) => {
+      const val = Number(e.target.value);
+      state.decisionWeights = { ...DEFAULT_DECISION_WEIGHTS, ...(state.decisionWeights || {}), [key]: val };
+      const pill = document.getElementById(`weightVal_${key}`);
+      if (pill) pill.textContent = String(val);
+      const listHost = document.getElementById('decisionRankedList');
+      if (listHost) {
+        const ranked = computeDecisionScores(state.programs, state.decisionWeights, state.costSettings);
+        listHost.innerHTML = renderDecisionRankedListHtml(ranked);
+        listHost.querySelectorAll('[data-open-code]').forEach((row) => {
+          row.addEventListener('click', () => openDrawer(row.dataset.openCode));
+        });
+      }
+    });
+    slider.addEventListener('change', () => saveState());
+  });
+
+  document.getElementById('applyDecisionOrderBtn')?.addEventListener('click', () => {
+    const ranked = computeDecisionScores(state.programs, state.decisionWeights, state.costSettings);
+    if (!ranked.length) return;
+    state.programs = ranked.map((r) => r.program);
+    ui.sortBy = 'manual';
+    ui.region = 'TR';
+    ui.tab = 'preferences';
+    saveState();
+    renderAll();
+    showToast('Tercih sıran kişisel karar skoruna göre yeniden dizildi!', 'success');
+  });
 
   document.querySelectorAll('[data-open-code]').forEach((btn) => {
     btn.addEventListener('click', () => openDrawer(btn.dataset.openCode));
@@ -3032,26 +3701,16 @@ async function loadSharedLinkIfPresent() {
 
 async function init() {
   initTheme();
+  initSheetSwipeDismiss();
 
-  document.getElementById('brandHome')?.addEventListener('click', (e) => {
+  const goHome = (e) => {
     e.preventDefault();
     ui.region = 'TR';
     ui.tab = 'preferences';
     renderAll();
-  });
-
-  document.querySelectorAll('#desktopNav .nav-pill-btn').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const target = btn.dataset.tab;
-      if (target === 'abroad') {
-        ui.region = 'ABROAD';
-      } else {
-        ui.region = 'TR';
-        ui.tab = target;
-      }
-      renderAll();
-    });
-  });
+  };
+  document.getElementById('brandHome')?.addEventListener('click', goHome);
+  document.getElementById('mobileBrandHome')?.addEventListener('click', goHome);
 
   document.querySelectorAll('#mobileNav .mobile-nav-btn').forEach((btn) => {
     btn.addEventListener('click', () => {
@@ -3066,10 +3725,15 @@ async function init() {
     });
   });
 
-  document.getElementById('themeToggleBtn')?.addEventListener('click', () => {
+  const toggleTheme = () => {
     const cur = document.documentElement.getAttribute('data-theme');
     applyTheme(cur === 'dark' ? 'light' : 'dark');
-  });
+  };
+  document.getElementById('themeToggleBtn')?.addEventListener('click', toggleTheme);
+  document.getElementById('sidebarThemeBtn')?.addEventListener('click', toggleTheme);
+  document.getElementById('sidebarSpotlightBtn')?.addEventListener('click', () => openAddModal());
+  document.getElementById('sidebarNetsBtn')?.addEventListener('click', openMyNetsModal);
+  document.getElementById('sidebarSyncBtn')?.addEventListener('click', openSyncModal);
 
   document.getElementById('openAddBtn')?.addEventListener('click', () => openAddModal());
   document.getElementById('closeAddModalBtn')?.addEventListener('click', closeAddModal);
@@ -3083,12 +3747,16 @@ async function init() {
       const inp = document.getElementById('programCodeInput');
       inp.value = btn.dataset.sampleQuery;
       autoSizeSpotlightInput(inp);
+      renderSpotlightLocalHits(inp.value);
       handleSpotlightAction();
     });
   });
 
   const spotlightInput = document.getElementById('programCodeInput');
-  spotlightInput?.addEventListener('input', () => autoSizeSpotlightInput(spotlightInput));
+  spotlightInput?.addEventListener('input', () => {
+    autoSizeSpotlightInput(spotlightInput);
+    renderSpotlightLocalHits(spotlightInput.value);
+  });
   spotlightInput?.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
@@ -3120,11 +3788,16 @@ async function init() {
 
   document.getElementById('drawerBackdrop')?.addEventListener('click', closeDrawer);
 
+  window.addEventListener('scroll', updateCollapsingHeader, { passive: true });
+  window.addEventListener('resize', initSlidingSegmentedControls);
+  document.addEventListener('click', closeContextMenu);
+
   document.addEventListener('keydown', (e) => {
     if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
       e.preventDefault();
       openAddModal();
     } else if (e.key === 'Escape') {
+      closeContextMenu();
       closeDrawer();
       closeAddModal();
       closeMyNetsModal();

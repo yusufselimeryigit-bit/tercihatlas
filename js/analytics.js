@@ -474,3 +474,240 @@ export function openPrintableReport(state) {
   w.document.close();
   return true;
 }
+
+// ============================================================================
+// YKS 2027 Estimated Score & Rank Engine (from User's TYT/AYT/YDT Nets + OBP)
+// ============================================================================
+function interpolateScoreToRank(score, anchors) {
+  if (!Number.isFinite(score)) return null;
+  if (score >= anchors[0][0]) return anchors[0][1];
+  for (let i = 0; i < anchors.length - 1; i++) {
+    const [s1, r1] = anchors[i];
+    const [s2, r2] = anchors[i + 1];
+    if (score <= s1 && score >= s2) {
+      const t = (s1 - score) / (s1 - s2 || 1);
+      // Log-linear interpolation matches real YKS bell-curve rank density
+      const logR = Math.log10(r1) + t * (Math.log10(r2) - Math.log10(r1));
+      return Math.max(1, Math.round(Math.pow(10, logR)));
+    }
+  }
+  return anchors[anchors.length - 1][1];
+}
+
+const RANK_ANCHORS = {
+  SAY: [
+    [555, 50],
+    [545, 500],
+    [535, 2000],
+    [525, 5200],
+    [510, 12000],
+    [490, 25000],
+    [465, 48000],
+    [435, 85000],
+    [400, 145000],
+    [350, 280000],
+    [290, 600000],
+    [220, 1400000],
+  ],
+  EA: [
+    [535, 50],
+    [515, 500],
+    [495, 2200],
+    [475, 7000],
+    [450, 19000],
+    [420, 48000],
+    [390, 105000],
+    [355, 220000],
+    [310, 480000],
+    [250, 1100000],
+  ],
+  SÖZ: [
+    [525, 50],
+    [500, 600],
+    [475, 2800],
+    [450, 9500],
+    [420, 28000],
+    [385, 78000],
+    [345, 190000],
+    [295, 480000],
+    [240, 1050000],
+  ],
+  DİL: [
+    [535, 50],
+    [515, 600],
+    [490, 2600],
+    [465, 7500],
+    [435, 18000],
+    [400, 38000],
+    [355, 78000],
+    [300, 140000],
+  ],
+};
+
+/**
+ * Estimates placement scores (Y-SAY, Y-EA, Y-SÖZ, Y-DİL) and approximate Turkey ranks
+ * from the user's entered/PDF-imported TYT, AYT, YDT nets and OBP.
+ */
+export function estimateYksRankFromNets(myNets) {
+  if (!myNets) return null;
+  const num = (v) => (v !== null && v !== undefined && v !== '' && Number.isFinite(Number(v)) ? Number(v) : null);
+
+  const tTr = num(myNets.tyt?.turkce);
+  const tSos = num(myNets.tyt?.sosyal);
+  const tMat = num(myNets.tyt?.matematik);
+  const tFen = num(myNets.tyt?.fen);
+  const hasTyt = [tTr, tSos, tMat, tFen].some((v) => v !== null);
+  if (!hasTyt) return null;
+
+  const tytContrib = (tTr || 0) * 1.32 + (tSos || 0) * 1.36 + (tMat || 0) * 1.32 + (tFen || 0) * 1.36;
+  const obp = num(myNets.obp) ?? 450; // sensible default 450 (90 diploma) if omitted
+  const obpContrib = obp * 0.12;
+  const base = 100;
+
+  const aMat = num(myNets.ayt?.matematik);
+  const aFiz = num(myNets.ayt?.fizik);
+  const aKim = num(myNets.ayt?.kimya);
+  const aBio = num(myNets.ayt?.biyoloji);
+  const aEdb = num(myNets.ayt?.edebiyat);
+  const aTr1 = num(myNets.ayt?.tarih1);
+  const aCg1 = num(myNets.ayt?.cografya1);
+  const aTr2 = num(myNets.ayt?.tarih2);
+  const aCg2 = num(myNets.ayt?.cografya2);
+  const aFel = num(myNets.ayt?.felsefe);
+  const aDin = num(myNets.ayt?.din);
+  const ydt = num(myNets.ydt);
+
+  const out = {};
+
+  if ([aMat, aFiz, aKim, aBio].some((v) => v !== null)) {
+    const score = Number((base + tytContrib + (aMat || 0) * 3.0 + (aFiz || 0) * 2.85 + (aKim || 0) * 3.07 + (aBio || 0) * 3.07 + obpContrib).toFixed(2));
+    out.SAY = { score, rank: interpolateScoreToRank(score, RANK_ANCHORS.SAY) };
+  }
+
+  if ([aMat, aEdb, aTr1, aCg1].some((v) => v !== null)) {
+    const score = Number((base + tytContrib + (aMat || 0) * 3.0 + (aEdb || 0) * 3.0 + (aTr1 || 0) * 2.8 + (aCg1 || 0) * 3.33 + obpContrib).toFixed(2));
+    out.EA = { score, rank: interpolateScoreToRank(score, RANK_ANCHORS.EA) };
+  }
+
+  if ([aEdb, aTr1, aCg1, aTr2, aCg2, aFel, aDin].some((v) => v !== null)) {
+    const score = Number(
+      (
+        base +
+        tytContrib +
+        (aEdb || 0) * 3.0 +
+        (aTr1 || 0) * 2.8 +
+        (aCg1 || 0) * 3.33 +
+        (aTr2 || 0) * 2.91 +
+        (aCg2 || 0) * 2.91 +
+        (aFel || 0) * 3.0 +
+        (aDin || 0) * 3.33 +
+        obpContrib
+      ).toFixed(2),
+    );
+    out.SÖZ = { score, rank: interpolateScoreToRank(score, RANK_ANCHORS.SÖZ) };
+  }
+
+  if (ydt !== null) {
+    const score = Number((base + tytContrib + ydt * 3.0 + obpContrib).toFixed(2));
+    out.DİL = { score, rank: interpolateScoreToRank(score, RANK_ANCHORS.DİL) };
+  }
+
+  return Object.keys(out).length ? { ...out, obpUsed: obp, obpEstimated: num(myNets.obp) === null } : null;
+}
+
+/**
+ * Checks whether the user's current estimated rank for a program's scoreType qualifies for the program.
+ */
+export function isProgramCurrentlyReachable(program, estimatedRanks) {
+  if (!program?.latestRank || !estimatedRanks) return false;
+  const st = String(program.scoreType || '').toUpperCase();
+  const est = estimatedRanks[st];
+  if (!est || !est.rank) return false;
+  return est.rank <= program.latestRank * 1.05; // within 5% safety band
+}
+
+// ============================================================================
+// Weighted Personal Decision Score Engine (0 – 100 Fit Score)
+// ============================================================================
+export const DEFAULT_DECISION_WEIGHTS = {
+  rank: 25,
+  academic: 20,
+  language: 20,
+  cost: 15,
+  personal: 20,
+};
+
+export function computeDecisionScores(programs, weights = DEFAULT_DECISION_WEIGHTS, costSettings = {}) {
+  if (!programs || !programs.length) return [];
+
+  const w = { ...DEFAULT_DECISION_WEIGHTS, ...(weights || {}) };
+  const totalW = Math.max(1, w.rank + w.academic + w.language + w.cost + w.personal);
+
+  const validRanks = programs.map((p) => p.latestRank).filter((r) => r && r > 0);
+  const logMinR = validRanks.length ? Math.log10(Math.max(1, Math.min(...validRanks))) : 1;
+  const logMaxR = validRanks.length ? Math.log10(Math.max(10, Math.max(...validRanks))) : 5;
+  const logSpan = Math.max(0.25, logMaxR - logMinR);
+
+  const staffCounts = programs.map((p) => {
+    const s = p.academicStaff || {};
+    return (s.prof || 0) * 3 + (s.doc || 0) * 2 + (s.drOgr || 0) * 1.2 + (s.arGor || 0) * 0.5;
+  });
+  const maxStaff = Math.max(10, ...staffCounts);
+
+  const monthlyIst = costSettings.monthlyIstanbul || 22000;
+  const monthlyMetro = costSettings.monthlyMetro || 17000;
+  const monthlyOther = costSettings.monthlyOther || 13000;
+  const annualCost = (p) => {
+    const c = String(p.city || '').toLocaleUpperCase('tr');
+    const m = c === 'İSTANBUL' ? monthlyIst : c === 'ANKARA' || c === 'İZMİR' ? monthlyMetro : monthlyOther;
+    return (p.tuition || 0) + m * 9;
+  };
+  const costs = programs.map(annualCost);
+  const minCost = Math.min(...costs);
+  const maxCost = Math.max(minCost + 1, ...costs);
+
+  return programs
+    .map((p, idx) => {
+      // 1. Rank / Prestige score (smaller rank = higher score)
+      const rankScore = p.latestRank
+        ? Math.round(100 - ((Math.log10(Math.max(1, p.latestRank)) - logMinR) / logSpan) * 70)
+        : 45;
+
+      // 2. Academic strength + Accreditation bonus
+      const acBonus = p.accreditation ? 22 : 0;
+      const academicScore = Math.min(100, Math.round((staffCounts[idx] / maxStaff) * 78 + acBonus));
+
+      // 3. Language score (English/German/French > %30 > Turkish)
+      const lang = String(p.language || '').toLocaleLowerCase('tr');
+      const dept = String(p.department || '').toLocaleLowerCase('tr');
+      let languageScore = 60;
+      if (lang.includes('ingilizce') || lang.includes('almanca') || lang.includes('fransızca')) {
+        languageScore = dept.includes('%30') ? 82 : 100;
+      }
+
+      // 4. Cost advantage (cheaper = higher score)
+      const costNorm = (costs[idx] - minCost) / (maxCost - minCost);
+      const costScore = Math.round(100 - costNorm * 75);
+
+      // 5. Personal rating + pros/cons sentiment
+      const starPart = (p.rating || 3) * 16; // default neutral 48 if unrated
+      const prosConsBonus = Math.max(-20, Math.min(20, ((p.pros?.length || 0) - (p.cons?.length || 0)) * 5));
+      const personalScore = Math.max(10, Math.min(100, Math.round(starPart + prosConsBonus)));
+
+      const fitScore = Math.round(
+        (rankScore * w.rank +
+          academicScore * w.academic +
+          languageScore * w.language +
+          costScore * w.cost +
+          personalScore * w.personal) /
+          totalW,
+      );
+
+      return {
+        program: p,
+        fitScore,
+        breakdown: { rankScore, academicScore, languageScore, costScore, personalScore },
+      };
+    })
+    .sort((a, b) => b.fitScore - a.fitScore);
+}
