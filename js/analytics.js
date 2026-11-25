@@ -927,3 +927,89 @@ export function compareScenarios(scenarioA, scenarioB, targetRank, costSettings 
 
   return { a, b, common, onlyA, onlyB };
 }
+
+// ============================================================================
+// Personal Records (PR) from Uploaded TYT / AYT Exam History
+// ============================================================================
+export function computeExamPersonalRecords(examHistory) {
+  const list = Array.isArray(examHistory) ? examHistory : [];
+  let bestTyt = null;
+  let bestAyt = null;
+  let bestInstRank = null;
+  const bestSubjects = {};
+
+  const considerSub = (label, val, exam) => {
+    const n = Number(val);
+    if (!Number.isFinite(n)) return;
+    if (!bestSubjects[label] || n > bestSubjects[label].val) {
+      bestSubjects[label] = { label, val: n, examName: exam.examName };
+    }
+  };
+
+  for (const ex of list) {
+    const tot = Number(ex.total);
+    if (ex.examType === 'TYT' && Number.isFinite(tot)) {
+      if (!bestTyt || tot > bestTyt.total) bestTyt = { total: tot, examName: ex.examName, examDate: ex.examDate };
+      if (ex.tyt) {
+        considerSub('TYT Türkçe', ex.tyt.turkce, ex);
+        considerSub('TYT Mat', ex.tyt.matematik, ex);
+        considerSub('TYT Fen', ex.tyt.fen, ex);
+        considerSub('TYT Sosyal', ex.tyt.sosyal, ex);
+      }
+    } else if (ex.examType === 'AYT' && Number.isFinite(tot)) {
+      if (!bestAyt || tot > bestAyt.total) bestAyt = { total: tot, examName: ex.examName, examDate: ex.examDate };
+      if (ex.ayt) {
+        considerSub('AYT Mat', ex.ayt.matematik, ex);
+        considerSub('AYT Fizik', ex.ayt.fizik, ex);
+        considerSub('AYT Kimya', ex.ayt.kimya, ex);
+        considerSub('AYT Biyoloji', ex.ayt.biyoloji, ex);
+        considerSub('AYT Edebiyat', ex.ayt.edebiyat, ex);
+      }
+    }
+
+    const r = Number(ex.institutionRank);
+    if (Number.isFinite(r) && r >= 1) {
+      if (!bestInstRank || r < bestInstRank.rank) {
+        bestInstRank = {
+          rank: r,
+          totalParticipants: ex.totalParticipants || null,
+          examName: ex.examName,
+          examType: ex.examType,
+        };
+      }
+    }
+  }
+
+  return {
+    bestTyt,
+    bestAyt,
+    bestInstRank,
+    bestSubjects: Object.values(bestSubjects),
+  };
+}
+
+// ============================================================================
+// Preference List Snapshot Diff Engine (Time Machine)
+// ============================================================================
+export function diffProgramLists(currentPrograms, snapshotPrograms) {
+  const cur = Array.isArray(currentPrograms) ? currentPrograms : [];
+  const snap = Array.isArray(snapshotPrograms) ? snapshotPrograms : [];
+
+  const curIdx = new Map(cur.map((p, i) => [p.code, i]));
+  const snapIdx = new Map(snap.map((p, i) => [p.code, i]));
+
+  let addedSince = 0;
+  let removedSince = 0;
+  let movedCount = 0;
+
+  for (const p of cur) {
+    if (!snapIdx.has(p.code)) addedSince += 1;
+    else if (snapIdx.get(p.code) !== curIdx.get(p.code)) movedCount += 1;
+  }
+  for (const p of snap) {
+    if (!curIdx.has(p.code)) removedSince += 1;
+  }
+
+  const identical = addedSince === 0 && removedSince === 0 && movedCount === 0;
+  return { identical, addedSince, removedSince, movedCount };
+}

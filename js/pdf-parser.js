@@ -206,6 +206,50 @@ function matchesStudent(rowText, queryTokens) {
   return queryTokens.every((t) => norm.includes(t));
 }
 
+/**
+ * Extracts student's institution/exam rank (leftmost positive integer before student name)
+ * and total participants across the list PDF when available.
+ */
+function extractInstitutionRank(matchedRow, allRows, queryTokens) {
+  let institutionRank = null;
+  if (matchedRow?.items?.length) {
+    const firstToken = queryTokens[0] || '';
+    const nameItem = matchedRow.items.find((it) => foldTurkish(it.text).includes(firstToken));
+    const nameX = nameItem ? nameItem.x : Infinity;
+
+    for (const item of matchedRow.items) {
+      if (item.x >= nameX) break;
+      const t = item.text.trim();
+      if (/^\d{1,4}$/.test(t)) {
+        const n = Number(t);
+        if (n >= 1 && n <= 5000) {
+          institutionRank = n;
+          break;
+        }
+      }
+    }
+  }
+
+  let totalParticipants = null;
+  if (institutionRank !== null && Array.isArray(allRows)) {
+    let maxRank = institutionRank;
+    let rankedRows = 0;
+    for (const r of allRows) {
+      const first = r.items?.[0]?.text?.trim();
+      if (first && /^\d{1,4}$/.test(first)) {
+        const n = Number(first);
+        if (n >= 1 && n <= 5000) {
+          rankedRows += 1;
+          if (n > maxRank && n <= rankedRows + 50) maxRank = n;
+        }
+      }
+    }
+    if (rankedRows >= 5) totalParticipants = Math.max(maxRank, institutionRank);
+  }
+
+  return { institutionRank, totalParticipants };
+}
+
 function aggregateNets(colValues, examType) {
   const r2 = (v) => Number(v.toFixed(2));
   const sumKeys = (keys) => {
@@ -320,6 +364,8 @@ export async function parseExamPdfFile(file, { examType = 'TYT', studentName = '
     throw new Error(`PDF içinde "${studentName}" bulunamadı. İsim yazımını veya öğrenci numarasını kontrol et.`);
   }
 
+  const { institutionRank, totalParticipants } = extractInstitutionRank(matchedRow, allRows, queryTokens);
+
   // Extract decimal tokens (net values) on the student's horizontal row
   // Note: 3-decimal scores like 363,099 are excluded automatically by parseDecimalToken (1-2 decimals only)
   const extractDecimals = (row) =>
@@ -369,6 +415,8 @@ export async function parseExamPdfFile(file, { examType = 'TYT', studentName = '
         examType,
         examName,
         examDate,
+        institutionRank,
+        totalParticipants,
         matchedLine: matchedRow.text,
         rawSubjects: colValues,
         ...agg,
@@ -383,6 +431,8 @@ export async function parseExamPdfFile(file, { examType = 'TYT', studentName = '
       examType,
       examName,
       examDate,
+      institutionRank,
+      totalParticipants,
       matchedLine: matchedRow.text,
       rawSubjects: {},
       ...vertical,

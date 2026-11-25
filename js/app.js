@@ -13,7 +13,7 @@ import {
   getAytFieldsForScoreType,
   generateSyncKey,
   exportProgramsToCsv,
-} from './utils.js?v=13';
+} from './utils.js?v=14';
 import {
   getApiBase,
   setCustomApiBase,
@@ -27,7 +27,7 @@ import {
   pushCloudSync,
   createShareSnapshot,
   fetchShareSnapshot,
-} from './api.js?v=13';
+} from './api.js?v=14';
 import {
   renderSparkline,
   renderDetailTrendChart,
@@ -35,7 +35,7 @@ import {
   renderExamProgressionChart,
   renderMiniNetSparkline,
   renderAppleActivityRings,
-} from './charts.js?v=13';
+} from './charts.js?v=14';
 import {
   compute2027Projection,
   compareWithMyNets,
@@ -48,15 +48,17 @@ import {
   analyzeSubjectLeverage,
   computeGoalRingsAndWeeklyPlan,
   compareScenarios,
-} from './analytics.js?v=13';
-import { ABROAD_PRESETS, DEFAULT_ABROAD_TOOLS, createAbroadRecord, renderAbroadView } from './abroad.js?v=13';
-import { parseExamPdfFile } from './pdf-parser.js?v=13';
+  computeExamPersonalRecords,
+  diffProgramLists,
+} from './analytics.js?v=14';
+import { ABROAD_PRESETS, DEFAULT_ABROAD_TOOLS, createAbroadRecord, renderAbroadView } from './abroad.js?v=14';
+import { parseExamPdfFile } from './pdf-parser.js?v=14';
 import {
   renderTurkeyCampusMap,
   renderCostCalculator,
   renderTimelineView,
   downloadTimelineIcs,
-} from './map-cost.js?v=13';
+} from './map-cost.js?v=14';
 
 const STATE_KEY = 'tercihatlas_state_v1';
 const SYNC_KEY_STORAGE = 'tercihatlas_sync_key';
@@ -110,6 +112,7 @@ const DEFAULT_STATE = {
   compareCodes: [],
   myNets: structuredClone(DEFAULT_MY_NETS),
   examHistory: [],
+  snapshots: [],
   abroadPrograms: [],
   abroadTools: structuredClone(DEFAULT_ABROAD_TOOLS),
   costSettings: structuredClone(DEFAULT_COST_SETTINGS),
@@ -202,6 +205,7 @@ function normalizeState(parsed) {
     abroadPrograms: Array.isArray(parsed?.abroadPrograms) ? parsed.abroadPrograms : [],
     abroadTools: { ...structuredClone(DEFAULT_ABROAD_TOOLS), ...(parsed?.abroadTools || {}) },
     examHistory: Array.isArray(parsed?.examHistory) ? parsed.examHistory : [],
+    snapshots: Array.isArray(parsed?.snapshots) ? parsed.snapshots : [],
     costSettings: { ...structuredClone(DEFAULT_COST_SETTINGS), ...(parsed?.costSettings || {}) },
     decisionWeights: { ...structuredClone(DEFAULT_DECISION_WEIGHTS), ...(parsed?.decisionWeights || {}) },
     myNets: {
@@ -1128,7 +1132,8 @@ function renderPreferencesView() {
           </button>
           <div class="actions-dropdown" id="prefActionsDropdown" role="menu">
             ${!ui.readOnlyShare
-              ? `<button class="ctx-item" id="refreshAllBtn" ${ui.refreshBusy ? 'disabled' : ''}>${SF.refresh} Tümünü Canlı Güncelle</button>`
+              ? `<button class="ctx-item" id="refreshAllBtn" ${ui.refreshBusy ? 'disabled' : ''}>${SF.refresh} Tümünü Canlı Güncelle</button>
+                 <button class="ctx-item" id="openSnapshotsBtn"><svg class="sf-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg> Zaman Makinesi (${state.snapshots.length})</button>`
               : ''}
             <button class="ctx-item" id="openOsymBtn">${SF.share} ÖSYM AİS & Paylaşım Linki</button>
             <button class="ctx-item" id="printReportBtn">${SF.print} PDF Raporu / Yazdır</button>
@@ -1787,6 +1792,8 @@ function renderProgressionPanel() {
 
   const rings = computeGoalRingsAndWeeklyPlan(state.programs, state.myNets);
   const leverage = analyzeSubjectLeverage(state.myNets, state.examHistory, topProg, state.targetRank);
+  const prs = computeExamPersonalRecords(state.examHistory);
+  const hasPrs = Boolean(prs.bestTyt || prs.bestAyt || prs.bestInstRank);
 
   return `
     <!-- Feature 3: Apple Fitness Activity Rings & YKS 2027 Weekly Net Planner -->
@@ -1879,6 +1886,25 @@ function renderProgressionPanel() {
           <button class="seg-btn seg-btn-sm ${ui.progressionType === 'AYT' ? 'active' : ''}" data-prog-type="AYT">AYT</button>
         </div>
       </div>
+      ${hasPrs
+        ? `<div class="pr-strip tabular" style="margin-bottom:12px;">
+            <div class="pr-tile">
+              <span>🏆 En Yüksek TYT (PR)</span>
+              <strong>${prs.bestTyt ? `${formatNet(prs.bestTyt.total)} net` : '—'}</strong>
+              <small>${escapeHtml(prs.bestTyt?.examName || 'TYT PDF bekleniyor')}</small>
+            </div>
+            <div class="pr-tile">
+              <span>🏆 En Yüksek AYT (PR)</span>
+              <strong>${prs.bestAyt ? `${formatNet(prs.bestAyt.total)} net` : '—'}</strong>
+              <small>${escapeHtml(prs.bestAyt?.examName || 'AYT PDF bekleniyor')}</small>
+            </div>
+            <div class="pr-tile">
+              <span>🏆 En İyi Kurum Sırası</span>
+              <strong>${prs.bestInstRank ? `#${prs.bestInstRank.rank}${prs.bestInstRank.totalParticipants ? ` / ${prs.bestInstRank.totalParticipants}` : ''}` : '—'}</strong>
+              <small>${escapeHtml(prs.bestInstRank?.examName || 'Kurum sıralı PDF bekleniyor')}</small>
+            </div>
+          </div>`
+        : ''}
       ${renderExamProgressionChart(state.examHistory, {
         examType: ui.progressionType,
         targetNet,
@@ -2587,6 +2613,25 @@ function renderDrawer() {
               </div>
 
               <div style="border-top:0.5px solid var(--separator-subtle);padding-top:10px;">
+                <div style="font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:7px;">Tek Tıkla Hızlı Araştırma</div>
+                <div class="research-shortcuts-grid">
+                  ${(() => {
+                    const qBase = `${p.university} ${p.department}`;
+                    const shortcuts = [
+                      { label: 'Ders Müfredatı', url: `https://www.google.com/search?q=${encodeURIComponent(`"${p.university}" "${p.department}" ders müfredatı`)}` },
+                      { label: 'YouTube Yorumları', url: `https://www.youtube.com/results?search_query=${encodeURIComponent(qBase)}` },
+                      { label: 'LinkedIn Mezunlar', url: `https://www.google.com/search?q=${encodeURIComponent(`site:linkedin.com/in "${p.university}" "${p.department}"`)}` },
+                      { label: 'Kampüs & Yurt Haritası', url: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${p.university} ${p.faculty || p.department} ${p.city}`)}` },
+                      { label: 'Erasmus & Değişim', url: `https://www.google.com/search?q=${encodeURIComponent(`"${p.university}" "${p.department}" erasmus anlaşmaları`)}` },
+                    ];
+                    return shortcuts
+                      .map((sc) => `<a class="research-shortcut-chip" href="${sc.url}" target="_blank" rel="noopener">${sc.label} ${SF.external}</a>`)
+                      .join('');
+                  })()}
+                </div>
+              </div>
+
+              <div style="border-top:0.5px solid var(--separator-subtle);padding-top:10px;">
                 <div style="font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:7px;">Kaydedilen Linkler (YouTube, Müfredat PDF, Forum)</div>
                 ${(p.links || []).length
                   ? `<div class="link-list">
@@ -3182,35 +3227,61 @@ function renderMyNetsModal() {
         <label class="pdf-drop-card" id="tytPdfDrop">
           ${SF.upload}
           <strong>TYT Deneme PDF Yükle</strong>
-          <span>Dershane liste PDF'inden otomatik oku</span>
-          <input type="file" id="tytPdfInput" accept="application/pdf,.pdf" style="display:none;" />
+          <span>Tekli veya çoklu PDF seç / sürükle-bırak</span>
+          <input type="file" id="tytPdfInput" accept="application/pdf,.pdf" multiple style="display:none;" />
         </label>
         <label class="pdf-drop-card" id="aytPdfDrop">
           ${SF.upload}
           <strong>AYT Deneme PDF Yükle</strong>
-          <span>Dershane liste PDF'inden otomatik oku</span>
-          <input type="file" id="aytPdfInput" accept="application/pdf,.pdf" style="display:none;" />
+          <span>Tekli veya çoklu PDF seç / sürükle-bırak</span>
+          <input type="file" id="aytPdfInput" accept="application/pdf,.pdf" multiple style="display:none;" />
         </label>
       </div>
 
       <div id="pdfParseStatus"></div>
     </div>
 
+    ${(() => {
+      const prs = computeExamPersonalRecords(state.examHistory);
+      if (!prs.bestTyt && !prs.bestAyt && !prs.bestInstRank) return '';
+      return `<div class="pr-strip tabular">
+        <div class="pr-tile">
+          <span>🏆 En Yüksek TYT</span>
+          <strong>${prs.bestTyt ? `${formatNet(prs.bestTyt.total)} net` : '—'}</strong>
+          <small>${escapeHtml(prs.bestTyt?.examName || '—')}</small>
+        </div>
+        <div class="pr-tile">
+          <span>🏆 En Yüksek AYT</span>
+          <strong>${prs.bestAyt ? `${formatNet(prs.bestAyt.total)} net` : '—'}</strong>
+          <small>${escapeHtml(prs.bestAyt?.examName || '—')}</small>
+        </div>
+        <div class="pr-tile">
+          <span>🏆 En İyi Kurum Sırası</span>
+          <strong>${prs.bestInstRank ? `#${prs.bestInstRank.rank}${prs.bestInstRank.totalParticipants ? ` / ${prs.bestInstRank.totalParticipants}` : ''}` : '—'}</strong>
+          <small>${escapeHtml(prs.bestInstRank?.examName || '—')}</small>
+        </div>
+      </div>`;
+    })()}
+
     ${(state.examHistory || []).length
       ? `<div>
           <div class="section-heading" style="margin-bottom:7px;"><span>Yüklenen Denemeler (${state.examHistory.length})</span></div>
           <div class="exam-history-list">
             ${state.examHistory
-              .slice(0, 12)
+              .slice(0, 20)
               .map(
                 (ex, idx) => `<div class="exam-history-row">
                   <div style="min-width:0;">
                     <span class="pill ${ex.examType === 'TYT' ? 'pill-accent' : 'pill-risk-guvenli'}" style="margin-right:6px;">${escapeHtml(ex.examType)}</span>
                     <strong>${escapeHtml(ex.examName)}</strong>
-                    <div style="font-size:11.5px;color:var(--text-tertiary);margin-top:2px;">${escapeHtml(ex.examDate || ex.importedAt?.slice(0, 10) || '')} · Toplam: <strong class="tabular">${formatNet(ex.total)} net</strong></div>
+                    <div style="font-size:11.5px;color:var(--text-tertiary);margin-top:2px;">
+                      ${escapeHtml(ex.examDate || ex.importedAt?.slice(0, 10) || '')} · Toplam: <strong class="tabular">${formatNet(ex.total)} net</strong>
+                      ${ex.institutionRank ? ` · <span class="pill" style="padding:1px 6px;font-size:10.5px;">Kurum #${ex.institutionRank}${ex.totalParticipants ? `/${ex.totalParticipants}` : ''}</span>` : ''}
+                    </div>
                   </div>
                   <div style="display:flex;gap:5px;flex-shrink:0;">
                     <button type="button" class="mini-action active" data-apply-exam="${idx}">Uygula</button>
+                    <button type="button" class="mini-action" data-edit-exam="${idx}" title="Ad / tarih düzenle">Düzenle</button>
                     <button type="button" class="btn-ghost" data-del-exam="${idx}" title="Sil">${SF.close}</button>
                   </div>
                 </div>`,
@@ -3259,35 +3330,50 @@ function renderMyNetsModal() {
     </form>
   `;
 
-  async function handlePdfUpload(file, examType) {
-    if (!file) return;
+  async function handlePdfUploadBatch(fileList, examType) {
+    const files = Array.from(fileList || []).filter((f) => f && (/\.pdf$/i.test(f.name) || f.type === 'application/pdf'));
+    if (!files.length) return;
     const statusEl = document.getElementById('pdfParseStatus');
     const studentName = document.getElementById('pdfStudentName')?.value.trim() || 'Yusuf Selim Eryiğit';
     state.studentName = studentName;
 
-    statusEl.innerHTML = `<div class="info-banner">${examType} PDF taranıyor ve <strong>${escapeHtml(studentName)}</strong> aranıyor...</div>`;
-    try {
-      const parsed = await parseExamPdfFile(file, { examType, studentName });
-      if (examType === 'TYT' && parsed.tyt) {
-        state.myNets.tyt = { ...state.myNets.tyt, ...parsed.tyt };
-      } else if (examType === 'AYT' && parsed.ayt) {
-        for (const [k, v] of Object.entries(parsed.ayt)) {
+    const successes = [];
+    const failures = [];
+
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      statusEl.innerHTML = `<div class="info-banner">${examType} PDF taranıyor (${i + 1}/${files.length}): <strong>${escapeHtml(file.name)}</strong>...</div>`;
+      try {
+        const parsed = await parseExamPdfFile(file, { examType, studentName });
+        successes.push(parsed);
+        state.examHistory.unshift({
+          id: `ex-${Date.now()}-${i}`,
+          examType,
+          examName: parsed.examName,
+          examDate: parsed.examDate,
+          institutionRank: parsed.institutionRank ?? null,
+          totalParticipants: parsed.totalParticipants ?? null,
+          tyt: parsed.tyt || null,
+          ayt: parsed.ayt || null,
+          total: parsed.total,
+          importedAt: new Date().toISOString(),
+        });
+      } catch (err) {
+        failures.push(`${file.name}: ${err.message || 'Okunamadı'}`);
+      }
+    }
+
+    if (state.examHistory.length > 60) state.examHistory.length = 60;
+
+    if (successes.length) {
+      const latest = successes[successes.length - 1];
+      if (examType === 'TYT' && latest.tyt) {
+        state.myNets.tyt = { ...state.myNets.tyt, ...latest.tyt };
+      } else if (examType === 'AYT' && latest.ayt) {
+        for (const [k, v] of Object.entries(latest.ayt)) {
           if (v !== null && v !== undefined) state.myNets.ayt[k] = v;
         }
       }
-
-      state.examHistory.unshift({
-        id: `ex-${Date.now()}`,
-        examType,
-        examName: parsed.examName,
-        examDate: parsed.examDate,
-        tyt: parsed.tyt || null,
-        ayt: parsed.ayt || null,
-        total: parsed.total,
-        importedAt: new Date().toISOString(),
-      });
-      if (state.examHistory.length > 40) state.examHistory.length = 40;
-
       saveState();
       renderMyNetsModal();
       renderAll();
@@ -3295,25 +3381,50 @@ function renderMyNetsModal() {
 
       const freshStatus = document.getElementById('pdfParseStatus');
       if (freshStatus) {
-        const detail =
-          examType === 'TYT'
-            ? `Türkçe ${formatNet(parsed.tyt.turkce)} · Sosyal ${formatNet(parsed.tyt.sosyal)} · Mat ${formatNet(parsed.tyt.matematik)} · Fen ${formatNet(parsed.tyt.fen)} (Toplam ${formatNet(parsed.total)})`
-            : `Toplam ${formatNet(parsed.total)} AYT neti otomatik işlendi.`;
-        freshStatus.innerHTML = `<div class="quota-alert-good">✓ ${escapeHtml(studentName)} bulundu (${escapeHtml(parsed.examName)}) · ${escapeHtml(detail)}</div>`;
+        const lastRankTxt = latest.institutionRank
+          ? ` · Kurum Sırası: #${latest.institutionRank}${latest.totalParticipants ? `/${latest.totalParticipants}` : ''}`
+          : '';
+        const msg =
+          successes.length === 1
+            ? `✓ ${studentName} bulundu (${latest.examName}) · Toplam ${formatNet(latest.total)} net${lastRankTxt}`
+            : `✓ ${successes.length}/${files.length} ${examType} PDF toplu işlendi · Son deneme (${latest.examName}: ${formatNet(latest.total)} net) aktif edildi.`;
+        freshStatus.innerHTML =
+          `<div class="quota-alert-good">${escapeHtml(msg)}</div>` +
+          (failures.length ? `<div class="error-banner" style="margin-top:6px;">${failures.map(escapeHtml).join('<br/>')}</div>` : '');
       }
-      showToast(`${examType} netlerin PDF'den otomatik kaydedildi!`, 'success');
-    } catch (err) {
-      statusEl.innerHTML = `<div class="error-banner">${escapeHtml(err.message || 'PDF okunamadı.')}</div>`;
+      showToast(
+        successes.length > 1 ? `${successes.length} ${examType} PDF'i toplu kaydedildi!` : `${examType} netlerin PDF'den otomatik kaydedildi!`,
+        'success',
+      );
+    } else if (failures.length) {
+      statusEl.innerHTML = `<div class="error-banner">${failures.map(escapeHtml).join('<br/>')}</div>`;
     }
   }
 
   document.getElementById('tytPdfInput')?.addEventListener('change', (e) => {
-    handlePdfUpload(e.target.files?.[0], 'TYT');
+    handlePdfUploadBatch(e.target.files, 'TYT');
   });
 
   document.getElementById('aytPdfInput')?.addEventListener('change', (e) => {
-    handlePdfUpload(e.target.files?.[0], 'AYT');
+    handlePdfUploadBatch(e.target.files, 'AYT');
   });
+
+  const wirePdfDrop = (id, examType) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      el.classList.add('drag-active');
+    });
+    el.addEventListener('dragleave', () => el.classList.remove('drag-active'));
+    el.addEventListener('drop', (e) => {
+      e.preventDefault();
+      el.classList.remove('drag-active');
+      handlePdfUploadBatch(e.dataTransfer?.files, examType);
+    });
+  };
+  wirePdfDrop('tytPdfDrop', 'TYT');
+  wirePdfDrop('aytPdfDrop', 'AYT');
 
   body.querySelectorAll('[data-apply-exam]').forEach((btn) => {
     btn.addEventListener('click', () => {
@@ -3333,11 +3444,28 @@ function renderMyNetsModal() {
     });
   });
 
+  body.querySelectorAll('[data-edit-exam]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const ex = state.examHistory[Number(btn.dataset.editExam)];
+      if (!ex) return;
+      const nextName = window.prompt('Deneme adını düzenle:', ex.examName || '');
+      if (nextName === null) return;
+      if (nextName.trim()) ex.examName = nextName.trim();
+      const nextDate = window.prompt('Deneme tarihi (ör. 25.11.2026):', ex.examDate || '');
+      if (nextDate !== null) ex.examDate = nextDate.trim() || ex.examDate;
+      saveState();
+      renderMyNetsModal();
+      renderAll();
+      showToast('Deneme bilgisi güncellendi.', 'success');
+    });
+  });
+
   body.querySelectorAll('[data-del-exam]').forEach((btn) => {
     btn.addEventListener('click', () => {
       state.examHistory.splice(Number(btn.dataset.delExam), 1);
       saveState();
       renderMyNetsModal();
+      renderAll();
     });
   });
 
@@ -3501,6 +3629,142 @@ function renderOsymModal() {
       ui.osymCopiedCodes.add(code);
       renderOsymModal();
       showToast(`${code} kopyalandı.`, 'success');
+    });
+  });
+}
+
+// ============================================================================
+// Feature 4: Time Machine — Preference List Snapshots & Restore Modal
+// ============================================================================
+function openSnapshotModal() {
+  const overlay = document.getElementById('snapshotModalOverlay');
+  if (!overlay) return;
+  renderSnapshotModal();
+  overlay.classList.add('open');
+  overlay.setAttribute('aria-hidden', 'false');
+}
+
+function closeSnapshotModal() {
+  const overlay = document.getElementById('snapshotModalOverlay');
+  if (!overlay) return;
+  overlay.classList.remove('open');
+  overlay.setAttribute('aria-hidden', 'true');
+}
+
+function createManualSnapshot(label) {
+  syncActiveScenarioPointers();
+  const sc = getActiveScenario();
+  const cleanLabel =
+    String(label || '').trim() ||
+    `${new Date().toLocaleDateString('tr-TR', { day: 'numeric', month: 'short' })} — ${sc?.name || 'Liste'}`;
+  state.snapshots.unshift({
+    id: `snap-${Date.now()}`,
+    label: cleanLabel,
+    scenarioId: sc?.id || state.activeScenarioId,
+    scenarioName: sc?.name || 'Plan A',
+    targetRank: state.targetRank,
+    programs: structuredClone(state.programs),
+    createdAt: new Date().toISOString(),
+  });
+  if (state.snapshots.length > 25) state.snapshots.length = 25;
+  saveState();
+}
+
+function renderSnapshotModal() {
+  const body = document.getElementById('snapshotModalBody');
+  if (!body) return;
+  const sc = getActiveScenario();
+  const defaultLbl = `${new Date().toLocaleDateString('tr-TR', { day: 'numeric', month: 'long' })} — ${sc?.name || 'Liste'}`;
+
+  body.innerHTML = `
+    <div class="info-banner">
+      Tercih haftasında sıralamanı değiştirirken eski versiyonları kaybetme. İstediğin an <strong>Anlık Görüntü</strong> al ve tek tıkla geri yükle.
+    </div>
+
+    <form id="createSnapshotForm" style="display:flex;gap:8px;flex-wrap:wrap;">
+      <input id="snapshotLabelInput" class="input" type="text" placeholder="Örn: Rehber Hoca Sonrası (${escapeHtml(defaultLbl)})" style="flex:1;min-width:220px;" />
+      <button type="submit" class="btn btn-primary" ${!state.programs.length ? 'disabled' : ''}>${SF.plus} Anlık Görüntü Al</button>
+    </form>
+
+    <div class="section-heading">
+      <span>Kayıtlı Anlık Görüntüler</span>
+      <span class="tabular">${state.snapshots.length} / 25</span>
+    </div>
+
+    ${state.snapshots.length
+      ? `<div class="snapshot-list">
+          ${state.snapshots
+            .map((sn, idx) => {
+              const diff = diffProgramLists(state.programs, sn.programs);
+              let diffTxt = 'Mevcut listeyle birebir aynı';
+              let diffTone = 'var(--green)';
+              if (!diff.identical) {
+                const parts = [];
+                if (diff.addedSince) parts.push(`+${diff.addedSince} yeni`);
+                if (diff.removedSince) parts.push(`-${diff.removedSince} eksik`);
+                if (diff.movedCount) parts.push(`${diff.movedCount} sıra farkı`);
+                diffTxt = parts.join(' · ');
+                diffTone = 'var(--accent)';
+              }
+              return `<div class="snapshot-row">
+                <div style="min-width:0;">
+                  <div style="font-weight:650;font-size:13.5px;">${escapeHtml(sn.label)}</div>
+                  <div style="font-size:11.5px;color:var(--text-secondary);margin-top:2px;">
+                    ${escapeHtml(sn.scenarioName)} · <strong class="tabular">${sn.programs.length} bölüm</strong> · ${formatRelativeTime(sn.createdAt)}
+                  </div>
+                  <div style="font-size:11.5px;font-weight:600;color:${diffTone};margin-top:3px;" class="tabular">${escapeHtml(diffTxt)}</div>
+                </div>
+                <div style="display:flex;gap:6px;flex-shrink:0;">
+                  <button type="button" class="btn btn-sm ${diff.identical ? 'btn-soft' : 'btn-primary'}" data-restore-snap="${idx}" ${diff.identical ? 'disabled' : ''}>
+                    ${diff.identical ? 'Aktif' : 'Geri Yükle'}
+                  </button>
+                  <button type="button" class="btn btn-ghost btn-icon btn-sm" data-del-snap="${idx}" title="Sil">${SF.trash}</button>
+                </div>
+              </div>`;
+            })
+            .join('')}
+        </div>`
+      : `<div class="chart-empty">Henüz kayıtlı bir liste anlık görüntüsü yok. Yukarıdan ilk anlık görüntünü kaydedebilirsin.</div>`}
+  `;
+
+  document.getElementById('createSnapshotForm')?.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const val = document.getElementById('snapshotLabelInput')?.value.trim();
+    createManualSnapshot(val || defaultLbl);
+    renderSnapshotModal();
+    renderAll();
+    showToast('Liste anlık görüntüsü kaydedildi!', 'success');
+  });
+
+  body.querySelectorAll('[data-restore-snap]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const sn = state.snapshots[Number(btn.dataset.restoreSnap)];
+      if (!sn) return;
+      if (!window.confirm(`"${sn.label}" kaydındaki ${sn.programs.length} bölümlük sıraya dönülsün mü? (Mevcut sıran önce otomatik yedeklenecek.)`)) {
+        return;
+      }
+      // Auto-backup current state before restoring so nothing is ever lost
+      const curDiff = diffProgramLists(state.programs, sn.programs);
+      if (!curDiff.identical && state.programs.length) {
+        createManualSnapshot(`Otomatik Yedek (Geri Yükleme Öncesi)`);
+      }
+      state.programs = structuredClone(sn.programs);
+      if (sn.targetRank) state.targetRank = sn.targetRank;
+      syncActiveScenarioPointers();
+      ui.sortBy = 'manual';
+      saveState();
+      renderSnapshotModal();
+      renderAll();
+      showToast(`"${sn.label}" geri yüklendi!`, 'success');
+    });
+  });
+
+  body.querySelectorAll('[data-del-snap]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      state.snapshots.splice(Number(btn.dataset.delSnap), 1);
+      saveState();
+      renderSnapshotModal();
+      renderAll();
     });
   });
 }
@@ -3938,6 +4202,10 @@ function bindPreferencesEvents() {
   document.getElementById('refreshAllBtn')?.addEventListener('click', () => {
     prefDropdown?.classList.remove('open');
     refreshAllProgramsLive();
+  });
+  document.getElementById('openSnapshotsBtn')?.addEventListener('click', () => {
+    prefDropdown?.classList.remove('open');
+    openSnapshotModal();
   });
   document.getElementById('dismissRefreshDiffBtn')?.addEventListener('click', () => {
     ui.refreshDiff = null;
@@ -4391,6 +4659,11 @@ async function init() {
     if (e.target.id === 'osymModalOverlay') closeOsymModal();
   });
 
+  document.getElementById('closeSnapshotModalBtn')?.addEventListener('click', closeSnapshotModal);
+  document.getElementById('snapshotModalOverlay')?.addEventListener('click', (e) => {
+    if (e.target.id === 'snapshotModalOverlay') closeSnapshotModal();
+  });
+
   document.getElementById('openSyncBtn')?.addEventListener('click', openSyncModal);
   document.getElementById('closeSyncModalBtn')?.addEventListener('click', closeSyncModal);
   document.getElementById('syncModalOverlay')?.addEventListener('click', (e) => {
@@ -4427,13 +4700,14 @@ async function init() {
       closeMyNetsModal();
       closeAbroadModal();
       closeOsymModal();
+      closeSnapshotModal();
       closeSyncModal();
     }
   });
 
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker
-      .register('./sw.js?v=13')
+      .register('./sw.js?v=14')
       .then((reg) => reg.update().catch(() => {}))
       .catch(() => {});
   }
