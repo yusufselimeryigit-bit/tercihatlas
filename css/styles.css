@@ -3076,3 +3076,222 @@ a { color: var(--accent); text-decoration: none; }
   }
   .apple-list-ord { width: 20px; }
 }
+
+/* ==========================================================================
+   v17: Interactive Stocks Chart Tooltip, Mobile Sliding Pill,
+   Spotlight Keyboard Nav, Refined Card Metrics/DnD & Drawer Scroll Summary
+   ========================================================================== */
+.interactive-chart-wrap {
+  position: relative;
+  user-select: none;
+  touch-action: pan-y;
+}
+
+.interactive-chart-wrap svg {
+  cursor: crosshair;
+}
+
+.chart-crosshair,
+.chart-active-ring {
+  pointer-events: none;
+  transition: opacity 140ms ease;
+}
+
+.chart-tooltip {
+  position: absolute;
+  top: 6px;
+  left: 0;
+  z-index: 12;
+  pointer-events: none;
+  background: var(--glass-strong);
+  backdrop-filter: saturate(220%) blur(26px);
+  -webkit-backdrop-filter: saturate(220%) blur(26px);
+  border-radius: 12px;
+  padding: 7px 11px;
+  box-shadow: var(--shadow-float);
+  font-size: 11.5px;
+  line-height: 1.35;
+  white-space: nowrap;
+  opacity: 0;
+  transform: translate(-50%, 4px) scale(0.96);
+  transition: opacity 150ms ease, transform 180ms var(--spring);
+}
+
+.chart-tooltip.open {
+  opacity: 1;
+  transform: translate(-50%, 0) scale(1);
+}
+
+.chart-tooltip-title {
+  font-size: 10.5px;
+  font-weight: 650;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.chart-tooltip-main {
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.chart-tooltip-sub {
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin-top: 1px;
+}
+
+/* Feature 2: iOS 26 Floating Mobile Nav Sliding Liquid Glass Capsule */
+.mobile-nav {
+  position: fixed;
+}
+
+.mobile-nav-thumb {
+  position: absolute;
+  top: 5px;
+  bottom: 5px;
+  left: 0;
+  width: 0;
+  border-radius: var(--r-pill);
+  background: var(--accent-soft);
+  box-shadow: inset 0 0.5px 0 var(--glass-rim);
+  transition:
+    transform 400ms cubic-bezier(0.32, 1.18, 0.56, 1),
+    width 400ms cubic-bezier(0.32, 1.18, 0.56, 1);
+  will-change: transform, width;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0;
+}
+
+.mobile-nav-thumb.ready { opacity: 1; }
+
+.mobile-nav-btn {
+  position: relative;
+  z-index: 1;
+}
+
+.mobile-nav.has-thumb .mobile-nav-btn.active {
+  background: transparent;
+}
+
+/* Feature 4: macOS Spotlight Keyboard Selection + Hint Footer */
+.search-result-row.kbd-active {
+  background: var(--accent-soft);
+  box-shadow: 0 0 0 1.5px var(--accent);
+}
+
+.spotlight-footer-hint {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 14px;
+  padding: 9px 18px;
+  border-top: 0.5px solid var(--separator);
+  font-size: 11px;
+  color: var(--text-tertiary);
+  background: var(--surface-secondary);
+}
+
+.spotlight-footer-hint kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 19px;
+  height: 18px;
+  padding: 0 5px;
+  margin-right: 3px;
+  border-radius: 5px;
+  background: var(--surface);
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08), 0 0 0 0.5px var(--separator);
+}
+
+/* Feature 5: Cleaner Card Metric Chips, Hover-Reveal Reorder & Elevated DnD */
+.prog-card .metric-group {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.prog-card .metric-item {
+  background: var(--surface-secondary);
+  border-radius: 11px;
+  padding: 7px 11px;
+  min-width: 82px;
+}
+
+.card-reorder-btns {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: opacity 180ms ease;
+}
+
+@media (hover: hover) {
+  .prog-card .card-reorder-btns {
+    opacity: 0;
+    pointer-events: none;
+  }
+  .prog-card:hover .card-reorder-btns,
+  .prog-card:focus-within .card-reorder-btns {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+
+.prog-card.dragging {
+  transform: scale(1.02);
+  box-shadow: var(--shadow-float);
+  opacity: 0.72;
+}
+
+.prog-card.drag-over {
+  box-shadow: 0 0 0 2px var(--accent), var(--shadow-card-hover);
+  transform: translateY(-2px);
+}
+
+/* Feature 6: Detail Sheet Scroll Summary Pill + Thin Progress Bar */
+.drawer-scroll-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 11px;
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  box-shadow: var(--shadow-thumb);
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--text);
+  opacity: 0;
+  transform: translateY(4px) scale(0.96);
+  pointer-events: none;
+  transition: opacity 200ms ease, transform 220ms var(--spring);
+}
+
+.drawer-header.body-scrolled .drawer-scroll-pill {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+
+.drawer-scroll-progress {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 2px;
+  width: 0%;
+  background: var(--accent);
+  opacity: 0;
+  transition: opacity 180ms ease;
+  pointer-events: none;
+}
+
+.drawer-header.body-scrolled .drawer-scroll-progress {
+  opacity: 0.9;
+}

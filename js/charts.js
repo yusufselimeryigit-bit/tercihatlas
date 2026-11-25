@@ -122,13 +122,25 @@ export function renderDetailTrendChart(history, mode = 'rank') {
     })
     .join('');
 
+  const escAttr = (s) =>
+    String(s ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/"/g, '&quot;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+
   const nodes = coords
     .map((c, idx) => {
       const label = mode === 'rank' ? formatRank(c.p[key]) : formatScore(c.p[key]);
       const labelY = Math.max(16, c.y - 13);
       const isLatest = idx === coords.length - 1;
+      const tipMain =
+        mode === 'rank'
+          ? `Sıra: ${formatRank(c.p.rank)}${c.p.minScore ? ` · ${formatScore(c.p.minScore)} p` : ''}`
+          : `Puan: ${formatScore(c.p.minScore)}${c.p.rank ? ` · Sıra ${formatRank(c.p.rank)}` : ''}`;
+      const tipSub = c.p.quota ? `Kontenjan: ${c.p.quota}${c.p.placed ? ` / Yerleşen: ${c.p.placed}` : ''}` : '';
       return `
-        <g class="chart-node">
+        <g class="chart-node chart-hit-pt" data-cx="${c.x.toFixed(1)}" data-cy="${c.y.toFixed(1)}" data-tip-title="${escAttr(c.p.year)}" data-tip-main="${escAttr(tipMain)}" data-tip-sub="${escAttr(tipSub)}">
           ${isLatest ? `<circle cx="${c.x.toFixed(1)}" cy="${c.y.toFixed(1)}" r="9" fill="${color}" fill-opacity="0.16"/>` : ''}
           <circle cx="${c.x.toFixed(1)}" cy="${c.y.toFixed(1)}" r="${isLatest ? '4.8' : '4'}" fill="var(--surface)" stroke="${color}" stroke-width="2.4"/>
           <text x="${c.x.toFixed(1)}" y="${labelY.toFixed(1)}" text-anchor="middle" class="chart-val-label ${isLatest ? 'latest' : ''}">${label}</text>
@@ -137,18 +149,23 @@ export function renderDetailTrendChart(history, mode = 'rank') {
     })
     .join('');
 
-  return `<svg class="detail-chart" viewBox="0 0 ${width} ${height}" width="100%" role="img" aria-label="Yıllık trend grafiği">
-    <defs>
-      <linearGradient id="${gradId}" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0%" stop-color="${color}" stop-opacity="0.22"/>
-        <stop offset="100%" stop-color="${color}" stop-opacity="0.01"/>
-      </linearGradient>
-    </defs>
-    ${gridLines}
-    ${areaPath ? `<path d="${areaPath}" fill="url(#${gradId})"/>` : ''}
-    ${coords.length > 1 ? `<path d="${linePath}" fill="none" stroke="${color}" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>` : ''}
-    ${nodes}
-  </svg>`;
+  return `<div class="interactive-chart-wrap" data-vb-w="${width}" data-vb-h="${height}">
+    <svg class="detail-chart" viewBox="0 0 ${width} ${height}" width="100%" role="img" aria-label="Yıllık trend grafiği">
+      <defs>
+        <linearGradient id="${gradId}" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="${color}" stop-opacity="0.22"/>
+          <stop offset="100%" stop-color="${color}" stop-opacity="0.01"/>
+        </linearGradient>
+      </defs>
+      ${gridLines}
+      ${areaPath ? `<path d="${areaPath}" fill="url(#${gradId})"/>` : ''}
+      ${coords.length > 1 ? `<path d="${linePath}" fill="none" stroke="${color}" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>` : ''}
+      <line class="chart-crosshair" x1="0" y1="${padT - 8}" x2="0" y2="${height - padB}" stroke="${color}" stroke-width="1.2" stroke-dasharray="3 3" opacity="0"/>
+      <circle class="chart-active-ring" cx="0" cy="0" r="8" fill="${color}" fill-opacity="0.2" stroke="${color}" stroke-width="2" opacity="0"/>
+      ${nodes}
+    </svg>
+    <div class="chart-tooltip" aria-hidden="true"></div>
+  </div>`;
 }
 
 /**
@@ -262,12 +279,36 @@ export function renderExamProgressionChart(exams, { examType = 'TYT', targetNet 
       </text>`;
   }
 
+  const escAttr = (s) =>
+    String(s ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/"/g, '&quot;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+
   const nodes = coords
     .map((c, idx) => {
       const isLast = idx === coords.length - 1;
       const valTxt = Number(c.e.total).toLocaleString('tr-TR', { maximumFractionDigits: 2 });
       const shortLbl = (c.e.examDate || c.e.examName || `#${idx + 1}`).slice(0, 12);
-      return `<g>
+      const tipTitle = `${c.e.examName || examType}${c.e.examDate ? ` (${c.e.examDate})` : ''}`;
+      const tipMain = `${examType} Toplam: ${valTxt} net`;
+      const parts = [];
+      if (examType === 'TYT' && c.e.tyt) {
+        if (c.e.tyt.turkce != null) parts.push(`Tr ${c.e.tyt.turkce}`);
+        if (c.e.tyt.matematik != null) parts.push(`Mat ${c.e.tyt.matematik}`);
+        if (c.e.tyt.fen != null) parts.push(`Fen ${c.e.tyt.fen}`);
+        if (c.e.tyt.sosyal != null) parts.push(`Sos ${c.e.tyt.sosyal}`);
+      } else if (examType === 'AYT' && c.e.ayt) {
+        if (c.e.ayt.matematik != null) parts.push(`Mat ${c.e.ayt.matematik}`);
+        if (c.e.ayt.fizik != null) parts.push(`Fiz ${c.e.ayt.fizik}`);
+        if (c.e.ayt.kimya != null) parts.push(`Kim ${c.e.ayt.kimya}`);
+        if (c.e.ayt.biyoloji != null) parts.push(`Biy ${c.e.ayt.biyoloji}`);
+      }
+      if (c.e.institutionRank) parts.push(`Kurum #${c.e.institutionRank}`);
+      const tipSub = parts.join(' · ');
+
+      return `<g class="chart-hit-pt" data-cx="${c.x.toFixed(1)}" data-cy="${c.y.toFixed(1)}" data-tip-title="${escAttr(tipTitle)}" data-tip-main="${escAttr(tipMain)}" data-tip-sub="${escAttr(tipSub)}">
         ${isLast ? `<circle cx="${c.x.toFixed(1)}" cy="${c.y.toFixed(1)}" r="9" fill="${color}" fill-opacity="0.18"/>` : ''}
         <circle cx="${c.x.toFixed(1)}" cy="${c.y.toFixed(1)}" r="${isLast ? '5' : '4'}" fill="var(--surface)" stroke="${color}" stroke-width="2.4"/>
         <text x="${c.x.toFixed(1)}" y="${Math.max(16, c.y - 12).toFixed(1)}" text-anchor="middle" class="chart-val-label ${isLast ? 'latest' : ''}">${valTxt}</text>
@@ -276,19 +317,24 @@ export function renderExamProgressionChart(exams, { examType = 'TYT', targetNet 
     })
     .join('');
 
-  return `<svg class="detail-chart" viewBox="0 0 ${width} ${height}" width="100%" role="img" aria-label="${examType} deneme gelişim grafiği">
-    <defs>
-      <linearGradient id="${gradId}" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0%" stop-color="${color}" stop-opacity="0.24"/>
-        <stop offset="100%" stop-color="${color}" stop-opacity="0.01"/>
-      </linearGradient>
-    </defs>
-    ${gridLines}
-    ${targetLineSvg}
-    ${areaPath ? `<path d="${areaPath}" fill="url(#${gradId})"/>` : ''}
-    ${coords.length > 1 ? `<path d="${linePath}" fill="none" stroke="${color}" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>` : ''}
-    ${nodes}
-  </svg>`;
+  return `<div class="interactive-chart-wrap" data-vb-w="${width}" data-vb-h="${height}">
+    <svg class="detail-chart" viewBox="0 0 ${width} ${height}" width="100%" role="img" aria-label="${examType} deneme gelişim grafiği">
+      <defs>
+        <linearGradient id="${gradId}" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="${color}" stop-opacity="0.24"/>
+          <stop offset="100%" stop-color="${color}" stop-opacity="0.01"/>
+        </linearGradient>
+      </defs>
+      ${gridLines}
+      ${targetLineSvg}
+      ${areaPath ? `<path d="${areaPath}" fill="url(#${gradId})"/>` : ''}
+      ${coords.length > 1 ? `<path d="${linePath}" fill="none" stroke="${color}" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>` : ''}
+      <line class="chart-crosshair" x1="0" y1="${padT - 8}" x2="0" y2="${height - padB}" stroke="${color}" stroke-width="1.2" stroke-dasharray="3 3" opacity="0"/>
+      <circle class="chart-active-ring" cx="0" cy="0" r="8" fill="${color}" fill-opacity="0.22" stroke="${color}" stroke-width="2" opacity="0"/>
+      ${nodes}
+    </svg>
+    <div class="chart-tooltip" aria-hidden="true"></div>
+  </div>`;
 }
 
 /**

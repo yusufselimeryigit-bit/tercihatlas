@@ -8,10 +8,10 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <meta name="apple-mobile-web-app-title" content="TercihAtlas" />
   <title>TercihAtlas — YKS 2027 Tercih & Üniversite Rehberi</title>
-  <link rel="icon" type="image/png" sizes="64x64" href="favicon.png?v=16" />
-  <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png?v=16" />
-  <link rel="manifest" href="manifest.json?v=16" />
-  <link rel="stylesheet" href="css/styles.css?v=16" />
+  <link rel="icon" type="image/png" sizes="64x64" href="favicon.png?v=17" />
+  <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png?v=17" />
+  <link rel="manifest" href="manifest.json?v=17" />
+  <link rel="stylesheet" href="css/styles.css?v=17" />
 </head>
 <body>
   <!-- macOS Tahoe / iPadOS Floating Liquid Glass Top Navigation -->
@@ -70,7 +70,8 @@
   <main class="main" id="mainRoot"></main>
 
   <!-- iOS 26 Floating Liquid Glass Bottom Tab Capsule (Mobile / Portrait Tablet) -->
-  <nav class="mobile-nav" id="mobileNav" aria-label="Mobil navigasyon">
+  <nav class="mobile-nav has-thumb" id="mobileNav" aria-label="Mobil navigasyon">
+    <div class="mobile-nav-thumb" id="mobileNavThumb" aria-hidden="true"></div>
     <button class="mobile-nav-btn active" data-mobile-tab="preferences">
       <svg class="sf-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="3.5"/><path d="M7.5 9.5h9M7.5 14h5.5"/></svg>
       <span>Tercihler</span>
@@ -139,6 +140,11 @@
         <div id="spotlightLocalHits"></div>
         <div id="addModalFeedback"></div>
         <div id="addModalPreview"></div>
+      </div>
+      <div class="spotlight-footer-hint">
+        <span><kbd>↑</kbd><kbd>↓</kbd> Gezin</span>
+        <span><kbd>↵</kbd> Aç / Ara</span>
+        <span><kbd>Esc</kbd> Kapat</span>
       </div>
     </div>
   </div>
@@ -243,6 +249,6 @@
   <!-- Floating Pill Toasts -->
   <div class="toast-container" id="toastContainer"></div>
 
-  <script type="module" src="js/app.js?v=16"></script>
+  <script type="module" src="js/app.js?v=17"></script>
 </body>
 </html>

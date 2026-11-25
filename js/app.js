@@ -13,7 +13,7 @@ import {
   getAytFieldsForScoreType,
   generateSyncKey,
   exportProgramsToCsv,
-} from './utils.js?v=16';
+} from './utils.js?v=17';
 import {
   getApiBase,
   setCustomApiBase,
@@ -27,7 +27,7 @@ import {
   pushCloudSync,
   createShareSnapshot,
   fetchShareSnapshot,
-} from './api.js?v=16';
+} from './api.js?v=17';
 import {
   renderSparkline,
   renderDetailTrendChart,
@@ -35,7 +35,7 @@ import {
   renderExamProgressionChart,
   renderMiniNetSparkline,
   renderAppleActivityRings,
-} from './charts.js?v=16';
+} from './charts.js?v=17';
 import {
   compute2027Projection,
   compareWithMyNets,
@@ -50,15 +50,15 @@ import {
   compareScenarios,
   computeExamPersonalRecords,
   diffProgramLists,
-} from './analytics.js?v=16';
-import { ABROAD_PRESETS, DEFAULT_ABROAD_TOOLS, createAbroadRecord, renderAbroadView } from './abroad.js?v=16';
-import { parseExamPdfFile } from './pdf-parser.js?v=16';
+} from './analytics.js?v=17';
+import { ABROAD_PRESETS, DEFAULT_ABROAD_TOOLS, createAbroadRecord, renderAbroadView } from './abroad.js?v=17';
+import { parseExamPdfFile } from './pdf-parser.js?v=17';
 import {
   renderTurkeyCampusMap,
   renderCostCalculator,
   renderTimelineView,
   downloadTimelineIcs,
-} from './map-cost.js?v=16';
+} from './map-cost.js?v=17';
 
 const STATE_KEY = 'tercihatlas_state_v1';
 const SYNC_KEY_STORAGE = 'tercihatlas_sync_key';
@@ -188,6 +188,7 @@ const ui = {
   dragCode: null,
   osymCopiedCodes: new Set(),
   lastShareUrl: '',
+  spotlightIdx: -1,
   readOnlyShare: null, // { title, ownerName, sharedAt } when viewing ?share=...
 };
 
@@ -924,8 +925,111 @@ function updateDesktopNavThumb({ animate = true } = {}) {
   navGlideTimer = setTimeout(() => navThumb.classList.remove('gliding'), 360);
 }
 
+function updateMobileNavThumb({ animate = true } = {}) {
+  const mNav = document.getElementById('mobileNav');
+  if (!mNav || mNav.offsetWidth === 0) return;
+  const activeBtn = mNav.querySelector('.mobile-nav-btn.active');
+  if (!activeBtn) return;
+
+  let thumb = document.getElementById('mobileNavThumb') || mNav.querySelector('.mobile-nav-thumb');
+  if (!thumb) {
+    thumb = document.createElement('div');
+    thumb.id = 'mobileNavThumb';
+    thumb.className = 'mobile-nav-thumb';
+    mNav.prepend(thumb);
+  }
+  mNav.classList.add('has-thumb');
+
+  const navRect = mNav.getBoundingClientRect();
+  const btnRect = activeBtn.getBoundingClientRect();
+  const targetLeft = Math.round((btnRect.left - navRect.left) * 10) / 10;
+  const targetWidth = Math.round(btnRect.width * 10) / 10;
+
+  const isFirst = !thumb.classList.contains('ready');
+  if (isFirst || !animate) {
+    thumb.style.transition = 'none';
+    thumb.style.width = `${targetWidth}px`;
+    thumb.style.transform = `translate3d(${targetLeft}px, 0, 0)`;
+    void thumb.offsetWidth;
+    thumb.classList.add('ready');
+    thumb.style.transition = '';
+    return;
+  }
+
+  thumb.style.width = `${targetWidth}px`;
+  thumb.style.transform = `translate3d(${targetLeft}px, 0, 0)`;
+}
+
+function bindInteractiveCharts(container = document) {
+  container.querySelectorAll('.interactive-chart-wrap').forEach((wrap) => {
+    const svg = wrap.querySelector('svg');
+    const tip = wrap.querySelector('.chart-tooltip');
+    const crosshair = wrap.querySelector('.chart-crosshair');
+    const ring = wrap.querySelector('.chart-active-ring');
+    const pts = Array.from(wrap.querySelectorAll('.chart-hit-pt')).map((el) => ({
+      cx: Number(el.dataset.cx),
+      cy: Number(el.dataset.cy),
+      title: el.dataset.tipTitle || '',
+      main: el.dataset.tipMain || '',
+      sub: el.dataset.tipSub || '',
+    }));
+    if (!svg || !tip || !pts.length) return;
+
+    const vbW = Number(wrap.dataset.vbW) || 560;
+
+    const showNearest = (clientX) => {
+      const rect = svg.getBoundingClientRect();
+      if (!rect.width) return;
+      const svgX = ((clientX - rect.left) / rect.width) * vbW;
+      let nearest = pts[0];
+      let bestDist = Infinity;
+      for (const p of pts) {
+        const d = Math.abs(p.cx - svgX);
+        if (d < bestDist) {
+          bestDist = d;
+          nearest = p;
+        }
+      }
+
+      if (crosshair) {
+        crosshair.setAttribute('x1', String(nearest.cx));
+        crosshair.setAttribute('x2', String(nearest.cx));
+        crosshair.setAttribute('opacity', '0.75');
+      }
+      if (ring) {
+        ring.setAttribute('cx', String(nearest.cx));
+        ring.setAttribute('cy', String(nearest.cy));
+        ring.setAttribute('opacity', '1');
+      }
+
+      tip.innerHTML = `
+        <div class="chart-tooltip-title">${escapeHtml(nearest.title)}</div>
+        <div class="chart-tooltip-main tabular">${escapeHtml(nearest.main)}</div>
+        ${nearest.sub ? `<div class="chart-tooltip-sub tabular">${escapeHtml(nearest.sub)}</div>` : ''}
+      `;
+      const pctX = (nearest.cx / vbW) * 100;
+      const clampedPct = Math.min(82, Math.max(18, pctX));
+      tip.style.left = `${clampedPct.toFixed(1)}%`;
+      tip.classList.add('open');
+      tip.setAttribute('aria-hidden', 'false');
+    };
+
+    const hide = () => {
+      if (crosshair) crosshair.setAttribute('opacity', '0');
+      if (ring) ring.setAttribute('opacity', '0');
+      tip.classList.remove('open');
+      tip.setAttribute('aria-hidden', 'true');
+    };
+
+    svg.addEventListener('pointermove', (e) => showNearest(e.clientX));
+    svg.addEventListener('pointerdown', (e) => showNearest(e.clientX));
+    svg.addEventListener('pointerleave', hide);
+  });
+}
+
 function initSlidingSegmentedControls() {
   updateDesktopNavThumb({ animate: true });
+  updateMobileNavThumb({ animate: true });
 
   requestAnimationFrame(() => {
     document.querySelectorAll('.segmented').forEach((seg, idx) => {
@@ -1107,6 +1211,7 @@ function updateHeaderBadges() {
     btn.classList.toggle('active', btn.dataset.mobileTab === activeNavKey);
   });
   updateDesktopNavThumb({ animate: true });
+  updateMobileNavThumb({ animate: true });
   updateCollapsingHeader();
 }
 
@@ -1148,6 +1253,7 @@ function renderAll() {
   if (ui.tab === 'analysis') {
     root.innerHTML = renderAnalysisView();
     bindAnalysisEvents();
+    bindInteractiveCharts(root);
     finishRender();
     return;
   }
@@ -1469,8 +1575,10 @@ function renderCardsView(programs) {
             </div>
             <div class="card-footer-actions" data-stop-card="1">
               ${manualMode
-                ? `<button class="mini-action mini-action-icon" data-move-up="${escapeHtml(p.code)}" title="Yukarı taşı">${SF.up}</button>
-                   <button class="mini-action mini-action-icon" data-move-down="${escapeHtml(p.code)}" title="Aşağı taşı">${SF.down}</button>`
+                ? `<span class="card-reorder-btns">
+                     <button class="mini-action mini-action-icon" data-move-up="${escapeHtml(p.code)}" title="Yukarı taşı">${SF.up}</button>
+                     <button class="mini-action mini-action-icon" data-move-down="${escapeHtml(p.code)}" title="Aşağı taşı">${SF.down}</button>
+                   </span>`
                 : ''}
               <button class="mini-action ${isCompared ? 'active' : ''}" data-toggle-compare="${escapeHtml(p.code)}" title="Karşılaştır">
                 ${isCompared ? `${SF.check} Kıyasla` : `${SF.plus} Kıyasla`}
@@ -2505,11 +2613,17 @@ function renderDrawer() {
   const checkDone = PROGRAM_CHECKLIST_ITEMS.filter((it) => p.checklist?.[it.key]).length;
 
   container.innerHTML = `
-    <div class="drawer-header">
+    <div class="drawer-header" id="drawerHeaderBar">
       <div style="display:flex;gap:15px;align-items:center;min-width:0;flex:1;">
         <div style="transform:scale(1.12);transform-origin:left center;">${renderAvatar(p)}</div>
         <div style="min-width:0;">
-          <div style="font-family:var(--font-display);font-size:21px;font-weight:700;letter-spacing:-0.03em;line-height:1.2;">${escapeHtml(p.department)}</div>
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+            <div style="font-family:var(--font-display);font-size:21px;font-weight:700;letter-spacing:-0.03em;line-height:1.2;">${escapeHtml(p.department)}</div>
+            <div class="drawer-scroll-pill tabular" id="drawerScrollPill">
+              <span>${formatRank(p.latestRank)}</span>
+              <span class="pill pill-risk-${escapeHtml(p.risk || 'hedef')}" style="padding:1px 7px;font-size:10.5px;">${escapeHtml((RISK_META[p.risk] || RISK_META.hedef).label)}</span>
+            </div>
+          </div>
           <div style="font-size:14.5px;font-weight:500;color:var(--text-secondary);margin-top:2px;">${escapeHtml(p.university)} · <span style="color:var(--text-tertiary)">${escapeHtml(p.faculty)}</span></div>
           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:7px;">
             <button class="pill mono" id="copyCodeBtn" title="Program kodunu kopyala" style="cursor:pointer;">${escapeHtml(p.code)} ${SF.copy}</button>
@@ -2526,6 +2640,7 @@ function renderDrawer() {
         ${!ui.readOnlyShare ? `<button class="btn btn-sm btn-danger" id="drawerDeleteBtn" title="Listeden çıkar">${SF.trash}</button>` : ''}
         <button class="btn btn-ghost btn-icon btn-sm" id="closeDrawerBtn" aria-label="Kapat">${SF.close}</button>
       </div>
+      <div class="drawer-scroll-progress" id="drawerScrollProgress"></div>
     </div>
 
     <div class="drawer-body">
@@ -2789,10 +2904,26 @@ function renderDrawer() {
   `;
 
   bindDrawerEvents(p);
+  bindInteractiveCharts(container);
   initSlidingSegmentedControls();
 }
 
 function bindDrawerEvents(p) {
+  const drawerBody = document.querySelector('#drawerContent .drawer-body');
+  const drawerHeader = document.getElementById('drawerHeaderBar');
+  const progressBar = document.getElementById('drawerScrollProgress');
+  drawerBody?.addEventListener(
+    'scroll',
+    () => {
+      const top = drawerBody.scrollTop;
+      const max = Math.max(1, drawerBody.scrollHeight - drawerBody.clientHeight);
+      const pct = Math.min(100, Math.max(0, (top / max) * 100));
+      if (drawerHeader) drawerHeader.classList.toggle('body-scrolled', top > 84);
+      if (progressBar) progressBar.style.width = `${pct.toFixed(1)}%`;
+    },
+    { passive: true },
+  );
+
   document.getElementById('closeDrawerBtn')?.addEventListener('click', closeDrawer);
   document.getElementById('copyCodeBtn')?.addEventListener('click', () => {
     navigator.clipboard?.writeText(p.code);
@@ -2922,7 +3053,26 @@ function bindDrawerEvents(p) {
 // ============================================================================
 // Spotlight Modal: Live YÖK Atlas Search + Direct Code / Link Paste
 // ============================================================================
+function getSpotlightNavItems() {
+  return Array.from(document.querySelectorAll('#spotlightLocalHits .search-result-row, #addModalPreview .search-result-row'));
+}
+
+function highlightSpotlightIdx(nextIdx) {
+  const items = getSpotlightNavItems();
+  items.forEach((el) => el.classList.remove('kbd-active'));
+  if (!items.length || nextIdx < 0) {
+    ui.spotlightIdx = -1;
+    return;
+  }
+  const wrapped = ((nextIdx % items.length) + items.length) % items.length;
+  ui.spotlightIdx = wrapped;
+  const active = items[wrapped];
+  active.classList.add('kbd-active');
+  active.scrollIntoView({ block: 'nearest' });
+}
+
 function openAddModal(prefillText = '') {
+  ui.spotlightIdx = -1;
   const overlay = document.getElementById('addModalOverlay');
   const input = document.getElementById('programCodeInput');
   document.getElementById('addModalFeedback').innerHTML = '';
@@ -4740,12 +4890,37 @@ async function init() {
 
   const spotlightInput = document.getElementById('programCodeInput');
   spotlightInput?.addEventListener('input', () => {
+    ui.spotlightIdx = -1;
     autoSizeSpotlightInput(spotlightInput);
     renderSpotlightLocalHits(spotlightInput.value);
   });
   spotlightInput?.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowDown') {
+      const items = getSpotlightNavItems();
+      if (items.length) {
+        e.preventDefault();
+        highlightSpotlightIdx(ui.spotlightIdx + 1);
+      }
+      return;
+    }
+    if (e.key === 'ArrowUp') {
+      const items = getSpotlightNavItems();
+      if (items.length) {
+        e.preventDefault();
+        highlightSpotlightIdx(ui.spotlightIdx <= 0 ? items.length - 1 : ui.spotlightIdx - 1);
+      }
+      return;
+    }
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
+      const items = getSpotlightNavItems();
+      if (ui.spotlightIdx >= 0 && items[ui.spotlightIdx]) {
+        const activeRow = items[ui.spotlightIdx];
+        const addBtn = activeRow.querySelector('[data-search-add]');
+        if (addBtn) addBtn.click();
+        else activeRow.click();
+        return;
+      }
       handleSpotlightAction();
     }
   });
@@ -4782,10 +4957,12 @@ async function init() {
   window.addEventListener('scroll', updateCollapsingHeader, { passive: true });
   window.addEventListener('resize', () => {
     updateDesktopNavThumb({ animate: false });
+    updateMobileNavThumb({ animate: false });
     initSlidingSegmentedControls();
   });
   document.fonts?.ready?.then?.(() => {
     updateDesktopNavThumb({ animate: false });
+    updateMobileNavThumb({ animate: false });
     initSlidingSegmentedControls();
   });
   document.addEventListener('click', () => {
