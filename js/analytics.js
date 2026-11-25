@@ -1091,3 +1091,221 @@ export function simulateOsymPlacement(programs, actualRank) {
     rows,
   };
 }
+
+// ============================================================================
+// ÖSYM Dead Preference & Rank Gap Auditor (Feature #6)
+// ============================================================================
+export function auditPreferenceOrder(programs, targetRank = null) {
+  if (!Array.isArray(programs) || !programs.length) {
+    return {
+      deadPreferences: [],
+      rankGaps: [],
+      safetyWarning: null,
+      issueCount: 0,
+      healthy: true,
+    };
+  }
+
+  const deadPreferences = [];
+  const seenBlocked = new Set();
+
+  for (let i = 0; i < programs.length; i += 1) {
+    const upper = programs[i];
+    const upperRank = Number(upper?.latestRank);
+    if (!upperRank || upperRank <= 0) continue;
+
+    for (let j = i + 1; j < programs.length; j += 1) {
+      const lower = programs[j];
+      const lowerRank = Number(lower?.latestRank);
+      if (!lowerRank || lowerRank <= 0) continue;
+      // Same score type comparison is the strict ÖSYM dead-preference case
+      if (upper.scoreType && lower.scoreType && upper.scoreType !== lower.scoreType) continue;
+
+      if (upperRank > lowerRank * 1.08 && !seenBlocked.has(lower.code)) {
+        seenBlocked.add(lower.code);
+        deadPreferences.push({
+          blockerOrder: i + 1,
+          blockedOrder: j + 1,
+          blocker: upper,
+          blocked: lower,
+          blockerRank: upperRank,
+          blockedRank: lowerRank,
+        });
+      }
+    }
+  }
+
+  const rankGaps = [];
+  const rankedList = programs
+    .map((p, idx) => ({ program: p, order: idx + 1, rank: Number(p?.latestRank) || 0 }))
+    .filter((x) => x.rank > 0);
+
+  for (let i = 0; i < rankedList.length - 1; i += 1) {
+    const cur = rankedList[i];
+    const next = rankedList[i + 1];
+    if (next.rank > cur.rank) {
+      const ratio = next.rank / Math.max(cur.rank, 1);
+      const diff = next.rank - cur.rank;
+      if ((ratio >= 2.0 && diff >= 4000) || diff >= 25000) {
+        rankGaps.push({
+          fromOrder: cur.order,
+          toOrder: next.order,
+          fromProgram: cur.program,
+          toProgram: next.program,
+          lowRank: cur.rank,
+          highRank: next.rank,
+          ratio: Number(ratio.toFixed(1)),
+          diff,
+        });
+      }
+    }
+  }
+
+  let safetyWarning = null;
+  const maxRank = rankedList.reduce((m, x) => Math.max(m, x.rank), 0);
+  const tgt = Number(targetRank) || 0;
+  if (tgt > 0 && maxRank > 0 && maxRank < tgt * 1.25) {
+    safetyWarning = {
+      maxRank,
+      targetRank: tgt,
+      recommendedFloor: Math.round(tgt * 1.45),
+      text: `En güvenli tercihin (${formatRank(maxRank)}), hedef sıralamanın (${formatRank(tgt)}) yeterince altında değil. Açıkta kalma riskini sıfırlamak için ~${formatRank(Math.round(tgt * 1.45))} bandına bir emniyet tercihi ekle.`,
+    };
+  }
+
+  const issueCount = deadPreferences.length + rankGaps.length + (safetyWarning ? 1 : 0);
+  return {
+    deadPreferences,
+    rankGaps,
+    safetyWarning,
+    issueCount,
+    healthy: issueCount === 0,
+  };
+}
+
+// ============================================================================
+// Interactive "+N Net Subject Boost -> Unlocked Preferences" Simulator (Feature #8)
+// ============================================================================
+export const SUBJECT_BOOST_PRESETS = {
+  SAY: [
+    { key: 'ayt.matematik', label: 'AYT Mat', step: 3, max: 40 },
+    { key: 'ayt.fizik', label: 'AYT Fizik', step: 2, max: 14 },
+    { key: 'ayt.kimya', label: 'AYT Kimya', step: 2, max: 13 },
+    { key: 'ayt.biyoloji', label: 'AYT Biyo', step: 2, max: 13 },
+    { key: 'tyt.matematik', label: 'TYT Mat', step: 3, max: 40 },
+    { key: 'tyt.turkce', label: 'TYT Türkçe', step: 3, max: 40 },
+    { key: 'tyt.fen', label: 'TYT Fen', step: 3, max: 20 },
+  ],
+  EA: [
+    { key: 'ayt.matematik', label: 'AYT Mat', step: 3, max: 40 },
+    { key: 'ayt.edebiyat', label: 'AYT Edeb.', step: 3, max: 24 },
+    { key: 'ayt.tarih1', label: 'AYT Tar-1', step: 2, max: 10 },
+    { key: 'ayt.cografya1', label: 'AYT Coğ-1', step: 2, max: 6 },
+    { key: 'tyt.matematik', label: 'TYT Mat', step: 3, max: 40 },
+    { key: 'tyt.turkce', label: 'TYT Türkçe', step: 3, max: 40 },
+  ],
+  SÖZ: [
+    { key: 'ayt.edebiyat', label: 'AYT Edeb.', step: 3, max: 24 },
+    { key: 'ayt.tarih1', label: 'AYT Tar-1', step: 2, max: 10 },
+    { key: 'ayt.tarih2', label: 'AYT Tar-2', step: 2, max: 11 },
+    { key: 'ayt.cografya2', label: 'AYT Coğ-2', step: 2, max: 11 },
+    { key: 'ayt.felsefe', label: 'AYT Felsefe', step: 2, max: 12 },
+    { key: 'tyt.turkce', label: 'TYT Türkçe', step: 3, max: 40 },
+  ],
+  DİL: [
+    { key: 'ydt', label: 'YDT', step: 5, max: 80 },
+    { key: 'tyt.turkce', label: 'TYT Türkçe', step: 3, max: 40 },
+    { key: 'tyt.matematik', label: 'TYT Mat', step: 3, max: 40 },
+    { key: 'tyt.sosyal', label: 'TYT Sosyal', step: 2, max: 20 },
+  ],
+};
+
+function getNetFieldValue(nets, key) {
+  if (key === 'ydt') return Number(nets?.ydt) || 0;
+  const [group, field] = key.split('.');
+  return Number(nets?.[group]?.[field]) || 0;
+}
+
+function cloneAndApplyBoosts(myNets, scoreType, deltas) {
+  const presets = SUBJECT_BOOST_PRESETS[scoreType] || SUBJECT_BOOST_PRESETS.SAY;
+  const maxByKey = Object.fromEntries(presets.map((p) => [p.key, p.max]));
+  const next = {
+    obp: myNets?.obp ?? 450,
+    tyt: {
+      turkce: Number(myNets?.tyt?.turkce) || 0,
+      sosyal: Number(myNets?.tyt?.sosyal) || 0,
+      matematik: Number(myNets?.tyt?.matematik) || 0,
+      fen: Number(myNets?.tyt?.fen) || 0,
+    },
+    ayt: { ...(myNets?.ayt || {}) },
+    ydt: myNets?.ydt !== undefined && myNets?.ydt !== null && myNets?.ydt !== '' ? Number(myNets.ydt) : null,
+  };
+
+  // Ensure scoreType AYT branch has numeric baseline so estimateYksRankFromNets produces that scoreType
+  for (const p of presets) {
+    if (p.key === 'ydt') {
+      if (next.ydt === null) next.ydt = 0;
+    } else {
+      const [g, f] = p.key.split('.');
+      if (next[g][f] === undefined || next[g][f] === null || next[g][f] === '') next[g][f] = 0;
+    }
+  }
+
+  let totalAdded = 0;
+  for (const [key, rawDelta] of Object.entries(deltas || {})) {
+    const delta = Number(rawDelta) || 0;
+    if (!delta) continue;
+    const cap = maxByKey[key] ?? 40;
+    if (key === 'ydt') {
+      const cur = Number(next.ydt) || 0;
+      const clamped = Math.max(0, Math.min(cap, Number((cur + delta).toFixed(2))));
+      totalAdded += clamped - cur;
+      next.ydt = clamped;
+    } else {
+      const [g, f] = key.split('.');
+      const cur = Number(next[g]?.[f]) || 0;
+      const clamped = Math.max(0, Math.min(cap, Number((cur + delta).toFixed(2))));
+      totalAdded += clamped - cur;
+      next[g][f] = clamped;
+    }
+  }
+  return { boostedNets: next, totalAdded: Number(totalAdded.toFixed(2)) };
+}
+
+export function simulateSubjectNetBoost(programs, myNets, scoreType = 'SAY', deltas = {}) {
+  const st = SUBJECT_BOOST_PRESETS[scoreType] ? scoreType : 'SAY';
+  const { boostedNets: baselineNets } = cloneAndApplyBoosts(myNets || {}, st, {});
+  const { boostedNets, totalAdded } = cloneAndApplyBoosts(myNets || {}, st, deltas);
+
+  const baseEst = estimateYksRankFromNets(baselineNets)?.[st] || null;
+  const boostEst = estimateYksRankFromNets(boostedNets)?.[st] || null;
+  if (!baseEst || !boostEst) return null;
+
+  const sameTypePrograms = (programs || []).filter((p) => !p.scoreType || p.scoreType === st);
+  const baseSim = simulateOsymPlacement(sameTypePrograms, baseEst.rank);
+  const boostSim = simulateOsymPlacement(sameTypePrograms, boostEst.rank);
+
+  const wasQualified = new Set(
+    (baseSim?.rows || []).filter((r) => r.chance === 'kesin' || r.chance === 'yuksek').map((r) => r.program.code),
+  );
+  const newlyUnlocked = (boostSim?.rows || []).filter(
+    (r) => (r.chance === 'kesin' || r.chance === 'yuksek') && !wasQualified.has(r.program.code),
+  );
+
+  return {
+    scoreType: st,
+    totalAdded,
+    baseScore: baseEst.score,
+    boostedScore: boostEst.score,
+    scoreGain: Number((boostEst.score - baseEst.score).toFixed(2)),
+    baseRank: baseEst.rank,
+    boostedRank: boostEst.rank,
+    rankGain: Math.max(0, baseEst.rank - boostEst.rank),
+    baseWinner: baseSim?.winner || null,
+    boostedWinner: boostSim?.winner || null,
+    newlyUnlocked,
+    currentValues: Object.fromEntries(
+      (SUBJECT_BOOST_PRESETS[st] || []).map((p) => [p.key, getNetFieldValue(boostedNets, p.key)]),
+    ),
+  };
+}

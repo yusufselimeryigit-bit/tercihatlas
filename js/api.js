@@ -2,7 +2,7 @@
  * TercihAtlas — Backend API, Local YÖK Atlas Catalog & Share Client
  */
 
-import { lookupProgramInCatalog, searchProgramsInCatalog } from './catalog.js?v=20';
+import { lookupProgramInCatalog, searchProgramsInCatalog } from './catalog.js?v=21';
 
 // Will be set automatically after Cloudflare Worker deployment.
 // On localhost/127.0.0.1, same-origin dev-server.mjs is used automatically.

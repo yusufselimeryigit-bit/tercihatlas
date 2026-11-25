@@ -13,7 +13,7 @@ import {
   getAytFieldsForScoreType,
   generateSyncKey,
   exportProgramsToCsv,
-} from './utils.js?v=20';
+} from './utils.js?v=21';
 import {
   getApiBase,
   setCustomApiBase,
@@ -25,14 +25,14 @@ import {
   searchProgramsFromApi,
   createShareSnapshot,
   fetchShareSnapshot,
-} from './api.js?v=20';
+} from './api.js?v=21';
 import {
   getFirebaseRoom,
   setFirebaseRoom,
   pushStateToFirebase,
   pullStateOnceFromFirebase,
   startFirebaseLiveSync,
-} from './firebase-sync.js?v=20';
+} from './firebase-sync.js?v=21';
 import {
   renderSparkline,
   renderDetailTrendChart,
@@ -40,7 +40,8 @@ import {
   renderExamProgressionChart,
   renderMiniNetSparkline,
   renderAppleActivityRings,
-} from './charts.js?v=20';
+  renderCompareRadarChart,
+} from './charts.js?v=21';
 import {
   compute2027Projection,
   compareWithMyNets,
@@ -56,15 +57,25 @@ import {
   computeExamPersonalRecords,
   diffProgramLists,
   simulateOsymPlacement,
-} from './analytics.js?v=20';
-import { ABROAD_PRESETS, DEFAULT_ABROAD_TOOLS, createAbroadRecord, renderAbroadView } from './abroad.js?v=20';
-import { parseExamPdfFile } from './pdf-parser.js?v=20';
+  auditPreferenceOrder,
+  SUBJECT_BOOST_PRESETS,
+  simulateSubjectNetBoost,
+} from './analytics.js?v=21';
+import { ABROAD_PRESETS, DEFAULT_ABROAD_TOOLS, createAbroadRecord, renderAbroadView } from './abroad.js?v=21';
+import { parseExamPdfFile } from './pdf-parser.js?v=21';
 import {
   renderTurkeyCampusMap,
   renderCostCalculator,
   renderTimelineView,
   downloadTimelineIcs,
-} from './map-cost.js?v=20';
+} from './map-cost.js?v=21';
+import { findSimilarProgramsInCatalog, findGapFillersInCatalog } from './catalog.js?v=21';
+import {
+  extractLogoAmbientColor,
+  getDaysUntil,
+  renderRoadmapPanelHtml,
+  exportSummaryPngCard,
+} from './v21-extras.js?v=21';
 
 const STATE_KEY = 'tercihatlas_state_v1';
 const SYNC_KEY_STORAGE = 'tercihatlas_sync_key';
@@ -131,6 +142,8 @@ const DEFAULT_STATE = {
   abroadTools: structuredClone(DEFAULT_ABROAD_TOOLS),
   costSettings: structuredClone(DEFAULT_COST_SETTINGS),
   decisionWeights: structuredClone(DEFAULT_DECISION_WEIGHTS),
+  roadmapChecks: {},
+  customMilestones: [],
 };
 
 // Uniform SF Symbols-style inline SVGs
@@ -186,6 +199,11 @@ const ui = {
   simTytBoost: 0,
   simAytBoost: 0,
   simPlacementRank: null,
+  subjectBoostDeltas: {},
+  subjectBoostScoreType: null,
+  selectMode: false,
+  selectedCodes: new Set(),
+  kbdFocusCode: null,
   viewMode: localStorage.getItem('tercihatlas_view_mode') || 'cards',
   search: '',
   filterRisk: 'all',
@@ -224,6 +242,8 @@ function normalizeState(parsed) {
     snapshots: Array.isArray(parsed?.snapshots) ? parsed.snapshots : [],
     costSettings: { ...structuredClone(DEFAULT_COST_SETTINGS), ...(parsed?.costSettings || {}) },
     decisionWeights: { ...structuredClone(DEFAULT_DECISION_WEIGHTS), ...(parsed?.decisionWeights || {}) },
+    roadmapChecks: parsed?.roadmapChecks && typeof parsed.roadmapChecks === 'object' ? { ...parsed.roadmapChecks } : {},
+    customMilestones: Array.isArray(parsed?.customMilestones) ? parsed.customMilestones : [],
     myNets: {
       ...structuredClone(DEFAULT_MY_NETS),
       ...(parsed?.myNets || {}),
@@ -825,6 +845,172 @@ function moveProgramStep(code, delta) {
   animateProgramFlip(prevRects);
 }
 
+function moveProgramToTop(code) {
+  const idx = state.programs.findIndex((p) => p.code === code);
+  if (idx <= 0) return;
+  const prevRects = captureProgramRects();
+  const [moved] = state.programs.splice(idx, 1);
+  state.programs.unshift(moved);
+  ui.sortBy = 'manual';
+  saveState();
+  renderAll();
+  animateProgramFlip(prevRects);
+  showToast(`#01 sıraya taşındı: ${moved.university}`, 'success');
+}
+
+function openShortcutsModal() {
+  const ov = document.getElementById('shortcutsModalOverlay');
+  if (!ov) return;
+  ov.classList.add('open');
+  ov.setAttribute('aria-hidden', 'false');
+}
+
+function closeShortcutsModal() {
+  const ov = document.getElementById('shortcutsModalOverlay');
+  if (!ov) return;
+  ov.classList.remove('open');
+  ov.setAttribute('aria-hidden', 'true');
+}
+
+async function triggerSummaryPngExport(customSimRank = null) {
+  if (!state.programs.length) {
+    showToast('Özet kartı üretmek için önce tercih ekle.', 'error');
+    return;
+  }
+  try {
+    showToast('Apple Keynote kalitesinde PNG kartı hazırlanıyor...');
+    const activeSc = getActiveScenario();
+    const health = analyzePreferenceHealth(state.programs, state.targetRank);
+    const est = estimateYksRankFromNets(state.myNets);
+    const primarySt = state.programs[0]?.scoreType || 'SAY';
+    const simRank = Number(customSimRank) || Number(ui.simPlacementRank) || est?.[primarySt]?.rank || Number(state.targetRank) || null;
+    const simResult = simRank ? simulateOsymPlacement(state.programs, simRank) : null;
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+    const accentHex = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#0071E3';
+    const fileName = await exportSummaryPngCard({
+      scenarioName: activeSc?.name || 'Ana Tercih Listem',
+      programs: state.programs,
+      targetRank: state.targetRank,
+      health,
+      simResult,
+      isDark,
+      accentHex,
+    });
+    showToast(`${fileName} indirildi! WhatsApp / iMessage ile paylaşabilirsin.`, 'success');
+  } catch (err) {
+    showToast(err.message || 'PNG dışa aktarılamadı.', 'error');
+  }
+}
+
+function renderBatchActionBar() {
+  const bar = document.getElementById('batchActionBar');
+  if (!bar) return;
+  const active = ui.region === 'TR' && ui.tab === 'preferences' && ui.selectMode && ui.selectedCodes.size > 0;
+  if (!active) {
+    bar.classList.remove('open');
+    bar.setAttribute('aria-hidden', 'true');
+    return;
+  }
+
+  const count = ui.selectedCodes.size;
+  const otherScenarios = state.scenarios.filter((s) => s.id !== state.activeScenarioId);
+
+  bar.innerHTML = `
+    <span class="batch-count-pill tabular">${count} seçili</span>
+    <button class="btn btn-sm" type="button" id="batchSelectAllBtn">${count === state.programs.length ? 'Temizle' : 'Tümü'}</button>
+    <span class="batch-sep"></span>
+    <button class="btn btn-sm btn-soft" type="button" id="batchCompareBtn">Kıyasla</button>
+    <button class="btn btn-sm" type="button" data-batch-risk="hayal"><span class="dot" style="background:var(--rose)"></span> Hayal</button>
+    <button class="btn btn-sm" type="button" data-batch-risk="hedef"><span class="dot" style="background:var(--accent)"></span> Hedef</button>
+    <button class="btn btn-sm" type="button" data-batch-risk="guvenli"><span class="dot" style="background:var(--green-bright)"></span> Güvenli</button>
+    ${otherScenarios.length
+      ? `<select class="select toolbar-select" id="batchCopyScenarioSelect" style="height:30px;font-size:12px;max-width:155px;">
+           <option value="">Plana Kopyala...</option>
+           ${otherScenarios.map((s) => `<option value="${escapeHtml(s.id)}">${escapeHtml(s.name)}</option>`).join('')}
+         </select>`
+      : ''}
+    <span class="batch-sep"></span>
+    <button class="btn btn-sm btn-danger" type="button" id="batchDeleteBtn">${SF.trash} Sil</button>
+    <button class="btn btn-ghost btn-icon btn-sm" type="button" id="batchExitBtn" title="Seçim modundan çık">${SF.close}</button>
+  `;
+
+  bar.classList.add('open');
+  bar.setAttribute('aria-hidden', 'false');
+
+  document.getElementById('batchSelectAllBtn')?.addEventListener('click', () => {
+    if (ui.selectedCodes.size === state.programs.length) ui.selectedCodes.clear();
+    else state.programs.forEach((p) => ui.selectedCodes.add(p.code));
+    renderAll();
+  });
+
+  document.getElementById('batchCompareBtn')?.addEventListener('click', () => {
+    const picked = [...ui.selectedCodes].slice(0, 4);
+    state.compareCodes = picked;
+    ui.selectMode = false;
+    ui.selectedCodes.clear();
+    ui.tab = 'compare';
+    ui.compareMode = 'programs';
+    saveState();
+    renderAll();
+    showToast(`${picked.length} bölüm karşılaştırmaya alındı.`, 'success');
+  });
+
+  bar.querySelectorAll('[data-batch-risk]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const rk = btn.dataset.batchRisk;
+      state.programs.forEach((p) => {
+        if (ui.selectedCodes.has(p.code)) p.risk = rk;
+      });
+      saveState();
+      renderAll();
+      showToast(`${count} bölümün kategorisi güncellendi.`, 'success');
+    });
+  });
+
+  document.getElementById('batchCopyScenarioSelect')?.addEventListener('change', (e) => {
+    const targetId = e.target.value;
+    if (!targetId) return;
+    const targetSc = state.scenarios.find((s) => s.id === targetId);
+    if (!targetSc) return;
+    let added = 0;
+    const existing = new Set((targetSc.programs || []).map((p) => p.code));
+    for (const p of state.programs) {
+      if (ui.selectedCodes.has(p.code) && !existing.has(p.code)) {
+        targetSc.programs.push(structuredClone(p));
+        added += 1;
+      }
+    }
+    saveState();
+    ui.selectedCodes.clear();
+    ui.selectMode = false;
+    renderAll();
+    showToast(`${added} bölüm "${targetSc.name}" planına kopyalandı.`, 'success');
+  });
+
+  document.getElementById('batchDeleteBtn')?.addEventListener('click', async () => {
+    const ok = await appleConfirm({
+      title: `${count} tercihi sil?`,
+      message: 'Seçili bölümler aktif senaryodan kaldırılacak.',
+      confirmText: 'Sil',
+      danger: true,
+    });
+    if (!ok) return;
+    state.programs = state.programs.filter((p) => !ui.selectedCodes.has(p.code));
+    state.compareCodes = state.compareCodes.filter((c) => !ui.selectedCodes.has(c));
+    ui.selectedCodes.clear();
+    ui.selectMode = false;
+    saveState();
+    renderAll();
+    showToast(`${count} bölüm listeden kaldırıldı.`, 'success');
+  });
+
+  document.getElementById('batchExitBtn')?.addEventListener('click', () => {
+    ui.selectMode = false;
+    ui.selectedCodes.clear();
+    renderAll();
+  });
+}
+
 function toggleCompare(code) {
   const idx = state.compareCodes.indexOf(code);
   if (idx !== -1) {
@@ -1174,16 +1360,20 @@ function closeContextMenu() {
 }
 
 function openContextMenu(e, code) {
-  e.preventDefault();
-  e.stopPropagation();
+  e.preventDefault?.();
+  e.stopPropagation?.();
   const p = state.programs.find((item) => item.code === code);
   const menu = document.getElementById('contextMenu');
   if (!p || !menu) return;
 
   const isCmp = state.compareCodes.includes(code);
+  const idx = state.programs.findIndex((item) => item.code === code);
   menu.innerHTML = `
     <button class="ctx-item" data-ctx="open">${SF.external} Detayı Aç</button>
     <button class="ctx-item" data-ctx="compare">${isCmp ? SF.check : SF.plus} ${isCmp ? 'Karşılaştırmadan Çıkar' : 'Karşılaştır'}</button>
+    ${!ui.readOnlyShare && idx > 0 ? `<button class="ctx-item" data-ctx="move-top">${SF.up} En Üste Taşı (#01)</button>` : ''}
+    ${!ui.readOnlyShare && idx > 0 ? `<button class="ctx-item" data-ctx="move-up">${SF.up} Bir Yukarı Taşı</button>` : ''}
+    ${!ui.readOnlyShare && idx !== -1 && idx < state.programs.length - 1 ? `<button class="ctx-item" data-ctx="move-down">${SF.down} Bir Aşağı Taşı</button>` : ''}
     <div class="ctx-sep"></div>
     <button class="ctx-item" data-ctx="risk-hayal"><span class="dot" style="background:var(--rose)"></span> Hayal Yap</button>
     <button class="ctx-item" data-ctx="risk-hedef"><span class="dot" style="background:var(--accent)"></span> Hedef Yap</button>
@@ -1195,10 +1385,12 @@ function openContextMenu(e, code) {
     ${!ui.readOnlyShare ? `<div class="ctx-sep"></div><button class="ctx-item danger" data-ctx="delete">${SF.trash} Listeden Çıkar</button>` : ''}
   `;
 
-  const menuW = 225;
-  const menuH = 320;
-  const left = Math.min(e.clientX, window.innerWidth - menuW - 12);
-  const top = Math.min(e.clientY, window.innerHeight - menuH - 12);
+  const menuW = 232;
+  const menuH = 410;
+  const clientX = Number(e.clientX) || window.innerWidth / 2;
+  const clientY = Number(e.clientY) || window.innerHeight / 2;
+  const left = Math.min(clientX, window.innerWidth - menuW - 12);
+  const top = Math.min(clientY, window.innerHeight - menuH - 12);
   menu.style.left = `${Math.max(10, left)}px`;
   menu.style.top = `${Math.max(10, top)}px`;
   menu.classList.add('open');
@@ -1210,6 +1402,9 @@ function openContextMenu(e, code) {
       closeContextMenu();
       if (act === 'open') openDrawer(code);
       else if (act === 'compare') toggleCompare(code);
+      else if (act === 'move-top') moveProgramToTop(code);
+      else if (act === 'move-up') moveProgramStep(code, -1);
+      else if (act === 'move-down') moveProgramStep(code, 1);
       else if (act.startsWith('risk-')) {
         p.risk = act.replace('risk-', '');
         saveState();
@@ -1307,6 +1502,7 @@ function renderAll() {
       root.classList.add('view-enter');
     }
     initSlidingSegmentedControls();
+    renderBatchActionBar();
   };
 
   if (ui.region === 'ABROAD') {
@@ -1421,12 +1617,20 @@ function renderPreferencesView() {
   const reachableCount = est ? state.programs.filter((p) => isProgramCurrentlyReachable(p, est)).length : 0;
 
   const activeSc = getActiveScenario();
+  const daysToYks = getDaysUntil('2027-06-19');
+  const prefAudit = state.programs.length >= 2 ? auditPreferenceOrder(state.programs, state.targetRank) : null;
   const headerHtml = `<div class="page-header">
     <div>
       <h1 class="page-title">Tercihlerim</h1>
       <p class="page-status tabular">${escapeHtml(activeSc?.name || 'Plan A')} · ${state.programs.length} / 24 tercih${state.targetRank ? ` · Hedef ${formatRank(state.targetRank)}` : ''}</p>
     </div>
-    <div class="actions-menu-wrap">
+    <div class="actions-menu-wrap" style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;">
+      ${daysToYks > 0
+        ? `<button class="countdown-pill-btn tabular" id="openRoadmapShortcutBtn" type="button" title="YKS 2027 & Yurtdışı Takvim">⏳ YKS 2027: ${daysToYks} gün</button>`
+        : ''}
+      ${prefAudit?.deadPreferences?.length
+        ? `<button class="audit-warn-pill" id="openAuditShortcutBtn" type="button" title="Ölü tercih uyarısını incele">⚠ ${prefAudit.deadPreferences.length} Ölü Tercih</button>`
+        : ''}
       <button class="btn btn-soft btn-sm" id="openDiscoverShortcutBtn">✦ Keşfet</button>
       ${state.programs.length
         ? `<button class="btn btn-sm" id="prefActionsMenuBtn" aria-haspopup="menu" aria-expanded="false">
@@ -1440,8 +1644,11 @@ function renderPreferencesView() {
                  <button class="ctx-item" id="openSnapshotsBtn"><svg class="sf-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg> Zaman Makinesi (${state.snapshots.length})</button>`
               : ''}
             <button class="ctx-item" id="openPresentationBtn"><svg class="sf-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg> Sunum / Okuma Modu</button>
+            <button class="ctx-item" id="exportPngCardBtn">${SF.share} PNG Özet Kartı İndir</button>
             <button class="ctx-item" id="openOsymBtn">${SF.share} ÖSYM AİS & Paylaşım Linki</button>
             <button class="ctx-item" id="printReportBtn">${SF.print} PDF Raporu / Yazdır</button>
+            <div class="ctx-sep"></div>
+            <button class="ctx-item" id="openShortcutsMenuBtn">⌨️ Klavye Kısayolları (?)</button>
           </div>`
         : ''}
     </div>
@@ -1535,6 +1742,9 @@ function renderPreferencesView() {
     </div>
 
     <div class="toolbar-right">
+      ${!ui.readOnlyShare
+        ? `<button class="btn btn-sm ${ui.selectMode ? 'btn-primary' : ''}" id="toggleSelectModeBtn" type="button" title="Çoklu seçim modu (S)">${ui.selectMode ? `${SF.check} Bitti` : 'Seç'}</button>`
+        : ''}
       <select id="sortSelect" class="select toolbar-select" aria-label="Sıralama">
         <option value="manual" ${ui.sortBy === 'manual' ? 'selected' : ''}>Tercih Sıram</option>
         <option value="rank-asc" ${ui.sortBy === 'rank-asc' ? 'selected' : ''}>Sıralama (En Yüksek)</option>
@@ -1599,10 +1809,13 @@ function renderCardsView(programs) {
 
         const checkDone = PROGRAM_CHECKLIST_ITEMS.filter((it) => p.checklist?.[it.key]).length;
         const medalCls = p._order === 1 ? 'order-gold' : p._order === 2 ? 'order-silver' : p._order === 3 ? 'order-bronze' : '';
+        const isSel = ui.selectMode && ui.selectedCodes.has(p.code);
+        const isKbd = !ui.selectMode && ui.kbdFocusCode === p.code;
 
-        return `<article class="prog-card" data-code="${escapeHtml(p.code)}" draggable="${manualMode ? 'true' : 'false'}">
+        return `<article class="prog-card ${isSel ? 'is-selected' : ''} ${isKbd ? 'kbd-focused' : ''}" data-code="${escapeHtml(p.code)}" draggable="${manualMode && !ui.selectMode ? 'true' : 'false'}">
           <div class="card-top">
             <div class="card-left-head">
+              ${ui.selectMode ? `<span class="select-check-badge">${isSel ? SF.check : ''}</span>` : ''}
               ${renderAvatar(p)}
               <div class="card-titles">
                 <div class="card-dept">${escapeHtml(p.department)}</div>
@@ -1684,9 +1897,12 @@ function renderTableView(programs) {
         const riskMeta = RISK_META[p.risk] || RISK_META.hedef;
         const medalCls = p._order === 1 ? 'order-gold' : p._order === 2 ? 'order-silver' : p._order === 3 ? 'order-bronze' : '';
         const subMeta = [p.university, p.city, p.scoreType, p.language, p.scholarship].filter(Boolean).join(' · ');
+        const isSel = ui.selectMode && ui.selectedCodes.has(p.code);
+        const isKbd = !ui.selectMode && ui.kbdFocusCode === p.code;
 
-        return `<div class="apple-list-row" role="listitem" data-code="${escapeHtml(p.code)}" draggable="${manualMode ? 'true' : 'false'}">
+        return `<div class="apple-list-row ${isSel ? 'is-selected' : ''} ${isKbd ? 'kbd-focused' : ''}" role="listitem" data-code="${escapeHtml(p.code)}" draggable="${manualMode && !ui.selectMode ? 'true' : 'false'}">
           <div class="apple-list-left">
+            ${ui.selectMode ? `<span class="select-check-badge">${isSel ? SF.check : ''}</span>` : ''}
             <span class="apple-list-ord ${medalCls} tabular">${String(p._order).padStart(2, '0')}</span>
             ${renderAvatar(p)}
             <div class="apple-list-titles">
@@ -1942,6 +2158,7 @@ function renderCompareView() {
   ];
 
   return `${headerHtml}
+  ${selected.length >= 2 ? renderCompareRadarChart(selected) : ''}
   <div class="compare-grid-wrap">
     <table class="compare-table">
       <thead>
@@ -2041,6 +2258,7 @@ function renderSimulatorPanel() {
           <input id="simPlacementRankInput" class="input tabular" type="number" min="1" max="3000000" step="500"
             value="${escapeHtml(placementRank)}" placeholder="Sıralaman..." style="width:145px;height:32px;padding:0 12px;font-weight:700;" />
           ${estRank ? `<button class="btn btn-sm" id="useEstRankSimBtn" type="button">Net Tahminimi Kullan (${formatRank(estRank)})</button>` : ''}
+          <button class="btn btn-soft btn-sm" id="simExportPngBtn" type="button">${SF.share} Sonucu PNG İndir</button>
         </div>
       </div>
 
@@ -2068,6 +2286,71 @@ function renderSimulatorPanel() {
           </div>`
         : ''}
     </div>
+
+    <!-- Feature #8: Interactive Subject Net Boost -> Unlocked Preferences -->
+    ${(() => {
+      const boostSt = ui.subjectBoostScoreType || (SUBJECT_BOOST_PRESETS[primaryScoreType] ? primaryScoreType : 'SAY');
+      const presets = SUBJECT_BOOST_PRESETS[boostSt] || SUBJECT_BOOST_PRESETS.SAY;
+      const deltas = ui.subjectBoostDeltas || {};
+      const boostRes = simulateSubjectNetBoost(state.programs, state.myNets, boostSt, deltas);
+      const hasBoost = Object.values(deltas).some((v) => Number(v) > 0);
+      return `<div class="panel panel-full">
+        <div class="panel-title" style="flex-wrap:wrap;gap:8px;">
+          <span>"Hangi Dersten +3 Net Hangi Bölümün Kilidini Açar?"</span>
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            <div class="segmented">
+              ${['SAY', 'EA', 'SÖZ', 'DİL']
+                .map((st) => `<button class="seg-btn seg-btn-sm ${boostSt === st ? 'active' : ''}" data-boost-st="${st}">${st}</button>`)
+                .join('')}
+            </div>
+            ${hasBoost ? `<button class="btn btn-sm" id="resetSubjectBoostBtn" type="button">Sıfırla</button>` : ''}
+          </div>
+        </div>
+        <p style="font-size:12.5px;color:var(--text-secondary);margin:0 0 12px;">Ders butonlarına dokunarak mevcut netlerinin üstüne ekleme yap; hangi tercihlerinin anında <strong>Yerleşir</strong> bandına geçtiğini gör.</p>
+        <div class="subject-boost-grid">
+          ${presets
+            .map((pr) => {
+              const added = Number(deltas[pr.key]) || 0;
+              return `<button class="subject-boost-chip ${added > 0 ? 'active' : ''}" type="button" data-boost-key="${escapeHtml(pr.key)}" data-boost-step="${pr.step}">
+                <span>${escapeHtml(pr.label)}</span>
+                <strong class="tabular">${added > 0 ? `+${added} net` : `+${pr.step}`}</strong>
+              </button>`;
+            })
+            .join('')}
+        </div>
+        ${boostRes
+          ? `<div class="subject-boost-summary">
+              <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
+                <div>
+                  <div style="font-size:11px;color:var(--text-tertiary);font-weight:600;text-transform:uppercase;">Baz Sıralama (${boostSt})</div>
+                  <strong class="tabular" style="font-size:16px;">${formatRank(boostRes.baseRank)}</strong>
+                </div>
+                <span style="font-size:18px;color:var(--accent);font-weight:700;">→</span>
+                <div>
+                  <div style="font-size:11px;color:var(--text-tertiary);font-weight:600;text-transform:uppercase;">Yeni Tahmini Sıralama</div>
+                  <strong class="tabular" style="font-size:17px;color:${boostRes.rankGain > 0 ? 'var(--green)' : 'var(--text)'};">${formatRank(boostRes.boostedRank)}</strong>
+                </div>
+              </div>
+              <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                ${boostRes.totalAdded > 0
+                  ? `<span class="pill pill-accent tabular">+${boostRes.totalAdded} net (+${boostRes.scoreGain} puan)</span>
+                     <span class="pill pill-risk-guvenli tabular">${boostRes.rankGain > 0 ? `${formatRank(boostRes.rankGain)} sıra yükseliş` : 'Sıra sabit'}</span>`
+                  : `<span style="font-size:12.5px;color:var(--text-tertiary);">Bir ders seçerek simülasyonu başlat</span>`}
+              </div>
+            </div>
+            ${boostRes.newlyUnlocked.length
+              ? `<div class="quota-alert-good" style="margin-bottom:10px;">
+                   🔓 Bu net artışı ile <strong>${boostRes.newlyUnlocked.length} yeni tercihin</strong> kilidi açıldı:
+                   ${boostRes.newlyUnlocked.map((r) => `<strong>#${r.order} ${escapeHtml(r.program.university)} (${escapeHtml(r.program.department)})</strong>`).join(', ')}
+                 </div>`
+              : hasBoost
+                ? `<div style="font-size:12.5px;color:var(--text-secondary);">
+                     ${boostRes.boostedWinner ? `Mevcut en iyi yerleşim: <strong>#${boostRes.boostedWinner.order} ${escapeHtml(boostRes.boostedWinner.program.university)} — ${escapeHtml(boostRes.boostedWinner.program.department)}</strong>. Bir üst sırayı açmak için biraz daha net ekleyebilirsin.` : 'Henüz yeni bir bölümün kilidi açılmadı — birkaç net daha ekleyerek dene.'}
+                   </div>`
+                : ''}`
+          : `<div style="font-size:12.5px;color:var(--text-tertiary);">Net simülasyonu için üst çubuktaki <strong>Netlerim</strong> penceresinden TYT/AYT netlerini gir.</div>`}
+      </div>`;
+    })()}
 
     <div class="panel panel-full">
       <div class="panel-title">
@@ -2577,7 +2860,7 @@ function renderAnalysisView() {
   }
 
   if (ui.analysisSubTab === 'timeline') {
-    return `${headerHtml}<section class="analysis-grid">${renderTimelineView(state.abroadPrograms)}</section>`;
+    return `${headerHtml}<section class="analysis-grid">${renderRoadmapPanelHtml(state)}${renderTimelineView(state.abroadPrograms)}</section>`;
   }
 
   if (ui.analysisSubTab === 'cost') {
@@ -2605,6 +2888,7 @@ function renderAnalysisView() {
   }
 
   const health = analyzePreferenceHealth(state.programs, state.targetRank);
+  const orderAudit = auditPreferenceOrder(state.programs, state.targetRank);
   const scoreTone = health.score >= 80 ? 'green' : health.score >= 60 ? 'amber' : 'rose';
   const total = state.programs.length;
 
@@ -2659,6 +2943,59 @@ function renderAnalysisView() {
           )
           .join('')}
       </div>
+    </div>
+
+    <!-- Feature #6: Dead Preference & Rank Gap Auditor -->
+    <div class="panel panel-full">
+      <div class="panel-title" style="flex-wrap:wrap;gap:10px;">
+        <span>Ölü Tercih & Sıralama Boşluğu (Gap) Denetçisi</span>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          ${orderAudit.healthy
+            ? `<span class="pill pill-risk-guvenli">✓ Ölü Tercih & Kritik Boşluk Yok</span>`
+            : `<span class="pill pill-risk-hayal">${orderAudit.issueCount} bulgu tespit edildi</span>`}
+          ${orderAudit.deadPreferences.length && !ui.readOnlyShare
+            ? `<button class="btn btn-primary btn-sm" id="autoFixOrderBtn" type="button">✦ Sıralamayı Otomatik Düzelt</button>`
+            : ''}
+        </div>
+      </div>
+
+      ${orderAudit.healthy
+        ? `<div style="font-size:13px;color:var(--text-secondary);">Tercih merdivenin ÖSYM yerleştirme kuralına tam uyumlu: ölü tercih, tehlikeli sıralama uçurumu veya emniyet açığı görünmüyor.</div>`
+        : `<div class="audit-issue-list">
+            ${orderAudit.deadPreferences
+              .map(
+                (dp) => `<div class="audit-issue-card dead">
+                  <div style="font-size:13.5px;font-weight:650;color:var(--rose);">
+                    ⛔ Ölü Tercih: #${dp.blockerOrder} (${escapeHtml(dp.blocker.university)} · ${formatRank(dp.blockerRank)}) üstteyken #${dp.blockedOrder} (${escapeHtml(dp.blocked.university)} · ${formatRank(dp.blockedRank)}) değerlendirilmeyebilir
+                  </div>
+                  <div style="font-size:12.5px;color:var(--text-secondary);">
+                    ÖSYM yukarıdan aşağıya yerleştirir; #${dp.blockerOrder} tercihinin gelmesi durumunda daha yüksek tabanlı #${dp.blockedOrder} hiç denenmez.
+                  </div>
+                </div>`,
+              )
+              .join('')}
+            ${orderAudit.rankGaps
+              .map(
+                (gp, idx) => `<div class="audit-issue-card gap">
+                  <div style="font-size:13.5px;font-weight:650;color:var(--amber);">
+                    📉 Sıralama Uçurumu: #${gp.fromOrder} (${formatRank(gp.lowRank)}) → #${gp.toOrder} (${formatRank(gp.highRank)}) arasında ${gp.ratio}× boşluk var
+                  </div>
+                  <div style="font-size:12.5px;color:var(--text-secondary);">
+                    ${escapeHtml(gp.fromProgram.university)} ile ${escapeHtml(gp.toProgram.university)} arasındaki bandı dengelemek için 12.239 programlık katalogdan öneriler:
+                  </div>
+                  <div class="gap-fillers-row" id="gapFillers_${idx}" data-gap-low="${gp.lowRank}" data-gap-high="${gp.highRank}">
+                    <span style="font-size:12px;color:var(--text-tertiary);">Öneriler yükleniyor...</span>
+                  </div>
+                </div>`,
+              )
+              .join('')}
+            ${orderAudit.safetyWarning
+              ? `<div class="audit-issue-card dead">
+                  <div style="font-size:13.5px;font-weight:650;color:var(--rose);">🛡️ Güvenlik Ağı Uyarısı</div>
+                  <div style="font-size:12.5px;color:var(--text-secondary);">${escapeHtml(orderAudit.safetyWarning.text)}</div>
+                </div>`
+              : ''}
+          </div>`}
     </div>
 
     <div class="panel panel-full">
@@ -3119,6 +3456,16 @@ function renderDrawer({ animateSwap = false } = {}) {
               </section>`
             : ''}
 
+          <section class="drawer-section">
+            <div class="section-heading">
+              <span>Buna Benzer 5 Alternatif</span>
+              <span style="font-size:11.5px;color:var(--text-tertiary);font-weight:500;">12.239 Katalog · 0 ms</span>
+            </div>
+            <div class="similar-list" id="drawerSimilarHost">
+              <div style="font-size:12.5px;color:var(--text-tertiary);padding:6px 2px;">Benzer bölümler aranıyor...</div>
+            </div>
+          </section>
+
           <div style="font-size:11.5px;color:var(--text-tertiary);padding:0 4px;">
             Son YÖK Atlas güncellemesi · ${formatRelativeTime(p.fetchedAt)}
           </div>
@@ -3134,6 +3481,71 @@ function renderDrawer({ animateSwap = false } = {}) {
   bindDrawerEvents(p);
   bindInteractiveCharts(container);
   initSlidingSegmentedControls();
+
+  // Feature #1: Dynamic University Logo Ambient Glow on Drawer Header (0ms cached)
+  const logoSrc = getLogoUrl(p);
+  const currentCode = p.code;
+  if (logoSrc) {
+    extractLogoAmbientColor(logoSrc).then((col) => {
+      if (!col || ui.drawerCode !== currentCode) return;
+      const hdr = document.getElementById('drawerHeaderBar');
+      if (!hdr) return;
+      hdr.style.setProperty('--drawer-brand-rgb', col.rgb);
+      hdr.classList.add('has-brand-glow');
+    });
+  }
+
+  // Feature #7: Hydrate "Buna Benzer 5 Alternatif" from Built-In 0ms Catalog
+  findSimilarProgramsInCatalog(p, {
+    excludeCodes: state.programs.map((item) => item.code),
+    limit: 5,
+  })
+    .then((similars) => {
+      if (ui.drawerCode !== currentCode) return;
+      const host = document.getElementById('drawerSimilarHost');
+      if (!host) return;
+      if (!similars.length) {
+        host.innerHTML = `<div style="font-size:12.5px;color:var(--text-tertiary);padding:4px 2px;">Bu banda eklenebilecek yeni alternatif bulunamadı.</div>`;
+        return;
+      }
+      host.innerHTML = similars
+        .map(
+          (item) => `<div class="similar-row">
+            <div class="similar-row-info">
+              ${renderAvatar(item)}
+              <div style="min-width:0;flex:1;">
+                <div class="similar-row-title">${escapeHtml(item.department)}</div>
+                <div class="similar-row-sub">${escapeHtml(item.university)} · ${escapeHtml(item.city)} · <strong class="tabular">${formatRank(item.latestRank)}</strong></div>
+                <div style="font-size:11px;color:var(--accent);font-weight:600;margin-top:2px;">${escapeHtml(item.similarityReason)}</div>
+              </div>
+            </div>
+            ${!ui.readOnlyShare
+              ? `<button class="btn btn-soft btn-sm" type="button" data-similar-add="${escapeHtml(item.code)}" style="flex-shrink:0;">${SF.plus} Ekle</button>`
+              : ''}
+          </div>`,
+        )
+        .join('');
+
+      host.querySelectorAll('[data-similar-add]').forEach((btn) => {
+        btn.addEventListener('click', async () => {
+          const addCode = btn.dataset.similarAdd;
+          btn.disabled = true;
+          btn.textContent = '...';
+          try {
+            const full = await fetchProgramFromApi(addCode);
+            addProgramToState(full);
+            renderAll();
+            btn.textContent = 'Eklendi ✓';
+            showToast(`${full.university} — ${full.department} listene eklendi.`, 'success');
+          } catch (err) {
+            btn.disabled = false;
+            btn.innerHTML = `${SF.plus} Ekle`;
+            showToast(err.message || 'Eklenemedi.', 'error');
+          }
+        });
+      });
+    })
+    .catch(() => {});
 }
 
 function bindDrawerEvents(p) {
@@ -4739,6 +5151,20 @@ function bindPreferencesEvents() {
     renderAll();
   });
 
+  document.getElementById('openRoadmapShortcutBtn')?.addEventListener('click', () => {
+    ui.region = 'TR';
+    ui.tab = 'analysis';
+    ui.analysisSubTab = 'timeline';
+    renderAll();
+  });
+
+  document.getElementById('openAuditShortcutBtn')?.addEventListener('click', () => {
+    ui.region = 'TR';
+    ui.tab = 'analysis';
+    ui.analysisSubTab = 'overview';
+    renderAll();
+  });
+
   const prefMenuBtn = document.getElementById('prefActionsMenuBtn');
   const prefDropdown = document.getElementById('prefActionsDropdown');
   prefMenuBtn?.addEventListener('click', (e) => {
@@ -4758,6 +5184,19 @@ function bindPreferencesEvents() {
   document.getElementById('openPresentationBtn')?.addEventListener('click', () => {
     prefDropdown?.classList.remove('open');
     setPresentationMode(true);
+  });
+  document.getElementById('exportPngCardBtn')?.addEventListener('click', () => {
+    prefDropdown?.classList.remove('open');
+    triggerSummaryPngExport();
+  });
+  document.getElementById('openShortcutsMenuBtn')?.addEventListener('click', () => {
+    prefDropdown?.classList.remove('open');
+    openShortcutsModal();
+  });
+  document.getElementById('toggleSelectModeBtn')?.addEventListener('click', () => {
+    ui.selectMode = !ui.selectMode;
+    if (!ui.selectMode) ui.selectedCodes.clear();
+    renderAll();
   });
   document.getElementById('dismissRefreshDiffBtn')?.addEventListener('click', () => {
     ui.refreshDiff = null;
@@ -4877,8 +5316,139 @@ function bindPreferencesEvents() {
 
   listEl.querySelectorAll('[data-code]').forEach((item) => {
     const code = item.dataset.code;
-    item.addEventListener('click', () => openDrawer(code));
+    let suppressClickUntil = 0;
+
+    item.addEventListener('click', () => {
+      if (Date.now() < suppressClickUntil) return;
+      if (ui.selectMode) {
+        if (ui.selectedCodes.has(code)) ui.selectedCodes.delete(code);
+        else ui.selectedCodes.add(code);
+        renderAll();
+        return;
+      }
+      ui.kbdFocusCode = code;
+      openDrawer(code);
+    });
     item.addEventListener('contextmenu', (e) => openContextMenu(e, code));
+
+    // Feature #2 (iPadOS/iPhone Swipe Actions) + Feature #4 (520ms Long-Press Context Menu)
+    let touchStartX = 0;
+    let touchStartY = 0;
+    let touchDx = 0;
+    let swipeLocked = false;
+    let swipeCancelled = false;
+    let longPressTimer = null;
+    let swipeBadge = null;
+
+    const cleanupSwipeBadge = () => {
+      swipeBadge?.remove();
+      swipeBadge = null;
+    };
+
+    item.addEventListener(
+      'touchstart',
+      (e) => {
+        if (e.touches.length !== 1 || e.target.closest('[data-stop-card="1"]')) return;
+        const t = e.touches[0];
+        touchStartX = t.clientX;
+        touchStartY = t.clientY;
+        touchDx = 0;
+        swipeLocked = false;
+        swipeCancelled = false;
+
+        clearTimeout(longPressTimer);
+        if (!ui.selectMode) {
+          longPressTimer = setTimeout(() => {
+            if (!swipeLocked && !swipeCancelled) {
+              suppressClickUntil = Date.now() + 500;
+              item.classList.add('long-press-armed');
+              setTimeout(() => item.classList.remove('long-press-armed'), 220);
+              navigator.vibrate?.(12);
+              openContextMenu({ clientX: touchStartX, clientY: touchStartY }, code);
+            }
+          }, 520);
+        }
+      },
+      { passive: true },
+    );
+
+    item.addEventListener(
+      'touchmove',
+      (e) => {
+        if (e.touches.length !== 1) return;
+        const t = e.touches[0];
+        const dx = t.clientX - touchStartX;
+        const dy = t.clientY - touchStartY;
+
+        if (Math.abs(dx) > 10 || Math.abs(dy) > 10) {
+          clearTimeout(longPressTimer);
+        }
+        if (ui.selectMode || swipeCancelled) return;
+
+        if (!swipeLocked) {
+          if (Math.abs(dy) > 16 && Math.abs(dy) > Math.abs(dx)) {
+            swipeCancelled = true;
+            return;
+          }
+          if (Math.abs(dx) > 16 && Math.abs(dx) > Math.abs(dy) * 1.2) {
+            swipeLocked = true;
+            item.classList.add('swiping');
+            item.classList.remove('swipe-snap');
+          }
+        }
+
+        if (swipeLocked) {
+          // Soft rubber-band resistance beyond 95px
+          const clamped = dx > 0 ? Math.min(110, dx * 0.85) : Math.max(-110, dx * 0.85);
+          touchDx = clamped;
+          item.style.transform = `translate3d(${clamped}px, 0, 0)`;
+
+          if (!swipeBadge) {
+            swipeBadge = document.createElement('span');
+            swipeBadge.className = 'swipe-hint-badge';
+            item.appendChild(swipeBadge);
+          }
+          if (clamped > 24) {
+            const isCmp = state.compareCodes.includes(code);
+            swipeBadge.className = `swipe-hint-badge right ${clamped > 62 ? 'visible' : ''}`;
+            swipeBadge.textContent = isCmp ? '✓ Kıyaslamadan Çıkar' : '+ Karşılaştır';
+          } else if (clamped < -24 && !ui.readOnlyShare) {
+            swipeBadge.className = `swipe-hint-badge left ${clamped < -62 ? 'visible' : ''}`;
+            swipeBadge.textContent = 'Listeden Kaldır';
+          } else {
+            swipeBadge.classList.remove('visible');
+          }
+        }
+      },
+      { passive: true },
+    );
+
+    const endTouch = () => {
+      clearTimeout(longPressTimer);
+      if (!swipeLocked) return;
+      item.classList.remove('swiping');
+      item.classList.add('swipe-snap');
+      item.style.transform = 'translate3d(0, 0, 0)';
+      suppressClickUntil = Date.now() + 350;
+
+      const finalDx = touchDx;
+      cleanupSwipeBadge();
+      setTimeout(() => {
+        item.classList.remove('swipe-snap');
+        item.style.transform = '';
+      }, 330);
+
+      if (finalDx > 64) {
+        toggleCompare(code);
+      } else if (finalDx < -64 && !ui.readOnlyShare) {
+        removeProgram(code);
+      }
+      swipeLocked = false;
+      touchDx = 0;
+    };
+
+    item.addEventListener('touchend', endTouch, { passive: true });
+    item.addEventListener('touchcancel', endTouch, { passive: true });
 
     item.addEventListener('dragstart', (e) => {
       ui.dragCode = code;
@@ -5067,6 +5637,136 @@ function bindAnalysisEvents() {
   document.getElementById('useEstRankSimBtn')?.addEventListener('click', () => {
     ui.simPlacementRank = null;
     renderAll();
+  });
+  document.getElementById('simExportPngBtn')?.addEventListener('click', () => {
+    triggerSummaryPngExport(ui.simPlacementRank);
+  });
+
+  // Feature #8: Interactive Subject Boost bindings
+  document.querySelectorAll('[data-boost-st]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      ui.subjectBoostScoreType = btn.dataset.boostSt;
+      ui.subjectBoostDeltas = {};
+      renderAll();
+    });
+  });
+  document.querySelectorAll('[data-boost-key]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const k = btn.dataset.boostKey;
+      const step = Number(btn.dataset.boostStep) || 2;
+      const prev = Number(ui.subjectBoostDeltas?.[k]) || 0;
+      ui.subjectBoostDeltas = { ...(ui.subjectBoostDeltas || {}), [k]: prev + step };
+      renderAll();
+    });
+    btn.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      const k = btn.dataset.boostKey;
+      const next = { ...(ui.subjectBoostDeltas || {}) };
+      delete next[k];
+      ui.subjectBoostDeltas = next;
+      renderAll();
+    });
+  });
+  document.getElementById('resetSubjectBoostBtn')?.addEventListener('click', () => {
+    ui.subjectBoostDeltas = {};
+    renderAll();
+  });
+
+  // Feature #6: Auto-Fix Dead Preference Order + Hydrate Rank Gap Fillers from 0ms Catalog
+  document.getElementById('autoFixOrderBtn')?.addEventListener('click', () => {
+    state.programs.sort((a, b) => {
+      const ra = Number(a.latestRank) || 9e9;
+      const rb = Number(b.latestRank) || 9e9;
+      return ra - rb;
+    });
+    ui.sortBy = 'manual';
+    saveState();
+    renderAll();
+    showToast('Tercih listesi ÖSYM taban sırasına göre otomatik düzenlendi!', 'success');
+  });
+
+  document.querySelectorAll('[data-gap-low][data-gap-high]').forEach((host) => {
+    const low = Number(host.dataset.gapLow);
+    const high = Number(host.dataset.gapHigh);
+    findGapFillersInCatalog(low, high, { programs: state.programs, limit: 3 })
+      .then((fillers) => {
+        if (!document.body.contains(host)) return;
+        if (!fillers.length) {
+          host.innerHTML = `<span style="font-size:12px;color:var(--text-tertiary);">Bu aralıkta mevcut alanına uygun ek katalog önerisi bulunamadı.</span>`;
+          return;
+        }
+        host.innerHTML = fillers
+          .map(
+            (f) => `<div class="gap-filler-item">
+              <div style="min-width:0;flex:1;">
+                <strong style="display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(f.university)} — ${escapeHtml(f.department)}</strong>
+                <span style="font-size:11.5px;color:var(--text-secondary);">${escapeHtml(f.city)} · ${escapeHtml(f.language)} · <strong class="tabular">${formatRank(f.latestRank)}</strong></span>
+              </div>
+              ${!ui.readOnlyShare
+                ? `<button class="btn btn-soft btn-sm" type="button" data-gap-add="${escapeHtml(f.code)}" style="flex-shrink:0;">${SF.plus} Ekle</button>`
+                : ''}
+            </div>`,
+          )
+          .join('');
+        host.querySelectorAll('[data-gap-add]').forEach((btn) => {
+          btn.addEventListener('click', async () => {
+            const code = btn.dataset.gapAdd;
+            btn.disabled = true;
+            btn.textContent = '...';
+            try {
+              const full = await fetchProgramFromApi(code);
+              addProgramToState(full);
+              renderAll();
+              showToast(`${full.university} — ${full.department} boşluğu doldurmak üzere eklendi.`, 'success');
+            } catch (err) {
+              btn.disabled = false;
+              btn.innerHTML = `${SF.plus} Ekle`;
+              showToast(err.message || 'Eklenemedi.', 'error');
+            }
+          });
+        });
+      })
+      .catch(() => {});
+  });
+
+  // Feature #10: Roadmap Checklist & Custom Milestones
+  document.querySelectorAll('[data-roadmap-check]').forEach((cb) => {
+    cb.addEventListener('change', () => {
+      const id = cb.dataset.roadmapCheck;
+      state.roadmapChecks = { ...(state.roadmapChecks || {}), [id]: cb.checked };
+      saveState();
+      renderAll();
+    });
+  });
+
+  document.getElementById('addCustomMilestoneBtn')?.addEventListener('click', () => {
+    const textEl = document.getElementById('customMilestoneText');
+    const dateEl = document.getElementById('customMilestoneDate');
+    const text = textEl?.value.trim();
+    if (!text) return;
+    const item = { id: `cm_${Date.now()}`, text, date: dateEl?.value || '', done: false };
+    state.customMilestones = [...(state.customMilestones || []), item];
+    saveState();
+    renderAll();
+    showToast('Kişisel hedef yol haritana eklendi.', 'success');
+  });
+
+  document.querySelectorAll('[data-custom-milestone-toggle]').forEach((cb) => {
+    cb.addEventListener('change', () => {
+      const id = cb.dataset.customMilestoneToggle;
+      state.customMilestones = (state.customMilestones || []).map((c) => (c.id === id ? { ...c, done: cb.checked } : c));
+      saveState();
+      renderAll();
+    });
+  });
+
+  document.querySelectorAll('[data-custom-milestone-del]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const id = btn.dataset.customMilestoneDel;
+      state.customMilestones = (state.customMilestones || []).filter((c) => c.id !== id);
+      saveState();
+      renderAll();
+    });
   });
 
   // Net simulator sliders
@@ -5260,6 +5960,11 @@ async function init() {
     if (e.target.id === 'snapshotModalOverlay') closeSnapshotModal();
   });
 
+  document.getElementById('closeShortcutsModalBtn')?.addEventListener('click', closeShortcutsModal);
+  document.getElementById('shortcutsModalOverlay')?.addEventListener('click', (e) => {
+    if (e.target.id === 'shortcutsModalOverlay') closeShortcutsModal();
+  });
+
   document.getElementById('openSyncBtn')?.addEventListener('click', openSyncModal);
   document.getElementById('closeSyncModalBtn')?.addEventListener('click', closeSyncModal);
   document.getElementById('syncModalOverlay')?.addEventListener('click', (e) => {
@@ -5286,22 +5991,28 @@ async function init() {
   });
 
   document.addEventListener('keydown', (e) => {
+    const tag = document.activeElement?.tagName;
+    const isTyping = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || document.activeElement?.isContentEditable;
+    const anyModalOpen = Boolean(document.querySelector('.modal-overlay.open'));
+
     if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
       e.preventDefault();
       openAddModal();
-    } else if (ui.drawerCode && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
-      const tag = document.activeElement?.tagName;
-      if (tag !== 'INPUT' && tag !== 'TEXTAREA' && tag !== 'SELECT') {
-        e.preventDefault();
-        stepDrawerProgram(e.key === 'ArrowLeft' ? -1 : 1);
-      }
-    } else if (e.key === 'Escape') {
+      return;
+    }
+
+    if (e.key === 'Escape') {
       if (activeDialogClose) {
         activeDialogClose();
         return;
       }
       if (document.body.classList.contains('presentation-mode') && !ui.drawerCode) {
         setPresentationMode(false);
+      }
+      if (ui.selectMode) {
+        ui.selectMode = false;
+        ui.selectedCodes.clear();
+        renderAll();
       }
       closeContextMenu();
       closeAppearancePopover();
@@ -5313,6 +6024,116 @@ async function init() {
       closeOsymModal();
       closeSnapshotModal();
       closeSyncModal();
+      closeShortcutsModal();
+      return;
+    }
+
+    if (isTyping || e.metaKey || e.ctrlKey || e.altKey) return;
+
+    // Drawer left/right navigation
+    if (ui.drawerCode && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
+      e.preventDefault();
+      stepDrawerProgram(e.key === 'ArrowLeft' ? -1 : 1);
+      return;
+    }
+
+    // '?' toggles macOS Keyboard Shortcuts Overlay
+    if (e.key === '?') {
+      e.preventDefault();
+      const ov = document.getElementById('shortcutsModalOverlay');
+      if (ov?.classList.contains('open')) closeShortcutsModal();
+      else openShortcutsModal();
+      return;
+    }
+
+    if (anyModalOpen) return;
+
+    // 1..5 instant tab navigation
+    if (e.key === '1') {
+      ui.region = 'TR';
+      ui.tab = 'preferences';
+      renderAll();
+      return;
+    }
+    if (e.key === '2') {
+      ui.region = 'TR';
+      ui.tab = 'compare';
+      renderAll();
+      return;
+    }
+    if (e.key === '3') {
+      ui.region = 'TR';
+      ui.tab = 'analysis';
+      renderAll();
+      return;
+    }
+    if (e.key === '4') {
+      ui.region = 'ABROAD';
+      renderAll();
+      return;
+    }
+    if (e.key === '5') {
+      ui.region = 'TR';
+      ui.tab = 'analysis';
+      ui.analysisSubTab = 'timeline';
+      renderAll();
+      return;
+    }
+
+    const lower = e.key.toLowerCase();
+    if (lower === 'p') {
+      e.preventDefault();
+      setPresentationMode(!document.body.classList.contains('presentation-mode'));
+      return;
+    }
+
+    if (lower === 's' && ui.region === 'TR' && ui.tab === 'preferences' && !ui.readOnlyShare && state.programs.length) {
+      e.preventDefault();
+      ui.selectMode = !ui.selectMode;
+      if (!ui.selectMode) ui.selectedCodes.clear();
+      renderAll();
+      return;
+    }
+
+    // Preferences list keyboard navigation (J/K, Space, Shift+ArrowUp/Down)
+    if (ui.region === 'TR' && ui.tab === 'preferences' && state.programs.length) {
+      const visible = getFilteredPrograms();
+      if (!visible.length) return;
+      const curIdx = visible.findIndex((p) => p.code === ui.kbdFocusCode);
+
+      if (lower === 'j' || (!e.shiftKey && e.key === 'ArrowDown')) {
+        e.preventDefault();
+        const nextIdx = curIdx === -1 ? 0 : Math.min(visible.length - 1, curIdx + 1);
+        ui.kbdFocusCode = visible[nextIdx].code;
+        document.querySelectorAll('#programList [data-code]').forEach((el) => {
+          el.classList.toggle('kbd-focused', el.dataset.code === ui.kbdFocusCode);
+        });
+        document.querySelector(`#programList [data-code="${ui.kbdFocusCode}"]`)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        return;
+      }
+
+      if (lower === 'k' || (!e.shiftKey && e.key === 'ArrowUp')) {
+        e.preventDefault();
+        const nextIdx = curIdx <= 0 ? 0 : curIdx - 1;
+        ui.kbdFocusCode = visible[nextIdx].code;
+        document.querySelectorAll('#programList [data-code]').forEach((el) => {
+          el.classList.toggle('kbd-focused', el.dataset.code === ui.kbdFocusCode);
+        });
+        document.querySelector(`#programList [data-code="${ui.kbdFocusCode}"]`)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        return;
+      }
+
+      if (e.key === ' ' && ui.kbdFocusCode) {
+        e.preventDefault();
+        if (ui.drawerCode === ui.kbdFocusCode) closeDrawer();
+        else openDrawer(ui.kbdFocusCode);
+        return;
+      }
+
+      if (e.shiftKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown') && ui.kbdFocusCode && !ui.readOnlyShare) {
+        e.preventDefault();
+        moveProgramStep(ui.kbdFocusCode, e.key === 'ArrowUp' ? -1 : 1);
+      }
     }
   });
 

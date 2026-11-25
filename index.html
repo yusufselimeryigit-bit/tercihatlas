@@ -9,10 +9,10 @@
   <meta name="apple-mobile-web-app-title" content="TercihAtlas" />
   <title>TercihAtlas — YKS 2027 Tercih & Üniversite Rehberi</title>
   <link rel="preconnect" href="https://tercihatlas-2027-default-rtdb.firebaseio.com" crossorigin />
-  <link rel="icon" type="image/png" sizes="64x64" href="favicon.png?v=20" />
-  <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png?v=20" />
-  <link rel="manifest" href="manifest.json?v=20" />
-  <link rel="stylesheet" href="css/styles.css?v=20" />
+  <link rel="icon" type="image/png" sizes="64x64" href="favicon.png?v=21" />
+  <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png?v=21" />
+  <link rel="manifest" href="manifest.json?v=21" />
+  <link rel="stylesheet" href="css/styles.css?v=21" />
 </head>
 <body>
   <!-- macOS Tahoe / iPadOS Floating Liquid Glass Top Navigation -->
@@ -253,17 +253,47 @@
     <strong style="color:var(--accent);">Çık</strong>
   </button>
 
+  <!-- macOS Keyboard Shortcuts Overlay (? key) -->
+  <div class="modal-overlay" id="shortcutsModalOverlay" aria-hidden="true">
+    <div class="modal" style="width:min(540px, 100%);" role="dialog" aria-labelledby="shortcutsModalTitle">
+      <div class="modal-header">
+        <h3 id="shortcutsModalTitle">Klavye Kısayolları</h3>
+        <button class="btn btn-ghost btn-icon btn-sm" id="closeShortcutsModalBtn" aria-label="Kapat">
+          <svg class="sf-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <div class="modal-body" id="shortcutsModalBody">
+        <div class="shortcuts-grid">
+          <div class="shortcut-row"><span>Spotlight Arama & Bölüm Ekle</span><span class="shortcut-keys"><kbd>⌘</kbd><kbd>K</kbd></span></div>
+          <div class="shortcut-row"><span>Sekmeler (Tercih · Kıyasla · Analiz · Yurt Dışı)</span><span class="shortcut-keys"><kbd>1</kbd>–<kbd>4</kbd></span></div>
+          <div class="shortcut-row"><span>Takvim & Yol Haritasına Git</span><span class="shortcut-keys"><kbd>5</kbd></span></div>
+          <div class="shortcut-row"><span>Listede Aşağı / Yukarı Gezin</span><span class="shortcut-keys"><kbd>J</kbd> / <kbd>K</kbd></span></div>
+          <div class="shortcut-row"><span>Seçili Bölümün Detayını Aç</span><span class="shortcut-keys"><kbd>Space</kbd></span></div>
+          <div class="shortcut-row"><span>Seçili Bölümü Yukarı / Aşağı Taşı</span><span class="shortcut-keys"><kbd>⇧</kbd><kbd>↑</kbd> / <kbd>↓</kbd></span></div>
+          <div class="shortcut-row"><span>Çekmecede Önceki / Sonraki Bölüm</span><span class="shortcut-keys"><kbd>←</kbd> / <kbd>→</kbd></span></div>
+          <div class="shortcut-row"><span>Çoklu Seçim Modunu Aç / Kapat</span><span class="shortcut-keys"><kbd>S</kbd></span></div>
+          <div class="shortcut-row"><span>Sunum / Okuma Modu</span><span class="shortcut-keys"><kbd>P</kbd></span></div>
+          <div class="shortcut-row"><span>Bu Kısayol Rehberini Aç / Kapat</span><span class="shortcut-keys"><kbd>?</kbd></span></div>
+          <div class="shortcut-row"><span>Açık Pencereyi / Seçimi Kapat</span><span class="shortcut-keys"><kbd>Esc</kbd></span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Apple Photos-Style Floating Multi-Select Batch Action Bar -->
+  <div class="batch-action-bar" id="batchActionBar" role="toolbar" aria-label="Toplu işlemler" aria-hidden="true"></div>
+
   <!-- Native Apple Liquid Glass Alert / Prompt Dialog -->
   <div class="modal-overlay apple-dialog-overlay" id="appleDialogOverlay" aria-hidden="true">
     <div class="apple-dialog" id="appleDialogBox" role="alertdialog" aria-modal="true"></div>
   </div>
 
-  <!-- macOS Liquid Glass Right-Click Context Menu -->
+  <!-- macOS Liquid Glass Right-Click / Long-Press Context Menu -->
   <div class="context-menu" id="contextMenu" role="menu" aria-hidden="true"></div>
 
   <!-- Floating Pill Toasts -->
   <div class="toast-container" id="toastContainer"></div>
 
-  <script type="module" src="js/app.js?v=20"></script>
+  <script type="module" src="js/app.js?v=21"></script>
 </body>
 </html>

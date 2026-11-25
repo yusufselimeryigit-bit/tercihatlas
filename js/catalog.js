@@ -63,7 +63,7 @@ const TOKEN_ALIASES = {
 export async function loadCatalog() {
   if (parsedCache) return parsedCache;
   if (!catalogPromise) {
-    catalogPromise = fetch('./data/yokatlas-index.json?v=20')
+    catalogPromise = fetch('./data/yokatlas-index.json?v=21')
       .then((r) => {
         if (!r.ok) throw new Error(`Katalog yüklenemedi (${r.status})`);
         return r.json();
@@ -262,4 +262,195 @@ export async function searchProgramsInCatalog({
     query: q,
     source: 'catalog',
   };
+}
+
+const DEPT_STOP_WORDS = new Set([
+  'ingilizce',
+  'almanca',
+  'fransizca',
+  'turkce',
+  'burslu',
+  'indirimli',
+  'ucretli',
+  'ucretsiz',
+  'devlet',
+  'vakif',
+  'ogretim',
+  'ikinci',
+  've',
+  'ile',
+  'bolumu',
+  'programi',
+  'kktc',
+  'uyruklu',
+  '50',
+  '25',
+  '75',
+  '100',
+  '30',
+]);
+
+function extractDeptCoreTokens(department) {
+  return foldTr(department)
+    .split(' ')
+    .filter((t) => t.length >= 3 && !DEPT_STOP_WORDS.has(t));
+}
+
+/**
+ * Finds the top N similar alternatives from the 12,239-program built-in catalog
+ * based on core department keywords, scoreType, rank band closeness, and language/type.
+ */
+export async function findSimilarProgramsInCatalog(program, { excludeCodes = [], limit = 5 } = {}) {
+  if (!program) return [];
+  const cat = await loadCatalog();
+  const excluded = new Set([String(program.code || ''), ...excludeCodes.map(String)]);
+  const targetRank = Number(program.latestRank) || null;
+  const scoreType = String(program.scoreType || '').toUpperCase();
+  const coreTokens = extractDeptCoreTokens(program.department);
+  const primaryToken = coreTokens[0] || '';
+  const targetLang = foldTr(program.language || '');
+  const targetUniType = String(program.universityType || '').toUpperCase();
+
+  const scored = [];
+  for (const item of cat.items) {
+    if (excluded.has(item.code)) continue;
+    if (scoreType && item.scoreType !== scoreType) continue;
+    if (!item.latestRank || item.latestRank <= 0) continue;
+
+    const itemTokens = extractDeptCoreTokens(item.department);
+    if (!itemTokens.length) continue;
+
+    let overlap = 0;
+    for (const t of coreTokens) {
+      if (itemTokens.includes(t)) overlap += 1;
+    }
+    if (coreTokens.length && overlap === 0) continue;
+
+    const overlapRatio = coreTokens.length ? overlap / Math.max(coreTokens.length, itemTokens.length) : 0;
+    const primaryMatch = primaryToken && itemTokens.includes(primaryToken) ? 1 : 0;
+
+    let rankScore = 0.5;
+    let relDiff = 0;
+    if (targetRank) {
+      relDiff = (item.latestRank - targetRank) / Math.max(targetRank, 500);
+      const absRel = Math.abs(relDiff);
+      if (absRel > 1.25 && Math.abs(item.latestRank - targetRank) > 25000) continue;
+      rankScore = Math.max(0, 1 - absRel * 0.9);
+    }
+
+    const sameLang = targetLang && foldTr(item.language || '') === targetLang ? 1 : 0;
+    const sameUniType = targetUniType && item.universityType === targetUniType ? 1 : 0;
+    const diffUniBonus = foldTr(item.university) !== foldTr(program.university) ? 1 : 0.35;
+
+    const score =
+      overlapRatio * 48 +
+      primaryMatch * 16 +
+      rankScore * 28 +
+      sameLang * 5 +
+      sameUniType * 4 +
+      diffUniBonus * 6;
+
+    let reason = 'Benzer bölüm';
+    if (targetRank) {
+      const pct = Math.round(relDiff * 100);
+      if (Math.abs(pct) <= 8) reason = 'Neredeyse aynı sıralama';
+      else if (pct > 8) reason = `%${pct} daha erişilebilir`;
+      else reason = `%${Math.abs(pct)} daha rekabetçi`;
+    }
+    if (sameLang && /ingilizce/i.test(item.language || '')) {
+      reason += ' · İngilizce';
+    }
+
+    scored.push({
+      score,
+      reason,
+      item: {
+        code: item.code,
+        universityId: item.universityId,
+        university: item.university,
+        universityType: item.universityType,
+        faculty: item.faculty,
+        department: item.department,
+        city: item.city,
+        scoreType: item.scoreType,
+        language: item.language,
+        scholarship: item.scholarship,
+        latestYear: item.latestYear,
+        latestRank: item.latestRank,
+        latestScore: item.latestScore,
+        quota: item.quota,
+      },
+    });
+  }
+
+  scored.sort((a, b) => b.score - a.score);
+  return scored.slice(0, limit).map((s) => ({ ...s.item, similarityReason: s.reason }));
+}
+
+/**
+ * Suggests catalog programs whose latestRank sits inside a rank gap [lowRank, highRank],
+ * tailored to the user's dominant scoreType and department keywords.
+ */
+export async function findGapFillersInCatalog(lowRank, highRank, { programs = [], excludeCodes = [], limit = 3 } = {}) {
+  const low = Number(lowRank);
+  const high = Number(highRank);
+  if (!Number.isFinite(low) || !Number.isFinite(high) || high <= low) return [];
+
+  const cat = await loadCatalog();
+  const excluded = new Set([...excludeCodes.map(String), ...programs.map((p) => String(p.code || ''))]);
+
+  // Dominant scoreType & department keywords from user's existing list
+  const stCounts = new Map();
+  const kwCounts = new Map();
+  for (const p of programs) {
+    if (p.scoreType) stCounts.set(p.scoreType, (stCounts.get(p.scoreType) || 0) + 1);
+    for (const tok of extractDeptCoreTokens(p.department)) {
+      kwCounts.set(tok, (kwCounts.get(tok) || 0) + 1);
+    }
+  }
+  const domScoreType = [...stCounts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || '';
+  const topKeywords = [...kwCounts.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 4)
+    .map(([k]) => k);
+
+  const mid = Math.sqrt(low * high); // geometric midpoint fits log-distributed YKS ranks best
+  const scored = [];
+
+  for (const item of cat.items) {
+    if (excluded.has(item.code)) continue;
+    if (domScoreType && item.scoreType !== domScoreType) continue;
+    if (!item.latestRank || item.latestRank <= low * 1.04 || item.latestRank >= high * 0.96) continue;
+
+    const itemTokens = extractDeptCoreTokens(item.department);
+    let kwScore = 0;
+    for (let i = 0; i < topKeywords.length; i += 1) {
+      if (itemTokens.includes(topKeywords[i])) kwScore += 18 - i * 3;
+    }
+    if (topKeywords.length && kwScore === 0) continue;
+
+    const dist = Math.abs(Math.log(item.latestRank) - Math.log(mid));
+    const midScore = Math.max(0, 30 - dist * 25);
+    const devletBonus = item.universityType === 'DEVLET' || /burslu/i.test(item.scholarship || '') ? 6 : 0;
+
+    scored.push({
+      score: kwScore + midScore + devletBonus,
+      item: {
+        code: item.code,
+        universityId: item.universityId,
+        university: item.university,
+        universityType: item.universityType,
+        department: item.department,
+        city: item.city,
+        scoreType: item.scoreType,
+        language: item.language,
+        scholarship: item.scholarship,
+        latestRank: item.latestRank,
+        quota: item.quota,
+      },
+    });
+  }
+
+  scored.sort((a, b) => b.score - a.score);
+  return scored.slice(0, limit).map((s) => s.item);
 }
