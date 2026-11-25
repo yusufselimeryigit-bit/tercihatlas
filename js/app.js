@@ -13,7 +13,7 @@ import {
   getAytFieldsForScoreType,
   generateSyncKey,
   exportProgramsToCsv,
-} from './utils.js?v=12';
+} from './utils.js?v=13';
 import {
   getApiBase,
   setCustomApiBase,
@@ -27,7 +27,7 @@ import {
   pushCloudSync,
   createShareSnapshot,
   fetchShareSnapshot,
-} from './api.js?v=12';
+} from './api.js?v=13';
 import {
   renderSparkline,
   renderDetailTrendChart,
@@ -35,7 +35,7 @@ import {
   renderExamProgressionChart,
   renderMiniNetSparkline,
   renderAppleActivityRings,
-} from './charts.js?v=12';
+} from './charts.js?v=13';
 import {
   compute2027Projection,
   compareWithMyNets,
@@ -48,15 +48,15 @@ import {
   analyzeSubjectLeverage,
   computeGoalRingsAndWeeklyPlan,
   compareScenarios,
-} from './analytics.js?v=12';
-import { ABROAD_PRESETS, DEFAULT_ABROAD_TOOLS, createAbroadRecord, renderAbroadView } from './abroad.js?v=12';
-import { parseExamPdfFile } from './pdf-parser.js?v=12';
+} from './analytics.js?v=13';
+import { ABROAD_PRESETS, DEFAULT_ABROAD_TOOLS, createAbroadRecord, renderAbroadView } from './abroad.js?v=13';
+import { parseExamPdfFile } from './pdf-parser.js?v=13';
 import {
   renderTurkeyCampusMap,
   renderCostCalculator,
   renderTimelineView,
   downloadTimelineIcs,
-} from './map-cost.js?v=12';
+} from './map-cost.js?v=13';
 
 const STATE_KEY = 'tercihatlas_state_v1';
 const SYNC_KEY_STORAGE = 'tercihatlas_sync_key';
@@ -1166,7 +1166,7 @@ function renderPreferencesView() {
     return `${headerHtml}${diffBannerHtml}${scenarioHtml}${kpiHtml}
     <section class="apple-hero">
       <div class="apple-hero-content">
-        <img src="icon.svg" alt="TercihAtlas" class="apple-hero-icon" />
+        <img src="icon-192.png?v=13" alt="TercihAtlas" class="apple-hero-icon" />
         <h2>Bölüm ara veya program kodunu yapıştır.</h2>
         <p>"İTÜ Bilgisayar", "Ankara Devlet Tıp" gibi doğrudan YÖK Atlas'ta ara ya da 9 haneli program kodunu/linkini yapıştır.</p>
         <form class="hero-spotlight" id="heroSpotlightForm">
@@ -4433,7 +4433,7 @@ async function init() {
 
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker
-      .register('./sw.js?v=12')
+      .register('./sw.js?v=13')
       .then((reg) => reg.update().catch(() => {}))
       .catch(() => {});
   }

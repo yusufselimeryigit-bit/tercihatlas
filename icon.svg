@@ -1,28 +1,33 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
   <defs>
-    <linearGradient id="appleBg" x1="64" y1="32" x2="448" y2="480" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="#339CFF"/>
-      <stop offset="52%" stop-color="#0071E3"/>
-      <stop offset="100%" stop-color="#0051B3"/>
+    <linearGradient id="ivoryBg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FCFBF8"/>
+      <stop offset="100%" stop-color="#ECE8DE"/>
     </linearGradient>
-    <linearGradient id="glassSheen" x1="256" y1="0" x2="256" y2="260" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.34"/>
-      <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0"/>
+    <linearGradient id="navyL" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#152D58"/>
+      <stop offset="100%" stop-color="#0E2042"/>
     </linearGradient>
-    <linearGradient id="needleTop" x1="256" y1="118" x2="256" y2="256" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="#FFFFFF"/>
-      <stop offset="100%" stop-color="#E5F1FF"/>
+    <linearGradient id="navyR" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0E2144"/>
+      <stop offset="100%" stop-color="#091630"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#D9B254"/>
+      <stop offset="100%" stop-color="#B88A2C"/>
     </linearGradient>
   </defs>
-  <rect width="512" height="512" rx="118" fill="url(#appleBg)"/>
-  <rect x="8" y="8" width="496" height="496" rx="112" fill="url(#glassSheen)"/>
-  <rect x="12" y="12" width="488" height="488" rx="108" stroke="rgba(255,255,255,0.28)" stroke-width="4"/>
-  <!-- Outer dial ring -->
-  <circle cx="256" cy="256" r="144" stroke="rgba(255,255,255,0.3)" stroke-width="10"/>
-  <!-- Cardinal ticks -->
-  <path d="M256 84v18M256 410v18M84 256h18M410 256h18" stroke="rgba(255,255,255,0.65)" stroke-width="10" stroke-linecap="round"/>
-  <!-- Compass diamond -->
-  <path d="M256 122 L308 256 L256 390 L204 256 Z" fill="rgba(255,255,255,0.22)"/>
-  <path d="M256 122 L308 256 L256 238 L204 256 Z" fill="url(#needleTop)"/>
-  <circle cx="256" cy="256" r="16" fill="#0071E3" stroke="#FFFFFF" stroke-width="8"/>
+  <rect width="512" height="512" fill="url(#ivoryBg)"/>
+  <!-- Royal Navy Shield (left & right subtle split) -->
+  <path d="M256 96 C202 96 156 106 130 120 L130 250 C130 338 190 388 256 420 Z" fill="url(#navyL)"/>
+  <path d="M256 96 C310 96 356 106 382 120 L382 250 C382 338 322 388 256 420 Z" fill="url(#navyR)"/>
+  <!-- Brushed Gold Inner Border -->
+  <path d="M256 112 C206 112 166 121 144 132 L144 248 C144 326 198 372 256 402 C314 372 368 326 368 248 L368 132 C346 121 306 112 256 112 Z" fill="none" stroke="url(#gold)" stroke-width="8" stroke-linejoin="round"/>
+  <!-- Gold 4-Point Guiding Star -->
+  <path d="M256 136 L263 163 L284 170 L263 177 L256 204 L249 177 L228 170 L249 163 Z" fill="url(#gold)"/>
+  <!-- Ivory Open Book -->
+  <path d="M251 226 C234 214 210 212 190 215 L190 302 C210 299 234 301 251 314 Z" fill="#FCFBF8"/>
+  <path d="M261 226 C278 214 302 212 322 215 L322 302 C302 299 278 301 261 314 Z" fill="#FCFBF8"/>
+  <path d="M178 228 L178 314 L244 314" fill="none" stroke="#FCFBF8" stroke-width="8" stroke-linecap="square" stroke-linejoin="miter"/>
+  <path d="M334 228 L334 314 L268 314" fill="none" stroke="#FCFBF8" stroke-width="8" stroke-linecap="square" stroke-linejoin="miter"/>
 </svg>
