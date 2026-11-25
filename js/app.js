@@ -1532,31 +1532,21 @@ function renderAll() {
   finishRender();
 }
 
-function renderScenarioMenu() {
+function renderScenarioBar() {
   if (ui.readOnlyShare) return '';
-  const activeSc = getActiveScenario();
-  return `<div class="scenario-menu-wrap">
-    <button class="scenario-trigger-pill" id="scenarioMenuBtn" type="button" aria-haspopup="menu" aria-expanded="false">
-      <span>${escapeHtml(activeSc?.name || 'Plan A')}</span>
-      <svg class="sf-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="m6 9 6 6 6-6"/></svg>
-    </button>
-    <div class="actions-dropdown scenario-dropdown" id="scenarioDropdown" role="menu">
-      <div class="dropdown-section-label">Tercih Planları</div>
-      ${state.scenarios
-        .map(
-          (sc) => `<button class="ctx-item ${sc.id === state.activeScenarioId ? 'active' : ''}" data-switch-scenario="${escapeHtml(sc.id)}">
-            <span style="flex:1;text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(sc.name)}</span>
-            <span class="tabular" style="font-size:11.5px;color:var(--text-tertiary);">${sc.programs.length}</span>
-            ${sc.id === state.activeScenarioId ? SF.check : ''}
-          </button>`,
-        )
-        .join('')}
-      <div class="ctx-sep"></div>
-      <button class="ctx-item" id="newScenarioBtn">${SF.plus} Yeni Plan Oluştur</button>
-      <button class="ctx-item" id="dupScenarioBtn">${SF.copy} Aktif Planı Kopyala</button>
-      <button class="ctx-item" id="renameScenarioBtn">Planı Adlandır</button>
-      ${state.scenarios.length > 1 ? `<button class="ctx-item danger" id="delScenarioBtn">${SF.trash} Planı Sil</button>` : ''}
-    </div>
+  return `<div class="scenario-bar" aria-label="Tercih senaryoları">
+    ${state.scenarios
+      .map(
+        (sc) => `<button class="scenario-pill ${sc.id === state.activeScenarioId ? 'active' : ''}" data-switch-scenario="${escapeHtml(sc.id)}">
+          <span>${escapeHtml(sc.name)}</span>
+          <span class="tabular" style="opacity:0.75;font-size:11px;">(${sc.programs.length})</span>
+        </button>`,
+      )
+      .join('')}
+    <button class="scenario-pill" id="newScenarioBtn" title="Yeni boş senaryo oluştur">${SF.plus} Yeni Plan</button>
+    <button class="scenario-pill" id="dupScenarioBtn" title="Aktif planı kopyala">${SF.copy} Kopyala</button>
+    <button class="scenario-pill" id="renameScenarioBtn" title="Aktif planı yeniden adlandır">Adlandır</button>
+    ${state.scenarios.length > 1 ? `<button class="scenario-pill" id="delScenarioBtn" style="color:var(--rose);" title="Aktif planı sil">${SF.trash}</button>` : ''}
   </div>`;
 }
 
@@ -1570,45 +1560,53 @@ function renderKpiStrip() {
   const validRanks = state.programs.map((p) => p.latestRank).filter((r) => r && r > 0);
   const bestRank = validRanks.length ? Math.min(...validRanks) : null;
   const worstRank = validRanks.length ? Math.max(...validRanks) : null;
-  const daysToYks = getDaysUntil('2027-06-19');
 
-  return `<section class="summary-strip" aria-label="Tercih özeti">
-    <div class="summary-cell">
-      <span class="summary-label">Tercihler</span>
-      <div class="summary-val-row tabular">
-        <strong class="summary-val">${total}<span class="summary-muted">/24</span></strong>
-        ${total
-          ? `<span class="summary-mini-bar" title="${hayal} Hayal · ${hedef} Hedef · ${guvenli} Güvenli">
-               ${hayal ? `<i style="width:${pct(hayal)}%;background:var(--rose)"></i>` : ''}
-               ${hedef ? `<i style="width:${pct(hedef)}%;background:var(--accent)"></i>` : ''}
-               ${guvenli ? `<i style="width:${pct(guvenli)}%;background:var(--green-bright)"></i>` : ''}
-             </span>`
-          : ''}
+  return `<section class="kpi-strip" aria-label="Tercih özeti">
+    <div class="kpi-card">
+      <div class="kpi-head">
+        <span class="kpi-label"><span class="sf-badge sf-badge-blue">${SF.listBadge}</span>Tercih Sayısı</span>
+        <span style="font-size:11.5px;color:var(--text-tertiary);font-weight:500;">24 Hak</span>
+      </div>
+      <div class="kpi-value tabular">${total}<span style="font-size:15px;font-weight:500;color:var(--text-tertiary)">/ 24</span></div>
+      <div class="kpi-sub">${total === 0 ? 'İlk bölümünü ekle' : `${Math.max(0, 24 - total)} boş kontenjan kaldı`}</div>
+    </div>
+
+    <div class="kpi-card">
+      <div class="kpi-head">
+        <span class="kpi-label"><span class="sf-badge sf-badge-rose">${SF.pieBadge}</span>Risk Dengesi</span>
+      </div>
+      <div class="apple-stack-bar" aria-label="Risk dağılım çubuğu">
+        ${hayal ? `<div class="apple-stack-seg" style="width:${pct(hayal)}%;background:var(--rose)"></div>` : ''}
+        ${hedef ? `<div class="apple-stack-seg" style="width:${pct(hedef)}%;background:var(--accent)"></div>` : ''}
+        ${guvenli ? `<div class="apple-stack-seg" style="width:${pct(guvenli)}%;background:var(--green-bright)"></div>` : ''}
+      </div>
+      <div class="risk-legend tabular">
+        <span class="risk-legend-item"><span class="dot" style="background:var(--rose)"></span>${hayal} Hayal</span>
+        <span class="risk-legend-item"><span class="dot" style="background:var(--accent)"></span>${hedef} Hedef</span>
+        <span class="risk-legend-item"><span class="dot" style="background:var(--green-bright)"></span>${guvenli} Güvenli</span>
       </div>
     </div>
 
-    <div class="summary-divider" aria-hidden="true"></div>
-
-    <div class="summary-cell">
-      <span class="summary-label">Sıralama Bandı</span>
-      <strong class="summary-val tabular">${bestRank ? `${formatRank(bestRank)} – ${formatRank(worstRank)}` : '—'}</strong>
+    <div class="kpi-card">
+      <div class="kpi-head">
+        <span class="kpi-label"><span class="sf-badge sf-badge-green">${SF.chartBadge}</span>Sıralama Bandı</span>
+      </div>
+      <div class="kpi-value tabular" style="font-size:21px;">
+        ${bestRank ? `${formatRank(bestRank)} – ${formatRank(worstRank)}` : '—'}
+      </div>
+      <div class="kpi-sub">${validRanks.length ? `${validRanks.length} programın son taban sırası` : 'Bölüm ekleyince hesaplanır'}</div>
     </div>
 
-    <div class="summary-divider" aria-hidden="true"></div>
-
-    <div class="summary-cell">
-      <span class="summary-label">Hedef Sıralaman</span>
-      <input id="targetRankInput" class="summary-rank-input tabular" type="number" min="1" max="3000000" step="500"
-        value="${state.targetRank || ''}" placeholder="15000" aria-label="Hedef sıralama" ${ui.readOnlyShare ? 'disabled' : ''} />
+    <div class="kpi-card">
+      <div class="kpi-head">
+        <span class="kpi-label"><span class="sf-badge sf-badge-amber">${SF.targetBadge}</span>Hedef Sıralaman</span>
+      </div>
+      <div>
+        <input id="targetRankInput" class="target-rank-input tabular" type="number" min="1" max="3000000" step="500"
+          value="${state.targetRank || ''}" placeholder="15000" aria-label="Hedef sıralama" ${ui.readOnlyShare ? 'disabled' : ''} />
+      </div>
+      <div class="kpi-sub">Otomatik Hayal / Hedef / Güvenli etiketi</div>
     </div>
-
-    ${daysToYks > 0
-      ? `<div class="summary-divider summary-hide-sm" aria-hidden="true"></div>
-         <button class="summary-cell summary-cell-btn summary-hide-sm" id="openRoadmapShortcutBtn" type="button" title="YKS 2027 & Yurtdışı Takvim">
-           <span class="summary-label">YKS 2027</span>
-           <strong class="summary-val tabular" style="color:var(--accent);">${daysToYks} gün ›</strong>
-         </button>`
-      : ''}
   </section>`;
 }
 
@@ -1618,40 +1616,41 @@ function renderPreferencesView() {
   const est = estimateYksRankFromNets(state.myNets);
   const reachableCount = est ? state.programs.filter((p) => isProgramCurrentlyReachable(p, est)).length : 0;
 
+  const activeSc = getActiveScenario();
+  const daysToYks = getDaysUntil('2027-06-19');
   const prefAudit = state.programs.length >= 2 ? auditPreferenceOrder(state.programs, state.targetRank) : null;
-  const headerHtml = `<div class="page-header page-header-calm">
-    <div class="page-title-cluster">
+  const headerHtml = `<div class="page-header">
+    <div>
       <h1 class="page-title">Tercihlerim</h1>
-      ${renderScenarioMenu()}
-      ${prefAudit?.deadPreferences?.length
-        ? `<button class="audit-whisper-link" id="openAuditShortcutBtn" type="button" title="Ölü tercih uyarısını incele">⚠ ${prefAudit.deadPreferences.length} ölü tercih</button>`
-        : ''}
+      <p class="page-status tabular">${escapeHtml(activeSc?.name || 'Plan A')} · ${state.programs.length} / 24 tercih${state.targetRank ? ` · Hedef ${formatRank(state.targetRank)}` : ''}</p>
     </div>
-    <div class="actions-menu-wrap" style="display:flex;align-items:center;gap:8px;">
-      ${state.programs.length && !ui.readOnlyShare
-        ? `<button class="btn btn-sm ${ui.selectMode ? 'btn-primary' : 'btn-ghost'}" id="toggleSelectModeBtn" type="button" title="Çoklu seçim modu (S)">${ui.selectMode ? `${SF.check} Bitti` : 'Seç'}</button>`
+    <div class="actions-menu-wrap" style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;">
+      ${daysToYks > 0
+        ? `<button class="countdown-pill-btn tabular" id="openRoadmapShortcutBtn" type="button" title="YKS 2027 & Yurtdışı Takvim">⏳ YKS 2027: ${daysToYks} gün</button>`
         : ''}
-      <button class="btn btn-sm" id="prefActionsMenuBtn" aria-haspopup="menu" aria-expanded="false">
-        ${ui.refreshBusy
-          ? `${SF.refresh} ${escapeHtml(ui.refreshProgressText || 'Güncelleniyor...')}`
-          : `<svg class="sf-icon" width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg><span>İşlemler</span>`}
-      </button>
-      <div class="actions-dropdown" id="prefActionsDropdown" role="menu">
-        <button class="ctx-item" id="openDiscoverShortcutBtn">✦ Bölüm Keşfet Sihirbazı</button>
-        ${state.programs.length && !ui.readOnlyShare
-          ? `<button class="ctx-item" id="refreshAllBtn" ${ui.refreshBusy ? 'disabled' : ''}>${SF.refresh} Tümünü Canlı Güncelle</button>
-             <button class="ctx-item" id="openSnapshotsBtn"><svg class="sf-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg> Zaman Makinesi (${state.snapshots.length})</button>`
-          : ''}
-        ${state.programs.length
-          ? `<div class="ctx-sep"></div>
-             <button class="ctx-item" id="openPresentationBtn"><svg class="sf-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg> Sunum / Okuma Modu</button>
-             <button class="ctx-item" id="exportPngCardBtn">${SF.share} PNG Özet Kartı İndir</button>
-             <button class="ctx-item" id="openOsymBtn">${SF.share} ÖSYM AİS & Paylaşım Linki</button>
-             <button class="ctx-item" id="printReportBtn">${SF.print} PDF Raporu / Yazdır</button>`
-          : ''}
-        <div class="ctx-sep"></div>
-        <button class="ctx-item" id="openShortcutsMenuBtn">⌨️ Klavye Kısayolları (?)</button>
-      </div>
+      ${prefAudit?.deadPreferences?.length
+        ? `<button class="audit-warn-pill" id="openAuditShortcutBtn" type="button" title="Ölü tercih uyarısını incele">⚠ ${prefAudit.deadPreferences.length} Ölü Tercih</button>`
+        : ''}
+      <button class="btn btn-soft btn-sm" id="openDiscoverShortcutBtn">✦ Keşfet</button>
+      ${state.programs.length
+        ? `<button class="btn btn-sm" id="prefActionsMenuBtn" aria-haspopup="menu" aria-expanded="false">
+            ${ui.refreshBusy
+              ? `${SF.refresh} ${escapeHtml(ui.refreshProgressText || 'Güncelleniyor...')}`
+              : `<svg class="sf-icon" width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg><span>İşlemler</span>`}
+          </button>
+          <div class="actions-dropdown" id="prefActionsDropdown" role="menu">
+            ${!ui.readOnlyShare
+              ? `<button class="ctx-item" id="refreshAllBtn" ${ui.refreshBusy ? 'disabled' : ''}>${SF.refresh} Tümünü Canlı Güncelle</button>
+                 <button class="ctx-item" id="openSnapshotsBtn"><svg class="sf-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg> Zaman Makinesi (${state.snapshots.length})</button>`
+              : ''}
+            <button class="ctx-item" id="openPresentationBtn"><svg class="sf-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg> Sunum / Okuma Modu</button>
+            <button class="ctx-item" id="exportPngCardBtn">${SF.share} PNG Özet Kartı İndir</button>
+            <button class="ctx-item" id="openOsymBtn">${SF.share} ÖSYM AİS & Paylaşım Linki</button>
+            <button class="ctx-item" id="printReportBtn">${SF.print} PDF Raporu / Yazdır</button>
+            <div class="ctx-sep"></div>
+            <button class="ctx-item" id="openShortcutsMenuBtn">⌨️ Klavye Kısayolları (?)</button>
+          </div>`
+        : ''}
     </div>
   </div>`;
 
@@ -1677,10 +1676,11 @@ function renderPreferencesView() {
       </div>`
     : '';
 
+  const scenarioHtml = renderScenarioBar();
   const kpiHtml = renderKpiStrip();
 
   if (state.programs.length === 0) {
-    return `${headerHtml}${diffBannerHtml}${kpiHtml}
+    return `${headerHtml}${diffBannerHtml}${scenarioHtml}${kpiHtml}
     <section class="apple-hero">
       <div class="apple-hero-content">
         <img src="icon-192.png?v=13" alt="TercihAtlas" class="apple-hero-icon" />
@@ -1713,7 +1713,7 @@ function renderPreferencesView() {
     </section>`;
   }
 
-  const toolbarHtml = `<section class="toolbar toolbar-calm">
+  const toolbarHtml = `<section class="toolbar">
     <div class="toolbar-left">
       <div class="search-box">
         <svg class="sf-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7.5"/><path d="m20 20-3.8-3.8"/></svg>
@@ -1727,8 +1727,8 @@ function renderPreferencesView() {
             return `<button class="filter-pill ${ui.filterRisk === rk && !ui.filterReachable ? 'active' : ''}" data-filter-risk="${rk}">${label}</button>`;
           })
           .join('')}
-        ${est && reachableCount > 0
-          ? `<button class="filter-pill ${ui.filterReachable ? 'active' : ''}" data-filter-reachable="1" title="Mevcut netlerinle şu an girebildiğin bölümler">✓ Giriyorsun (${reachableCount})</button>`
+        ${est
+          ? `<button class="filter-pill ${ui.filterReachable ? 'active' : ''}" data-filter-reachable="1" title="Mevcut netlerinle şu an girebildiğin bölümler">✓ Şu An Giriyorsun (${reachableCount})</button>`
           : ''}
         ${scoreTypes.length > 1
           ? scoreTypes
@@ -1742,20 +1742,23 @@ function renderPreferencesView() {
     </div>
 
     <div class="toolbar-right">
+      ${!ui.readOnlyShare
+        ? `<button class="btn btn-sm ${ui.selectMode ? 'btn-primary' : ''}" id="toggleSelectModeBtn" type="button" title="Çoklu seçim modu (S)">${ui.selectMode ? `${SF.check} Bitti` : 'Seç'}</button>`
+        : ''}
       <select id="sortSelect" class="select toolbar-select" aria-label="Sıralama">
         <option value="manual" ${ui.sortBy === 'manual' ? 'selected' : ''}>Tercih Sıram</option>
-        <option value="rank-asc" ${ui.sortBy === 'rank-asc' ? 'selected' : ''}>Sıralama (Yüksek)</option>
-        <option value="rank-desc" ${ui.sortBy === 'rank-desc' ? 'selected' : ''}>Sıralama (Düşük)</option>
+        <option value="rank-asc" ${ui.sortBy === 'rank-asc' ? 'selected' : ''}>Sıralama (En Yüksek)</option>
+        <option value="rank-desc" ${ui.sortBy === 'rank-desc' ? 'selected' : ''}>Sıralama (En Düşük)</option>
         <option value="rating-desc" ${ui.sortBy === 'rating-desc' ? 'selected' : ''}>Yıldız Puanım</option>
         <option value="trend-up" ${ui.sortBy === 'trend-up' ? 'selected' : ''}>En Çok Yükselen</option>
       </select>
 
       <div class="segmented" role="group" aria-label="Görünüm">
-        <button class="seg-btn seg-btn-sm ${ui.viewMode === 'cards' ? 'active' : ''}" data-view="cards" title="Kart görünümü">
+        <button class="seg-btn seg-btn-sm ${ui.viewMode === 'cards' ? 'active' : ''}" data-view="cards">
           <svg class="sf-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7.5" height="7.5" rx="2"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="2"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="2"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="2"/></svg>
           <span>Kart</span>
         </button>
-        <button class="seg-btn seg-btn-sm ${ui.viewMode === 'table' ? 'active' : ''}" data-view="table" title="Liste görünümü">
+        <button class="seg-btn seg-btn-sm ${ui.viewMode === 'table' ? 'active' : ''}" data-view="table">
           <svg class="sf-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
           <span>Liste</span>
         </button>
@@ -1764,7 +1767,7 @@ function renderPreferencesView() {
   </section>`;
 
   if (!filtered.length) {
-    return `${headerHtml}${diffBannerHtml}${kpiHtml}${toolbarHtml}<div class="empty-state" style="padding:40px 24px;">
+    return `${headerHtml}${diffBannerHtml}${scenarioHtml}${kpiHtml}${toolbarHtml}<div class="empty-state" style="padding:40px 24px;">
       <h2>Eşleşen program bulunamadı</h2>
       <p>Arama kelimesini veya seçili filtreyi temizleyerek tüm tercihlerini görebilirsin.</p>
       <button class="btn" id="clearFiltersBtn">Filtreleri Temizle</button>
@@ -1772,7 +1775,7 @@ function renderPreferencesView() {
   }
 
   const contentHtml = ui.viewMode === 'table' ? renderTableView(filtered) : renderCardsView(filtered);
-  return `${headerHtml}${diffBannerHtml}${kpiHtml}${toolbarHtml}${contentHtml}`;
+  return `${headerHtml}${diffBannerHtml}${scenarioHtml}${kpiHtml}${toolbarHtml}${contentHtml}`;
 }
 
 function renderCardsView(programs) {
@@ -1784,19 +1787,32 @@ function renderCardsView(programs) {
     ui.filterScoreType === 'all' &&
     !ui.filterReachable;
   const est = estimateYksRankFromNets(state.myNets);
-  return `<section class="cards-grid cards-grid-calm" id="programList">
+  return `<section class="cards-grid" id="programList">
     ${programs
       .map((p) => {
+        const net0 = p.nets?.[0];
+        const gap = compareWithMyNets(p, state.myNets);
         const proj = compute2027Projection(p);
         const isCompared = state.compareCodes.includes(p.code);
         const isReachable = isProgramCurrentlyReachable(p, est);
         const riskMeta = RISK_META[p.risk] || RISK_META.hedef;
-        const metaShort = [p.city, p.language, p.scholarship && !/ücretsiz/i.test(p.scholarship) ? p.scholarship : null].filter(Boolean).slice(0, 3);
+        const metaParts = [p.scoreType, p.city, p.language, p.scholarship, p.accreditation].filter(Boolean);
+        const netSummary = net0
+          ? `TYT ${formatNet(net0.tytTotal)} · ${p.scoreType === 'DİL' ? `YDT ${formatNet(net0.ydt)}` : `AYT ${formatNet(net0.aytTotal)}`} net`
+          : 'Net verisi yok';
+
+        let netGapChip = '';
+        if (gap && (gap.tytDiff !== null || gap.aytDiff !== null)) {
+          const totalGap = (gap.tytDiff || 0) + (gap.aytDiff || 0);
+          netGapChip = `<span class="${totalGap >= 0 ? 'net-delta-pos' : 'net-delta-neg'} tabular" title="Kendi netlerinle son yerleşen farkı">Sen: ${formatSignedNet(totalGap)} net</span>`;
+        }
+
+        const checkDone = PROGRAM_CHECKLIST_ITEMS.filter((it) => p.checklist?.[it.key]).length;
         const medalCls = p._order === 1 ? 'order-gold' : p._order === 2 ? 'order-silver' : p._order === 3 ? 'order-bronze' : '';
         const isSel = ui.selectMode && ui.selectedCodes.has(p.code);
         const isKbd = !ui.selectMode && ui.kbdFocusCode === p.code;
 
-        return `<article class="prog-card prog-card-calm ${isSel ? 'is-selected' : ''} ${isKbd ? 'kbd-focused' : ''}" data-code="${escapeHtml(p.code)}" draggable="${manualMode && !ui.selectMode ? 'true' : 'false'}">
+        return `<article class="prog-card ${isSel ? 'is-selected' : ''} ${isKbd ? 'kbd-focused' : ''}" data-code="${escapeHtml(p.code)}" draggable="${manualMode && !ui.selectMode ? 'true' : 'false'}">
           <div class="card-top">
             <div class="card-left-head">
               ${ui.selectMode ? `<span class="select-check-badge">${isSel ? SF.check : ''}</span>` : ''}
@@ -1804,22 +1820,31 @@ function renderCardsView(programs) {
               <div class="card-titles">
                 <div class="card-dept">${escapeHtml(p.department)}</div>
                 <div class="card-uni">${escapeHtml(p.university)}</div>
-                <div class="card-meta-line">${escapeHtml(metaShort.join(' · '))}</div>
+                <div class="card-meta-line">${escapeHtml(metaParts.join(' · '))}</div>
               </div>
             </div>
-            <div style="display:flex;flex-direction:column;align-items:flex-end;gap:5px;flex-shrink:0;">
-              <span class="order-pill ${medalCls} tabular" title="${manualMode ? 'Sürükleyerek sırala' : 'Tercih sıran'}">
-                #${String(p._order).padStart(2, '0')}
-              </span>
+            <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0;">
               <span class="pill pill-risk-${escapeHtml(p.risk || 'hedef')}">${escapeHtml(riskMeta.label)}</span>
+              <span class="order-pill ${medalCls} tabular" title="${manualMode ? 'Sürükleyerek sırala' : 'Tercih sıran'}">
+                ${manualMode ? SF.grip : ''}#${String(p._order).padStart(2, '0')}
+              </span>
             </div>
           </div>
 
-          <div class="card-metrics card-metrics-calm">
-            <div class="metric-hero-col">
-              <span class="metric-label">${escapeHtml(p.latestYear || 2026)} Taban Sıralama</span>
-              <span class="metric-val tabular">${formatRank(p.latestRank)}</span>
-              ${proj ? `<span class="metric-proj-sub tabular">2027 tahmini: ${formatRank(proj.low)} – ${formatRank(proj.high)}</span>` : ''}
+          <div class="card-metrics">
+            <div class="metric-group">
+              <div class="metric-item">
+                <span class="metric-label">${escapeHtml(p.latestYear || 2026)} Sıralama</span>
+                <span class="metric-val tabular">${formatRank(p.latestRank)}</span>
+              </div>
+              <div class="metric-item">
+                <span class="metric-label">2027 Tahmini</span>
+                <span class="metric-val-sub tabular" style="color:var(--accent)">${proj ? `${formatRank(proj.low)}–${formatRank(proj.high)}` : '—'}</span>
+              </div>
+              <div class="metric-item">
+                <span class="metric-label">Kontenjan</span>
+                <span class="metric-val-sub tabular">${p.quota ?? '—'}</span>
+              </div>
             </div>
             <div class="spark-col">
               ${renderSparkline(p.history)}
@@ -1827,13 +1852,16 @@ function renderCardsView(programs) {
             </div>
           </div>
 
-          <div class="card-footer card-footer-calm">
+          <div class="card-footer">
             <div class="card-footer-left">
-              ${isReachable ? `<span class="reachable-pill">${SF.check} Giriyorsun</span>` : `<span class="card-score-tag">${escapeHtml(p.scoreType || 'SAY')}</span>`}
+              ${isReachable ? `<span class="reachable-pill">${SF.check} Şu an giriyorsun</span>` : ''}
+              <span class="tabular" style="font-weight:500;">${escapeHtml(netSummary)}</span>
+              ${netGapChip}
               ${renderStarsInline(p.rating)}
-              ${p.notes ? `<span style="display:inline-flex;align-items:center;color:var(--text-tertiary);" title="Kişisel not var">${SF.note}</span>` : ''}
+              ${checkDone ? `<span style="font-size:11.5px;color:var(--green);font-weight:600;">${checkDone}/4</span>` : ''}
+              ${p.notes ? `<span style="display:inline-flex;align-items:center;gap:4px;color:var(--text-tertiary);" title="Kişisel not var">${SF.note}</span>` : ''}
             </div>
-            <div class="card-footer-actions card-hover-actions" data-stop-card="1">
+            <div class="card-footer-actions" data-stop-card="1">
               ${manualMode
                 ? `<span class="card-reorder-btns">
                      <button class="mini-action mini-action-icon" data-move-up="${escapeHtml(p.code)}" title="Yukarı taşı">${SF.up}</button>
@@ -5108,40 +5136,15 @@ function renderSyncModal() {
 // Event Bindings
 // ============================================================================
 function bindPreferencesEvents() {
-  const scMenuBtn = document.getElementById('scenarioMenuBtn');
-  const scDropdown = document.getElementById('scenarioDropdown');
-  scMenuBtn?.addEventListener('click', (e) => {
-    e.stopPropagation();
-    document.getElementById('prefActionsDropdown')?.classList.remove('open');
-    const open = scDropdown?.classList.toggle('open');
-    scMenuBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
-  });
-
   document.querySelectorAll('[data-switch-scenario]').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      scDropdown?.classList.remove('open');
-      switchScenario(btn.dataset.switchScenario);
-    });
+    btn.addEventListener('click', () => switchScenario(btn.dataset.switchScenario));
   });
-  document.getElementById('newScenarioBtn')?.addEventListener('click', () => {
-    scDropdown?.classList.remove('open');
-    createScenario({ duplicateCurrent: false });
-  });
-  document.getElementById('dupScenarioBtn')?.addEventListener('click', () => {
-    scDropdown?.classList.remove('open');
-    createScenario({ duplicateCurrent: true });
-  });
-  document.getElementById('renameScenarioBtn')?.addEventListener('click', () => {
-    scDropdown?.classList.remove('open');
-    renameActiveScenario();
-  });
-  document.getElementById('delScenarioBtn')?.addEventListener('click', () => {
-    scDropdown?.classList.remove('open');
-    deleteActiveScenario();
-  });
+  document.getElementById('newScenarioBtn')?.addEventListener('click', () => createScenario({ duplicateCurrent: false }));
+  document.getElementById('dupScenarioBtn')?.addEventListener('click', () => createScenario({ duplicateCurrent: true }));
+  document.getElementById('renameScenarioBtn')?.addEventListener('click', renameActiveScenario);
+  document.getElementById('delScenarioBtn')?.addEventListener('click', deleteActiveScenario);
 
   document.getElementById('openDiscoverShortcutBtn')?.addEventListener('click', () => {
-    document.getElementById('prefActionsDropdown')?.classList.remove('open');
     ui.region = 'TR';
     ui.tab = 'analysis';
     ui.analysisSubTab = 'discover';
@@ -5166,7 +5169,6 @@ function bindPreferencesEvents() {
   const prefDropdown = document.getElementById('prefActionsDropdown');
   prefMenuBtn?.addEventListener('click', (e) => {
     e.stopPropagation();
-    document.getElementById('scenarioDropdown')?.classList.remove('open');
     const open = prefDropdown?.classList.toggle('open');
     prefMenuBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
   });
@@ -5986,7 +5988,6 @@ async function init() {
     closeContextMenu();
     closeAppearancePopover();
     document.getElementById('prefActionsDropdown')?.classList.remove('open');
-    document.getElementById('scenarioDropdown')?.classList.remove('open');
   });
 
   document.addEventListener('keydown', (e) => {
@@ -6016,7 +6017,6 @@ async function init() {
       closeContextMenu();
       closeAppearancePopover();
       document.getElementById('prefActionsDropdown')?.classList.remove('open');
-      document.getElementById('scenarioDropdown')?.classList.remove('open');
       closeDrawer();
       closeAddModal();
       closeMyNetsModal();
