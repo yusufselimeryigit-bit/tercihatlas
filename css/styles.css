@@ -4925,3 +4925,328 @@ button, a, input, select, textarea, .prog-card, .apple-list-row {
     font-size: 32px;
   }
 }
+
+/* ==========================================================================
+   v26: Dead-Pref Banner & Badges, Bk. Special Condition Translator Popover,
+        Spotlight Filter Toggles & Compare Personal Decision Matrix (1-10)
+   ========================================================================== */
+.dead-pref-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding: 13px 16px;
+  margin-bottom: 16px;
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--rose) 8%, var(--surface));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--rose) 28%, transparent), var(--shadow-xs);
+}
+
+.dead-pref-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: var(--rose-soft);
+  color: var(--rose);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.dead-pref-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: var(--rose);
+  color: #FFFFFF;
+  font-size: 10.5px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.prog-card.is-dead-pref {
+  box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--rose) 55%, transparent), var(--shadow-card);
+}
+
+.apple-list-row.is-dead-pref {
+  background: color-mix(in srgb, var(--rose) 5%, var(--surface));
+}
+
+.trend-new {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: var(--indigo-soft);
+  color: var(--indigo-apple);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+/* Spotlight Advanced Check Pills */
+.spot-check-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 30px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: var(--bg-grouped);
+  font-size: 12px;
+  font-weight: 550;
+  color: var(--text-secondary);
+  cursor: pointer;
+  user-select: none;
+  transition: background 140ms ease, color 140ms ease;
+}
+
+.spot-check-pill:hover {
+  background: var(--bg-grouped-hover);
+  color: var(--text);
+}
+
+.spot-check-pill input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+  accent-color: var(--accent);
+  margin: 0;
+}
+
+/* ÖSYM Bk. Translator Chips & Liquid Glass Popover */
+.bk-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 700;
+  background: var(--bg-grouped);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: transform 140ms var(--spring), background 140ms ease, color 140ms ease;
+}
+
+.bk-chip:hover {
+  transform: translateY(-1px);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.bk-chip.bk-tone-rose {
+  background: var(--rose-soft);
+  color: var(--rose);
+}
+
+.bk-chip.bk-tone-amber {
+  background: var(--amber-soft);
+  color: var(--amber);
+}
+
+.bk-chip.bk-tone-green {
+  background: var(--green-soft);
+  color: var(--green);
+}
+
+.bk-popover {
+  position: fixed;
+  z-index: 125;
+  padding: 14px 16px;
+  border-radius: 18px;
+  background: var(--glass-strong);
+  backdrop-filter: saturate(220%) blur(38px);
+  -webkit-backdrop-filter: saturate(220%) blur(38px);
+  box-shadow: var(--shadow-float);
+  opacity: 0;
+  transform: translateY(-4px) scale(0.96);
+  pointer-events: none;
+  transition: opacity 150ms ease, transform 200ms var(--spring);
+}
+
+.bk-popover.open {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  pointer-events: auto;
+}
+
+.bk-pop-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.bk-pop-code {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 6px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
+.bk-pop-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+  flex: 1;
+  min-width: 0;
+}
+
+.bk-pop-text {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+.bk-pop-raw {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 0.5px solid var(--separator);
+  font-size: 11.5px;
+  color: var(--text-tertiary);
+}
+
+.bk-pop-raw summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.bk-pop-raw p {
+  margin: 6px 0 0;
+  line-height: 1.45;
+}
+
+.bk-drawer-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.bk-drawer-card {
+  background: var(--surface);
+  border-radius: 13px;
+  padding: 11px 13px;
+  box-shadow: var(--shadow-xs);
+  border-left: 3px solid var(--accent);
+}
+
+.bk-drawer-card.bk-tone-rose { border-left-color: var(--rose); }
+.bk-drawer-card.bk-tone-amber { border-left-color: var(--amber-bright); }
+.bk-drawer-card.bk-tone-green { border-left-color: var(--green-bright); }
+
+/* Module 4: Personal Scoring Matrix (1-10) */
+.matrix-winner-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding: 14px 18px;
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--green-bright) 11%, var(--surface-secondary));
+  box-shadow: inset 0 0 0 0.5px color-mix(in srgb, var(--green-bright) 34%, transparent);
+  margin-bottom: 14px;
+}
+
+.matrix-winner-score {
+  font-family: var(--font-display);
+  font-size: 28px;
+  font-weight: 750;
+  letter-spacing: -0.03em;
+  color: var(--green);
+}
+
+.matrix-winner-score span {
+  font-size: 14px;
+  font-weight: 600;
+  opacity: 0.72;
+  margin-left: 2px;
+}
+
+.matrix-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.matrix-card {
+  background: var(--surface-secondary);
+  border-radius: 16px;
+  padding: 14px 16px;
+  box-shadow: inset 0 0 0 0.5px var(--separator);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  transition: box-shadow 180ms ease;
+}
+
+.matrix-card.winner {
+  box-shadow: 0 0 0 2px var(--green-bright), var(--shadow-sm);
+}
+
+.matrix-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.matrix-total-pill {
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: var(--surface);
+  font-size: 12px;
+  font-weight: 750;
+  color: var(--accent);
+  box-shadow: var(--shadow-xs);
+  flex-shrink: 0;
+}
+
+.matrix-card.winner .matrix-total-pill {
+  background: var(--green-soft);
+  color: var(--green);
+}
+
+.matrix-sliders {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.matrix-slider-row {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.matrix-slider-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.matrix-slider-top strong {
+  color: var(--text);
+  font-weight: 700;
+}
+
+@media (max-width: 860px) {
+  .matrix-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
+@media (max-width: 560px) {
+  .matrix-grid {
+    grid-template-columns: 1fr !important;
+  }
+}

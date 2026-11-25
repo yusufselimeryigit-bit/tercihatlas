@@ -2,7 +2,7 @@
  * TercihAtlas — Backend API, Local YÖK Atlas Catalog & Share Client
  */
 
-import { lookupProgramInCatalog, searchProgramsInCatalog } from './catalog.js?v=21';
+import { lookupProgramInCatalog, searchProgramsInCatalog } from './catalog.js?v=26';
 
 // Will be set automatically after Cloudflare Worker deployment.
 // On localhost/127.0.0.1, same-origin dev-server.mjs is used automatically.
@@ -94,9 +94,18 @@ export async function fetchProgramFromApi(code, { refresh = false } = {}) {
   }
 }
 
-export async function searchProgramsFromApi({ q = '', puanTuru = '', uniTuru = '', minRank = '', maxRank = '', size = 20 } = {}) {
+export async function searchProgramsFromApi({
+  q = '',
+  puanTuru = '',
+  uniTuru = '',
+  minRank = '',
+  maxRank = '',
+  onlyNew = false,
+  quotaIncreased = false,
+  size = 20,
+} = {}) {
   try {
-    return await searchProgramsInCatalog({ q, puanTuru, uniTuru, minRank, maxRank, size });
+    return await searchProgramsInCatalog({ q, puanTuru, uniTuru, minRank, maxRank, onlyNew, quotaIncreased, size });
   } catch {
     const sp = new URLSearchParams();
     if (q) sp.set('q', q);

@@ -97,6 +97,10 @@ export async function loadCatalog() {
             latestScore: r[11],
             quota: r[12],
             placed: r[13],
+            prevRank: r[14] || null,
+            prevQuota: r[16] || null,
+            isNew: !r[14] && !r[17],
+            quotaDelta: r[12] && r[16] ? r[12] - r[16] : 0,
             raw: r,
             accreditation: accred || null,
             _search: foldTr(`${r[0]} ${uni[1]} ${r[2]} ${city} ${scoreType} ${language} ${scholarship} ${uniType}`),
@@ -184,6 +188,8 @@ export async function searchProgramsInCatalog({
   uniTuru = '',
   minRank = '',
   maxRank = '',
+  onlyNew = false,
+  quotaIncreased = false,
   size = 20,
 } = {}) {
   const cat = await loadCatalog();
@@ -235,6 +241,8 @@ export async function searchProgramsInCatalog({
     if (filterUni && item.universityType !== filterUni) continue;
     if (minR !== null && (!item.latestRank || item.latestRank < minR)) continue;
     if (maxR !== null && (!item.latestRank || item.latestRank > maxR)) continue;
+    if (onlyNew && !item.isNew) continue;
+    if (quotaIncreased && !(item.quotaDelta > 0)) continue;
     if (terms.length && !terms.every((t) => item._search.includes(t))) continue;
     matches.push(item);
   }
@@ -257,6 +265,8 @@ export async function searchProgramsInCatalog({
       latestRank: item.latestRank,
       latestScore: item.latestScore,
       quota: item.quota,
+      isNew: item.isNew,
+      quotaDelta: item.quotaDelta,
     })),
     total: matches.length,
     query: q,

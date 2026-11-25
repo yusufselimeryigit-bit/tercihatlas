@@ -78,15 +78,15 @@ export function formatRelativeTime(iso) {
 export function suggestRisk(programRank, targetRank) {
   if (!programRank || !targetRank) return 'hedef';
   const ratio = Number(programRank) / Number(targetRank);
-  if (ratio < 0.78) return 'hayal';
-  if (ratio <= 1.25) return 'hedef';
-  return 'guvenli';
+  if (ratio < 0.85) return 'hayal'; // Kullanıcı sıralamasından %15+ daha önde (Sürpriz / İdealist)
+  if (ratio <= 1.15) return 'hedef'; // Kullanıcı sıralamasının ±%15 bandında (Hedef / Gerçekçi)
+  return 'guvenli'; // Kullanıcı sıralamasından %15–%20+ daha geride (Garanti / Emniyet)
 }
 
 export const RISK_META = {
-  hayal: { label: 'Hayal', color: '#F43F5E', desc: 'Hedefinin üstünde, yüksek rekabet' },
-  hedef: { label: 'Hedef', color: '#6366F1', desc: 'Hedef sıralamanla uyumlu' },
-  guvenli: { label: 'Güvenli', color: '#10B981', desc: 'Garanti / güvenlik bandı' },
+  hayal: { label: 'Sürpriz', fullLabel: 'Sürpriz / İdealist', color: '#FF2D55', desc: 'Sıralamandan %15–%30+ daha önde' },
+  hedef: { label: 'Hedef', fullLabel: 'Hedef / Gerçekçi', color: '#0071E3', desc: 'Sıralamanın ±%15 bandında' },
+  guvenli: { label: 'Garanti', fullLabel: 'Garanti / Emniyet', color: '#34C759', desc: 'Sıralamandan %20+ daha geride' },
 };
 
 export function getUniInitials(name) {
