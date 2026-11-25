@@ -75,7 +75,17 @@ import {
   getDaysUntil,
   renderRoadmapPanelHtml,
   exportSummaryPngCard,
-} from './v21-extras.js?v=21';
+} from './v21-extras.js?v=25';
+import {
+  DEFAULT_YKS_CALC_INPUT,
+  CALC_TYT_FIELDS,
+  CALC_AYT_FIELDS,
+  sanitizeFieldPair,
+  calculateYksResults,
+  buildCalcInputFromMyNets,
+  renderYksCalculatorPanel,
+  renderYksResultsBlockHtml,
+} from './yks-calculator.js?v=25';
 
 const STATE_KEY = 'tercihatlas_state_v1';
 const SYNC_KEY_STORAGE = 'tercihatlas_sync_key';
@@ -144,6 +154,7 @@ const DEFAULT_STATE = {
   decisionWeights: structuredClone(DEFAULT_DECISION_WEIGHTS),
   roadmapChecks: {},
   customMilestones: [],
+  yksCalculator: structuredClone(DEFAULT_YKS_CALC_INPUT),
 };
 
 // Uniform SF Symbols-style inline SVGs
@@ -216,6 +227,7 @@ const ui = {
   search: '',
   filterRisk: 'all',
   filterReachable: false,
+  filterCalcRank: null, // { rank, scoreType, year }
   filterScoreType: 'all',
   sortBy: 'manual',
   abroadFilter: 'ALL',
@@ -252,6 +264,12 @@ function normalizeState(parsed) {
     decisionWeights: { ...structuredClone(DEFAULT_DECISION_WEIGHTS), ...(parsed?.decisionWeights || {}) },
     roadmapChecks: parsed?.roadmapChecks && typeof parsed.roadmapChecks === 'object' ? { ...parsed.roadmapChecks } : {},
     customMilestones: Array.isArray(parsed?.customMilestones) ? parsed.customMilestones : [],
+    yksCalculator: {
+      ...structuredClone(DEFAULT_YKS_CALC_INPUT),
+      ...(parsed?.yksCalculator || {}),
+      tyt: { ...structuredClone(DEFAULT_YKS_CALC_INPUT.tyt), ...(parsed?.yksCalculator?.tyt || {}) },
+      ayt: { ...structuredClone(DEFAULT_YKS_CALC_INPUT.ayt), ...(parsed?.yksCalculator?.ayt || {}) },
+    },
     myNets: {
       ...structuredClone(DEFAULT_MY_NETS),
       ...(parsed?.myNets || {}),
@@ -746,6 +764,14 @@ function getFilteredPrograms() {
   if (ui.filterReachable) {
     const est = estimateYksRankFromNets(state.myNets);
     list = list.filter((p) => isProgramCurrentlyReachable(p, est));
+  }
+  if (ui.filterCalcRank && ui.filterCalcRank.rank > 0) {
+    const minBand = Math.round(ui.filterCalcRank.rank * 0.88);
+    const targetSt = ui.filterCalcRank.scoreType;
+    list = list.filter((p) => {
+      if (targetSt && targetSt !== 'TYT' && p.scoreType && p.scoreType !== targetSt) return false;
+      return Boolean(p.latestRank) && p.latestRank >= minBand;
+    });
   }
 
   if (ui.sortBy === 'rank-asc') list.sort((a, b) => (a.latestRank ?? 9e9) - (b.latestRank ?? 9e9));
@@ -1647,6 +1673,8 @@ function renderPreferencesView() {
               : `<svg class="sf-icon" width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg><span>İşlemler</span>`}
           </button>
           <div class="actions-dropdown" id="prefActionsDropdown" role="menu">
+            <button class="ctx-item" id="openCalcMenuBtn">${SF.chartBadge} Net & Sıralama Hesapla</button>
+            <div class="ctx-sep"></div>
             ${!ui.readOnlyShare
               ? `<button class="ctx-item" id="refreshAllBtn" ${ui.refreshBusy ? 'disabled' : ''}>${SF.refresh} Tümünü Canlı Güncelle</button>
                  <button class="ctx-item" id="openSnapshotsBtn">${SF.clock} Zaman Makinesi (${state.snapshots.length})</button>`
@@ -1737,6 +1765,11 @@ function renderPreferencesView() {
           .join('')}
         ${est
           ? `<button class="filter-pill ${ui.filterReachable ? 'active' : ''}" data-filter-reachable="1" title="Mevcut netlerinle şu an girebildiğin bölümler">✓ Şu An Giriyorsun (${reachableCount})</button>`
+          : ''}
+        ${ui.filterCalcRank
+          ? `<button class="filter-pill active" id="clearCalcFilterChip" type="button" title="Hesaplanan sıralama filtresini kaldır">
+               ${SF.targetBadge} ${escapeHtml(ui.filterCalcRank.scoreType)} #${formatRank(ui.filterCalcRank.rank)} (${ui.filterCalcRank.year}) · ✕
+             </button>`
           : ''}
         ${scoreTypes.length > 1
           ? scoreTypes
@@ -2832,6 +2865,7 @@ function renderDecisionScorePanel() {
 function renderAnalysisView() {
   const analysisTabs = [
     ['overview', 'Sağlık & Özet', '<svg class="sf-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 21s-7-4.5-7-10.2A4.3 4.3 0 0 1 12 7.5a4.3 4.3 0 0 1 7 3.3C19 16.5 12 21 12 21z"/></svg>'],
+    ['calculator', 'Puan Hesapla', '<svg class="sf-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="3"/><path d="M8 7h8M8 12h2M14 12h2M8 16h2M14 16h2"/></svg>'],
     ['progression', 'Gelişim', '<svg class="sf-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l6-6 4 4 7-8"/></svg>'],
     ['discover', 'Keşfet', '<svg class="sf-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><polygon points="15.5 8.5 13.5 13.5 8.5 15.5 10.5 10.5 15.5 8.5"/></svg>'],
     ['decision', 'Karar Skoru', '<svg class="sf-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/><circle cx="9" cy="7" r="2" fill="currentColor"/><circle cx="15" cy="12" r="2" fill="currentColor"/><circle cx="11" cy="17" r="2" fill="currentColor"/></svg>'],
@@ -2858,6 +2892,11 @@ function renderAnalysisView() {
       </div>
     </div>
   </div>`;
+
+  if (ui.analysisSubTab === 'calculator') {
+    const hasMyNets = Boolean(estimateYksRankFromNets(state.myNets));
+    return `${headerHtml}<section class="analysis-grid">${renderYksCalculatorPanel(state.yksCalculator, { hasMyNets })}</section>`;
+  }
 
   if (ui.analysisSubTab === 'progression') {
     return `${headerHtml}<section class="analysis-grid">${renderProgressionPanel()}</section>`;
@@ -4139,6 +4178,14 @@ function renderMyNetsModal() {
     </div>`;
 
   body.innerHTML = `
+    <div class="sheet-card" style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;background:var(--accent-soft);">
+      <div style="min-width:0;flex:1;">
+        <strong style="font-size:13.5px;color:var(--accent);display:block;">YKS Puan & 2023–2026 Sıralama Hesaplama Robotu</strong>
+        <span style="font-size:12px;color:var(--text-secondary);">Doğru/Yanlış ve kırık OBP desteğiyle Ham/Yerleştirme puanı ve 4 yıllık sıralama hesapla.</span>
+      </div>
+      <button class="btn btn-primary btn-sm" type="button" id="openYksCalcFromNetsBtn">Hesaplama Robotu →</button>
+    </div>
+
     ${est && estTypes.length
       ? `<div class="sheet-card" style="display:flex;flex-direction:column;gap:8px;">
           <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;">
@@ -4270,6 +4317,14 @@ function renderMyNetsModal() {
       </div>
     </form>
   `;
+
+  document.getElementById('openYksCalcFromNetsBtn')?.addEventListener('click', () => {
+    closeMyNetsModal();
+    ui.region = 'TR';
+    ui.tab = 'analysis';
+    ui.analysisSubTab = 'calculator';
+    renderAll();
+  });
 
   async function handlePdfUploadBatch(fileList, examType) {
     const files = Array.from(fileList || []).filter((f) => f && (/\.pdf$/i.test(f.name) || f.type === 'application/pdf'));
@@ -5181,6 +5236,17 @@ function bindPreferencesEvents() {
     prefMenuBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
   });
 
+  document.getElementById('openCalcMenuBtn')?.addEventListener('click', () => {
+    prefDropdown?.classList.remove('open');
+    ui.region = 'TR';
+    ui.tab = 'analysis';
+    ui.analysisSubTab = 'calculator';
+    renderAll();
+  });
+  document.getElementById('clearCalcFilterChip')?.addEventListener('click', () => {
+    ui.filterCalcRank = null;
+    renderAll();
+  });
   document.getElementById('refreshAllBtn')?.addEventListener('click', () => {
     prefDropdown?.classList.remove('open');
     refreshAllProgramsLive();
@@ -5230,6 +5296,7 @@ function bindPreferencesEvents() {
     ui.filterRisk = 'all';
     ui.filterScoreType = 'all';
     ui.filterReachable = false;
+    ui.filterCalcRank = null;
     renderAll();
   });
 
@@ -5808,6 +5875,265 @@ function bindAnalysisEvents() {
     downloadTimelineIcs(state.abroadPrograms);
     showToast('Apple Takvim (.ics) dosyası indirildi.', 'success');
   });
+
+  // YKS Puan & Çok Yıllı Sıralama Hesaplama Robotu bindings
+  bindYksCalculatorEvents();
+}
+
+function applyCalculatedRankFilter(rank, scoreType, year, { openCatalog = false } = {}) {
+  const numRank = Number(rank);
+  if (!Number.isFinite(numRank) || numRank <= 0) return;
+  const st = ['SAY', 'EA', 'SÖZ', 'DİL'].includes(scoreType) ? scoreType : 'SAY';
+
+  state.targetRank = numRank;
+  ui.simPlacementRank = numRank;
+  ui.discover.rank = numRank;
+  ui.discover.puanTuru = st;
+  saveState();
+
+  if (openCatalog || state.programs.length === 0) {
+    ui.region = 'TR';
+    ui.tab = 'analysis';
+    ui.analysisSubTab = 'discover';
+    if (!ui.discover.q) ui.discover.q = st === 'EA' ? 'Ekonomi' : st === 'SÖZ' ? 'İletişim' : st === 'DİL' ? 'İngilizce' : 'Bilgisayar';
+    renderAll();
+    runDiscoverSearch();
+    showToast(`${st} #${formatRank(numRank)} (${year}) sıralamasına göre katalog taranıyor.`, 'success');
+    return;
+  }
+
+  ui.filterCalcRank = { rank: numRank, scoreType: st, year };
+  ui.filterRisk = 'all';
+  ui.filterReachable = false;
+  ui.filterScoreType = 'all';
+  ui.region = 'TR';
+  ui.tab = 'preferences';
+  renderAll();
+  showToast(`Tercihlerin ${st} #${formatRank(numRank)} (${year}) sıralamasına göre filtrelendi.`, 'success');
+}
+
+function bindYksCalculatorEvents() {
+  const host = document.getElementById('yksCalcResultsHost');
+  if (!host) return;
+
+  let calcSaveTimer = null;
+  const scheduleCalcSave = () => {
+    clearTimeout(calcSaveTimer);
+    calcSaveTimer = setTimeout(() => saveState(), 350);
+  };
+
+  const ensureCalcState = () => {
+    if (!state.yksCalculator) state.yksCalculator = structuredClone(DEFAULT_YKS_CALC_INPUT);
+    if (!state.yksCalculator.tyt) state.yksCalculator.tyt = structuredClone(DEFAULT_YKS_CALC_INPUT.tyt);
+    if (!state.yksCalculator.ayt) state.yksCalculator.ayt = structuredClone(DEFAULT_YKS_CALC_INPUT.ayt);
+    return state.yksCalculator;
+  };
+
+  const wireResultsButtons = () => {
+    host.querySelectorAll('[data-calc-pick-type]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const calc = ensureCalcState();
+        calc.selectedType = btn.dataset.calcPickType;
+        refreshCalcResultsInPlace();
+        scheduleCalcSave();
+      });
+    });
+
+    host.querySelectorAll('[data-calc-pick-year]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const calc = ensureCalcState();
+        calc.selectedYear = Number(btn.dataset.calcPickYear) || 2026;
+        refreshCalcResultsInPlace();
+        scheduleCalcSave();
+      });
+    });
+
+    host.querySelectorAll('[data-calc-select-type]').forEach((row) => {
+      row.addEventListener('click', (e) => {
+        if (e.target.closest('button')) return;
+        const calc = ensureCalcState();
+        calc.selectedType = row.dataset.calcSelectType;
+        refreshCalcResultsInPlace();
+        scheduleCalcSave();
+      });
+    });
+
+    host.querySelectorAll('[data-calc-filter-row]').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const calc = ensureCalcState();
+        applyCalculatedRankFilter(Number(btn.dataset.calcFilterRank), btn.dataset.calcFilterRow, calc.selectedYear || 2026);
+      });
+    });
+
+    host.querySelector('#calcFilterPrefsBtn')?.addEventListener('click', (e) => {
+      const btn = e.currentTarget;
+      applyCalculatedRankFilter(Number(btn.dataset.rank), btn.dataset.type, Number(btn.dataset.year) || 2026, { openCatalog: false });
+    });
+
+    host.querySelector('#calcDiscoverCatalogBtn')?.addEventListener('click', (e) => {
+      const btn = e.currentTarget;
+      applyCalculatedRankFilter(Number(btn.dataset.rank), btn.dataset.type, Number(btn.dataset.year) || 2026, { openCatalog: true });
+    });
+  };
+
+  const refreshCalcResultsInPlace = () => {
+    const calc = ensureCalcState();
+    const res = calculateYksResults(calc);
+
+    // Update OBP summary pill
+    const obpSummary = document.getElementById('calcObpSummary');
+    if (obpSummary) {
+      obpSummary.innerHTML = `
+        <span class="pill">OBP: <strong>${res.obp.toFixed(1)}</strong></span>
+        <span class="pill ${res.obpBroken ? 'pill-risk-hayal' : 'pill-accent'}">
+          Katkı: <strong>+${res.obpAdd.toFixed(2)} puan</strong> (${res.obpBroken ? '×0,06 Kırık' : '×0,12 Tam'})
+        </span>`;
+    }
+
+    // Update TYT total net pill
+    const tytBadge = document.getElementById('calcTytTotalBadge');
+    if (tytBadge) {
+      tytBadge.innerHTML = `Toplam: <strong>${res.tytTotalNet.toFixed(2).replace('.', ',')}</strong> net`;
+    }
+
+    // Update each row net badge & progress hairline
+    const updateGroup = (fields, group) => {
+      for (const f of fields) {
+        const pair = res[group][f.key];
+        const netEl = document.getElementById(`calcNet_${group}_${f.key}`);
+        if (netEl) netEl.innerHTML = `<strong>${pair.net.toFixed(2).replace('.', ',')}</strong><small>/${f.max}</small>`;
+        const barFill = document.querySelector(`[data-calc-row="${group}.${f.key}"] .yks-field-bar i`);
+        if (barFill) barFill.style.width = `${Math.max(0, Math.min(100, (pair.net / f.max) * 100)).toFixed(1)}%`;
+      }
+    };
+    updateGroup(CALC_TYT_FIELDS, 'tyt');
+    updateGroup(CALC_AYT_FIELDS, 'ayt');
+
+    host.innerHTML = renderYksResultsBlockHtml(res, {
+      selectedType: calc.selectedType || 'SAY',
+      selectedYear: calc.selectedYear || 2026,
+    });
+    wireResultsButtons();
+    initSlidingSegmentedControls();
+  };
+
+  // Diploma note input (50–100)
+  const diplomaEl = document.getElementById('calcDiplomaInput');
+  diplomaEl?.addEventListener('input', () => {
+    const calc = ensureCalcState();
+    const raw = Number(diplomaEl.value);
+    if (Number.isFinite(raw)) {
+      calc.diploma = raw;
+      refreshCalcResultsInPlace();
+      scheduleCalcSave();
+    }
+  });
+  diplomaEl?.addEventListener('blur', () => {
+    const calc = ensureCalcState();
+    const clamped = Math.min(100, Math.max(50, Number(diplomaEl.value) || 50));
+    calc.diploma = clamped;
+    diplomaEl.value = String(clamped);
+    refreshCalcResultsInPlace();
+    saveState();
+  });
+
+  // Broken OBP toggle
+  document.getElementById('calcObpBrokenCheck')?.addEventListener('change', (e) => {
+    const calc = ensureCalcState();
+    calc.obpBroken = Boolean(e.target.checked);
+    refreshCalcResultsInPlace();
+    saveState();
+  });
+
+  // TYT & AYT/YDT Doğru/Yanlış inputs with strict D + Y <= max validation
+  document.querySelectorAll('[data-calc-group][data-calc-key][data-calc-part]').forEach((inp) => {
+    inp.addEventListener('input', () => {
+      const calc = ensureCalcState();
+      const group = inp.dataset.calcGroup;
+      const key = inp.dataset.calcKey;
+      const part = inp.dataset.calcPart;
+      const max = Number(inp.dataset.calcMax) || 40;
+
+      const cur = calc[group][key] || { d: 0, y: 0 };
+      let val = Math.floor(Number(inp.value) || 0);
+      if (val < 0) val = 0;
+
+      if (part === 'd') {
+        if (val > max) val = max;
+        const nextY = Math.min(Number(cur.y) || 0, max - val);
+        calc[group][key] = { d: val, y: nextY };
+        if (String(val) !== inp.value && inp.value !== '') inp.value = String(val);
+        const yInp = document.querySelector(`[data-calc-group="${group}"][data-calc-key="${key}"][data-calc-part="y"]`);
+        if (yInp && Number(yInp.value || 0) !== nextY) yInp.value = nextY ? String(nextY) : '';
+      } else {
+        const curD = Math.min(max, Math.max(0, Number(cur.d) || 0));
+        const maxY = Math.max(0, max - curD);
+        if (val > maxY) val = maxY;
+        calc[group][key] = { d: curD, y: val };
+        if (String(val) !== inp.value && inp.value !== '') inp.value = String(val);
+      }
+
+      const clean = sanitizeFieldPair(calc[group][key].d, calc[group][key].y, max);
+      calc[group][key] = { d: clean.d, y: clean.y };
+      refreshCalcResultsInPlace();
+      scheduleCalcSave();
+    });
+  });
+
+  // Pull from existing Netlerim profile
+  document.getElementById('calcPullMyNetsBtn')?.addEventListener('click', () => {
+    state.yksCalculator = buildCalcInputFromMyNets(state.myNets, ensureCalcState());
+    saveState();
+    renderAll();
+    showToast('Netlerim profilindeki veriler hesaplama robotuna aktarıldı.', 'success');
+  });
+
+  // Save calculator nets back to Netlerim profile
+  document.getElementById('calcSyncToMyNetsBtn')?.addEventListener('click', () => {
+    const res = calculateYksResults(ensureCalcState());
+    state.myNets = {
+      ...(state.myNets || structuredClone(DEFAULT_MY_NETS)),
+      obp: res.obp,
+      tyt: {
+        turkce: res.tyt.turkce.net,
+        sosyal: res.tyt.sosyal.net,
+        matematik: res.tyt.matematik.net,
+        fen: res.tyt.fen.net,
+      },
+      ayt: {
+        ...(state.myNets?.ayt || {}),
+        matematik: res.ayt.matematik.net || null,
+        fizik: res.ayt.fen.net ? Number(((res.ayt.fen.net * 14) / 40).toFixed(2)) : null,
+        kimya: res.ayt.fen.net ? Number(((res.ayt.fen.net * 13) / 40).toFixed(2)) : null,
+        biyoloji: res.ayt.fen.net ? Number(((res.ayt.fen.net * 13) / 40).toFixed(2)) : null,
+        edebiyat: res.ayt.edSos1.net ? Number(((res.ayt.edSos1.net * 24) / 40).toFixed(2)) : null,
+        tarih1: res.ayt.edSos1.net ? Number(((res.ayt.edSos1.net * 10) / 40).toFixed(2)) : null,
+        cografya1: res.ayt.edSos1.net ? Number(((res.ayt.edSos1.net * 6) / 40).toFixed(2)) : null,
+      },
+      ydt: res.ayt.ydt.net || null,
+    };
+    saveState();
+    renderAll();
+    showToast('Hesaplanan netler ve OBP "Netlerim" profiline kaydedildi.', 'success');
+  });
+
+  // Reset all fields to zero
+  document.getElementById('calcResetBtn')?.addEventListener('click', () => {
+    state.yksCalculator = {
+      diploma: 85,
+      obpBroken: false,
+      selectedType: ensureCalcState().selectedType || 'SAY',
+      selectedYear: ensureCalcState().selectedYear || 2026,
+      tyt: { turkce: { d: 0, y: 0 }, sosyal: { d: 0, y: 0 }, matematik: { d: 0, y: 0 }, fen: { d: 0, y: 0 } },
+      ayt: { matematik: { d: 0, y: 0 }, fen: { d: 0, y: 0 }, edSos1: { d: 0, y: 0 }, sos2: { d: 0, y: 0 }, ydt: { d: 0, y: 0 } },
+    };
+    saveState();
+    renderAll();
+    showToast('Hesaplama alanları sıfırlandı.');
+  });
+
+  wireResultsButtons();
 }
 
 // ============================================================================

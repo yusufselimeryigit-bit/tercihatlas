@@ -4456,3 +4456,472 @@ button, a, input, select, textarea, .prog-card, .apple-list-row {
   padding: 0 12px;
   box-shadow: inset 0 0 0 0.5px color-mix(in srgb, var(--rose) 28%, transparent);
 }
+
+/* ==========================================================================
+   v25: YKS Puan & Çok Yıllı Sıralama Hesaplama Robotu (Apple HIG Craft)
+   ========================================================================== */
+.yks-calc-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.yks-obp-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 15px 18px;
+  border-radius: 18px;
+  background: var(--surface-secondary);
+  box-shadow: inset 0 0 0 0.5px var(--separator);
+}
+
+.yks-obp-pills {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+
+.yks-broken-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 11px;
+  padding: 10px 14px;
+  border-radius: 14px;
+  background: var(--surface);
+  box-shadow: var(--shadow-xs);
+  cursor: pointer;
+  user-select: none;
+  transition: box-shadow 180ms ease;
+}
+
+.yks-broken-toggle:hover {
+  box-shadow: var(--shadow-sm);
+}
+
+.yks-broken-toggle input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--rose);
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.yks-broken-toggle span {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.yks-broken-toggle strong {
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--text);
+}
+
+.yks-broken-toggle small {
+  font-size: 11.5px;
+  color: var(--text-tertiary);
+}
+
+.yks-inputs-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.yks-input-card {
+  background: var(--surface-secondary);
+  border-radius: 18px;
+  padding: 16px 18px;
+  box-shadow: inset 0 0 0 0.5px var(--separator);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.yks-input-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.yks-input-card-head h4 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 15.5px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--text);
+}
+
+.yks-input-card-head > div > span {
+  font-size: 11.5px;
+  color: var(--text-tertiary);
+}
+
+.yks-field-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.yks-field-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 13px;
+  background: var(--surface);
+  box-shadow: var(--shadow-xs);
+}
+
+.yks-field-meta {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.yks-field-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.yks-field-tag {
+  font-size: 10px;
+  font-weight: 650;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--bg-grouped);
+  color: var(--text-tertiary);
+  flex-shrink: 0;
+}
+
+.yks-field-bar {
+  height: 4px;
+  border-radius: 999px;
+  background: var(--bg-grouped);
+  overflow: hidden;
+}
+
+.yks-field-bar i {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 72%, var(--green-bright)));
+  transition: width 220ms var(--spring);
+}
+
+.yks-dy-inputs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.yks-mini-input {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--bg-grouped);
+  border-radius: 10px;
+  padding: 3px 6px 3px 8px;
+  border: 1.5px solid transparent;
+  transition: border-color 150ms ease, background 150ms ease, box-shadow 150ms ease;
+}
+
+.yks-mini-input:focus-within {
+  background: var(--surface);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-ring);
+}
+
+.yks-mini-input span {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-tertiary);
+}
+
+.yks-mini-input input {
+  width: 38px;
+  border: none;
+  background: transparent;
+  outline: none;
+  text-align: center;
+  font-size: 13.5px;
+  font-weight: 650;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  padding: 3px 0;
+  -moz-appearance: textfield;
+}
+
+.yks-mini-input input::-webkit-outer-spin-button,
+.yks-mini-input input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.yks-net-badge {
+  min-width: 72px;
+  text-align: right;
+  font-size: 13px;
+  color: var(--accent);
+}
+
+.yks-net-badge strong {
+  font-weight: 700;
+}
+
+.yks-net-badge small {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  margin-left: 1px;
+}
+
+/* Summary Hero Result Card */
+.yks-results-host {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.yks-hero-result {
+  display: flex;
+  align-items: stretch;
+  justify-content: space-between;
+  gap: 18px;
+  flex-wrap: wrap;
+  padding: 20px 22px;
+  border-radius: 20px;
+  background:
+    radial-gradient(520px circle at 6% 0%, var(--accent-glow), transparent 65%),
+    var(--surface-secondary);
+  box-shadow: inset 0 0 0 0.5px var(--separator);
+}
+
+.yks-hero-left {
+  flex: 1;
+  min-width: 280px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.yks-hero-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.yks-hero-main {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 18px;
+  flex-wrap: wrap;
+}
+
+.yks-hero-eyebrow {
+  display: block;
+  font-size: 11.5px;
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.045em;
+  color: var(--accent);
+}
+
+.yks-hero-rank {
+  font-family: var(--font-display);
+  font-size: 40px;
+  font-weight: 750;
+  letter-spacing: -0.045em;
+  line-height: 1.04;
+  color: var(--text);
+  margin-top: 4px;
+}
+
+.yks-hero-band {
+  font-size: 12.5px;
+  color: var(--text-secondary);
+  margin-top: 5px;
+}
+
+.yks-hero-scores {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.yks-score-pill-box {
+  padding: 10px 14px;
+  border-radius: 14px;
+  background: var(--surface);
+  box-shadow: var(--shadow-xs);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 114px;
+}
+
+.yks-score-pill-box.accent {
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 0.5px color-mix(in srgb, var(--accent) 28%, transparent);
+}
+
+.yks-score-pill-box span {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-tertiary);
+}
+
+.yks-score-pill-box.accent span {
+  color: var(--accent);
+}
+
+.yks-score-pill-box strong {
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  color: var(--text);
+}
+
+.yks-hero-cta {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 8px;
+  min-width: 245px;
+}
+
+.yks-hero-cta .btn {
+  width: 100%;
+  height: 40px;
+}
+
+/* Multi-Year Results Table */
+.yks-table-wrap {
+  background: var(--surface);
+  border-radius: 18px;
+  overflow-x: auto;
+  box-shadow: var(--shadow-xs);
+}
+
+.yks-result-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 680px;
+}
+
+.yks-result-table th {
+  text-align: left;
+  font-size: 11px;
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-tertiary);
+  padding: 12px 14px;
+  border-bottom: 0.5px solid var(--separator);
+  background: var(--surface-secondary);
+  white-space: nowrap;
+}
+
+.yks-result-table td {
+  padding: 12px 14px;
+  border-bottom: 0.5px solid var(--separator-subtle);
+  font-size: 13.5px;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.yks-result-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.yks-res-row {
+  cursor: pointer;
+  transition: background 140ms ease;
+}
+
+.yks-res-row:hover {
+  background: var(--surface-secondary);
+}
+
+.yks-res-row.selected {
+  background: color-mix(in srgb, var(--accent) 7%, var(--surface));
+}
+
+.yks-res-row.muted {
+  opacity: 0.58;
+}
+
+.yks-type-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  height: 24px;
+  padding: 0 8px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 700;
+  background: var(--bg-grouped);
+  color: var(--text-secondary);
+}
+
+.yks-type-pill.active {
+  background: var(--accent);
+  color: #FFFFFF;
+}
+
+.yks-yr-hl {
+  color: var(--accent);
+  font-weight: 650;
+}
+
+@media (max-width: 900px) {
+  .yks-inputs-grid {
+    grid-template-columns: 1fr;
+  }
+  .yks-hero-cta {
+    width: 100%;
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+  .yks-hero-cta .btn {
+    flex: 1;
+    min-width: 210px;
+  }
+}
+
+@media (max-width: 560px) {
+  .yks-field-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+  .yks-dy-inputs {
+    justify-content: space-between;
+  }
+  .yks-hero-rank {
+    font-size: 32px;
+  }
+}
