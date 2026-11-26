@@ -41,7 +41,7 @@ import {
   renderMiniNetSparkline,
   renderAppleActivityRings,
   renderCompareRadarChart,
-} from './charts.js?v=26';
+} from './charts.js?v=29';
 import {
   compute2027Projection,
   compareWithMyNets,
@@ -61,7 +61,7 @@ import {
   SUBJECT_BOOST_PRESETS,
   simulateSubjectNetBoost,
 } from './analytics.js?v=28';
-import { ABROAD_PRESETS, DEFAULT_ABROAD_TOOLS, createAbroadRecord, renderAbroadView } from './abroad.js?v=26';
+import { ABROAD_PRESETS, DEFAULT_ABROAD_TOOLS, createAbroadRecord, renderAbroadView } from './abroad.js?v=29';
 import { parseExamPdfFile } from './pdf-parser.js?v=26';
 import {
   renderTurkeyCampusMap,
@@ -1424,7 +1424,7 @@ function initSlidingSegmentedControls() {
       const key = seg.id || seg.getAttribute('aria-label') || `seg-${idx}`;
       const segRect = seg.getBoundingClientRect();
       const btnRect = activeBtn.getBoundingClientRect();
-      const targetLeft = Math.round((btnRect.left - segRect.left) * 10) / 10;
+      const targetLeft = Math.round((btnRect.left - segRect.left + seg.scrollLeft) * 10) / 10;
       const targetWidth = Math.round(btnRect.width * 10) / 10;
 
       let thumb = seg.querySelector('.seg-thumb');
@@ -1716,7 +1716,7 @@ function renderKpiStrip() {
       <div class="kpi-head">
         <span class="kpi-label"><span class="sf-badge sf-badge-green">${SF.chartBadge}</span>Sıralama Bandı</span>
       </div>
-      <div class="kpi-value tabular" style="font-size:21px;">
+      <div class="kpi-value kpi-band-val tabular">
         ${bestRank ? `${formatRank(bestRank)} – ${formatRank(worstRank)}` : '—'}
       </div>
       <div class="kpi-sub">${validRanks.length ? `${validRanks.length} programın son taban sırası` : 'Bölüm ekleyince hesaplanır'}</div>
@@ -1983,8 +1983,8 @@ function renderCardsView(programs) {
                 <div class="card-meta-line">${escapeHtml(metaParts.join(' · '))}</div>
               </div>
             </div>
-            <div style="display:flex;flex-direction:column;align-items:flex-end;gap:5px;flex-shrink:0;">
-              <div style="display:flex;align-items:center;gap:5px;">
+            <div class="card-top-right">
+              <div class="card-top-badges">
                 ${deadInfo ? `<span class="dead-pref-pill" title="Ölü Tercih: #${deadInfo.blockerOrder} (${escapeHtml(deadInfo.blocker.university)}) daha düşük tabanlı olmasına rağmen bunun üstünde">${SF.warn} Ölü Tercih</span>` : ''}
                 <span class="pill pill-risk-${escapeHtml(p.risk || 'hedef')}" title="${escapeHtml(riskMeta.desc || '')}">${escapeHtml(riskMeta.label)}</span>
               </div>
@@ -2097,7 +2097,7 @@ function renderTableView(programs) {
               <div class="apple-list-rank">${formatRank(p.latestRank)}</div>
               <div class="apple-list-proj">${proj ? `27: ${formatRank(proj.low)}–${formatRank(proj.high)}` : `Kont: ${p.quota ?? '—'}`}</div>
             </div>
-            <div data-stop-card="1" style="display:flex;align-items:center;gap:6px;">
+            <div class="apple-list-actions" data-stop-card="1">
               ${manualMode
                 ? `<button class="mini-action mini-action-icon" data-move-up="${escapeHtml(p.code)}" title="Yukarı">${SF.up}</button>
                    <button class="mini-action mini-action-icon" data-move-down="${escapeHtml(p.code)}" title="Aşağı">${SF.down}</button>`
@@ -3301,18 +3301,18 @@ function renderDrawer({ animateSwap = false } = {}) {
 
   container.innerHTML = `
     <div class="drawer-header" id="drawerHeaderBar">
-      <div style="display:flex;gap:15px;align-items:center;min-width:0;flex:1;">
-        <div style="transform:scale(1.12);transform-origin:left center;">${renderAvatar(p)}</div>
-        <div style="min-width:0;">
+      <div class="drawer-head-main">
+        <div class="drawer-avatar-wrap">${renderAvatar(p)}</div>
+        <div style="min-width:0;flex:1;">
           <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-            <div style="font-family:var(--font-display);font-size:21px;font-weight:700;letter-spacing:-0.03em;line-height:1.2;">${escapeHtml(p.department)}</div>
+            <div class="drawer-title-text">${escapeHtml(p.department)}</div>
             <div class="drawer-scroll-pill tabular" id="drawerScrollPill">
               <span>${formatRank(p.latestRank)}</span>
               <span class="pill pill-risk-${escapeHtml(p.risk || 'hedef')}" style="padding:1px 7px;font-size:10.5px;">${escapeHtml((RISK_META[p.risk] || RISK_META.hedef).label)}</span>
             </div>
           </div>
-          <div style="font-size:14.5px;font-weight:500;color:var(--text-secondary);margin-top:2px;">${escapeHtml(p.university)} · <span style="color:var(--text-tertiary)">${escapeHtml(p.faculty)}</span></div>
-          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:7px;">
+          <div class="drawer-subtitle-text">${escapeHtml(p.university)} · <span style="color:var(--text-tertiary)">${escapeHtml(p.faculty)}</span></div>
+          <div class="drawer-meta-row">
             <button class="pill mono" id="copyCodeBtn" title="Program kodunu kopyala" style="cursor:pointer;">${escapeHtml(p.code)} ${SF.copy}</button>
             <span style="font-size:12.5px;color:var(--text-secondary);font-weight:500;">${escapeHtml(p.city)}${p.district ? ` / ${escapeHtml(p.district)}` : ''} · ${escapeHtml(metaLine)}</span>
           </div>
@@ -3379,6 +3379,7 @@ function renderDrawer({ animateSwap = false } = {}) {
               : ''}
             ${proj?.quotaAlert ? `<div class="${proj.quotaAlert.type === 'warn' ? 'quota-alert-warn' : 'quota-alert-good'}">${escapeHtml(proj.quotaAlert.text)}</div>` : ''}
             ${renderDetailTrendChart(p.history, ui.drawerChartMode)}
+            <div class="mini-table-wrap">
             <table class="mini-table tabular">
               <thead>
                 <tr><th>Yıl</th><th>Taban Sıralama</th><th>Taban Puan</th><th>Kontenjan</th><th>Yerleşen</th></tr>
@@ -3398,6 +3399,7 @@ function renderDrawer({ animateSwap = false } = {}) {
                   .join('')}
               </tbody>
             </table>
+            </div>
           </section>
 
           <section class="drawer-section">

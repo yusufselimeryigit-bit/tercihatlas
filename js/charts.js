@@ -86,10 +86,10 @@ export function renderDetailTrendChart(history, mode = 'rank') {
   }
 
   const width = 460;
-  const height = 196;
-  const padL = 32;
-  const padR = 32;
-  const padT = 34;
+  const height = 204;
+  const padL = 46;
+  const padR = 46;
+  const padT = 36;
   const padB = 32;
   const innerW = width - padL - padR;
   const innerH = height - padT - padB;
@@ -132,7 +132,7 @@ export function renderDetailTrendChart(history, mode = 'rank') {
   const nodes = coords
     .map((c, idx) => {
       const label = mode === 'rank' ? formatRank(c.p[key]) : formatScore(c.p[key]);
-      const labelY = Math.max(16, c.y - 13);
+      const labelY = c.y < padT + 14 ? c.y + 19 : Math.max(16, c.y - 13);
       const isLatest = idx === coords.length - 1;
       const tipMain =
         mode === 'rank'
@@ -187,11 +187,21 @@ export function renderRankSpectrum(programs, targetRank) {
 
   const riskColors = { hayal: 'var(--rose)', hedef: 'var(--accent)', guvenli: 'var(--green)' };
 
+  // Prevent overlapping dots when multiple programs have close ranks
+  const placedPositions = [];
   const dots = valid
     .map((p, idx) => {
-      const left = Math.min(97, Math.max(3, pos(p.latestRank)));
+      const left = Math.min(96, Math.max(4, pos(p.latestRank)));
+      let rowOffset = 0;
+      const nearby = placedPositions.filter((prev) => Math.abs(prev.left - left) < 6.5);
+      if (nearby.length > 0) {
+        const offsets = [0, -14, 14, -26, 26];
+        const used = new Set(nearby.map((n) => n.rowOffset));
+        rowOffset = offsets.find((o) => !used.has(o)) ?? (nearby.length % 2 === 0 ? -14 : 14);
+      }
+      placedPositions.push({ left, rowOffset });
       const color = riskColors[p.risk] || 'var(--accent)';
-      return `<button class="spectrum-dot" data-open-code="${p.code}" style="left:${left.toFixed(1)}%;--dot-color:${color}" title="#${idx + 1} ${p.university} — ${p.department} (${formatRank(p.latestRank)})">
+      return `<button class="spectrum-dot" data-open-code="${p.code}" style="left:${left.toFixed(1)}%;margin-top:${rowOffset}px;--dot-color:${color}" title="#${idx + 1} ${p.university} — ${p.department} (${formatRank(p.latestRank)})">
         <span>${idx + 1}</span>
       </button>`;
     })
@@ -200,8 +210,9 @@ export function renderRankSpectrum(programs, targetRank) {
   let targetMarker = '';
   if (targetRank && targetRank > 0) {
     const left = Math.min(96, Math.max(4, pos(Number(targetRank))));
+    const alignCls = left < 24 ? 'align-left' : left > 76 ? 'align-right' : '';
     targetMarker = `<div class="spectrum-target" style="left:${left.toFixed(1)}%">
-      <div class="spectrum-target-pill">Hedefin · ${formatRank(targetRank)}</div>
+      <div class="spectrum-target-pill ${alignCls}">Hedefin · ${formatRank(targetRank)}</div>
     </div>`;
   }
 
@@ -231,10 +242,10 @@ export function renderExamProgressionChart(exams, { examType = 'TYT', targetNet 
   }
 
   const width = 620;
-  const height = 220;
-  const padL = 38;
-  const padR = 32;
-  const padT = 32;
+  const height = 224;
+  const padL = 44;
+  const padR = 44;
+  const padT = 36;
   const padB = 42;
   const innerW = width - padL - padR;
   const innerH = height - padT - padB;
@@ -308,11 +319,14 @@ export function renderExamProgressionChart(exams, { examType = 'TYT', targetNet 
       if (c.e.institutionRank) parts.push(`Kurum #${c.e.institutionRank}`);
       const tipSub = parts.join(' · ');
 
+      const showXLabel = coords.length <= 6 || idx === 0 || idx === coords.length - 1 || idx % 2 === 0;
+      const showValLabel = coords.length <= 8 || idx === 0 || idx === coords.length - 1 || idx % 2 === 0;
+      const valLabelY = c.y < padT + 14 ? c.y + 18 : Math.max(16, c.y - 12);
       return `<g class="chart-hit-pt" data-cx="${c.x.toFixed(1)}" data-cy="${c.y.toFixed(1)}" data-tip-title="${escAttr(tipTitle)}" data-tip-main="${escAttr(tipMain)}" data-tip-sub="${escAttr(tipSub)}">
         ${isLast ? `<circle cx="${c.x.toFixed(1)}" cy="${c.y.toFixed(1)}" r="9" fill="${color}" fill-opacity="0.18"/>` : ''}
         <circle cx="${c.x.toFixed(1)}" cy="${c.y.toFixed(1)}" r="${isLast ? '5' : '4'}" fill="var(--surface)" stroke="${color}" stroke-width="2.4"/>
-        <text x="${c.x.toFixed(1)}" y="${Math.max(16, c.y - 12).toFixed(1)}" text-anchor="middle" class="chart-val-label ${isLast ? 'latest' : ''}">${valTxt}</text>
-        <text x="${c.x.toFixed(1)}" y="${height - 12}" text-anchor="middle" class="chart-year-label">${shortLbl}</text>
+        ${showValLabel ? `<text x="${c.x.toFixed(1)}" y="${valLabelY.toFixed(1)}" text-anchor="middle" class="chart-val-label ${isLast ? 'latest' : ''}">${valTxt}</text>` : ''}
+        ${showXLabel ? `<text x="${c.x.toFixed(1)}" y="${height - 12}" text-anchor="middle" class="chart-year-label">${shortLbl}</text>` : ''}
       </g>`;
     })
     .join('');

@@ -246,7 +246,7 @@ function renderAbroadToolsSection(abroadTools, eurTry = 38) {
           </div>
         </div>
         <div style="margin-bottom:10px;">
-          <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:5px;" class="tabular">
+          <div class="abroad-sperr-row tabular">
             <span style="color:var(--text-secondary);">Hedef: <strong>${fmtEur(target)}</strong> (€992/ay × 12)</span>
             <span style="color:var(--text-tertiary);">Kalan: <strong>${fmtEur(remainingEur)}</strong> (~${fmtTry(remainingTry)})</span>
           </div>
@@ -332,7 +332,7 @@ export function renderAbroadView(abroadPrograms, activeFilter = 'ALL', abroadToo
         <p style="font-size:15px;">Aşağıdaki popüler Avrupa mühendislik/ekonomi programlarını tek tıkla ekleyebilir veya kendi hedef üniversiteni oluşturabilirsin.</p>
         <button class="btn btn-primary" id="heroAbroadAddBtn">+ Özel Program Oluştur</button>
       </div>
-      <div class="sample-tiles" style="grid-template-columns:repeat(3, minmax(0, 1fr));max-width:780px;">
+      <div class="sample-tiles abroad-sample-tiles">
         ${ABROAD_PRESETS.map(
           (pr, idx) => `<button class="sample-tile" data-abroad-preset="${idx}">
             <strong>${escapeHtml(pr.university)}</strong>
@@ -361,7 +361,7 @@ export function renderAbroadView(abroadPrograms, activeFilter = 'ALL', abroadToo
                 <div class="card-meta-line">${escapeHtml([cInfo.label, p.city, p.language].filter(Boolean).join(' · '))}</div>
               </div>
             </div>
-            <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;">
+            <div class="card-top-right">
               <select class="select toolbar-select" data-abroad-status="${escapeHtml(p.id)}" style="height:28px;font-size:11.5px;padding:0 22px 0 10px;background:${st.bg};color:${st.color};font-weight:600;box-shadow:none;">
                 ${Object.entries(ABROAD_STATUS_META)
                   .map(([k, v]) => `<option value="${k}" ${p.status === k ? 'selected' : ''}>${v.label}</option>`)
@@ -371,7 +371,7 @@ export function renderAbroadView(abroadPrograms, activeFilter = 'ALL', abroadToo
             </div>
           </div>
 
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:12px 0;border-top:0.5px solid var(--separator-subtle);border-bottom:0.5px solid var(--separator-subtle);font-size:12.5px;">
+          <div class="abroad-card-meta-grid">
             <div>
               <div class="metric-label">Kabul / Sınav Şartı</div>
               <div style="font-weight:500;margin-top:2px;">${escapeHtml(p.admissionReq || '—')}</div>
@@ -391,9 +391,9 @@ export function renderAbroadView(abroadPrograms, activeFilter = 'ALL', abroadToo
           </div>
 
           <div style="padding-top:12px;">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+            <div class="abroad-check-head">
               <span style="font-size:11.5px;font-weight:600;color:var(--text-tertiary);">EVRAK KONTROLÜ (${doneCount}/${ABROAD_CHECKLIST_ITEMS.length})</span>
-              <div style="display:flex;gap:6px;">
+              <div style="display:flex;gap:6px;flex-wrap:wrap;">
                 ${p.url ? `<a class="mini-action" href="${escapeHtml(p.url)}" target="_blank" rel="noopener">Site ↗</a>` : ''}
                 <button class="mini-action" data-abroad-edit="${escapeHtml(p.id)}">Düzenle</button>
                 <button class="mini-action" style="color:var(--rose);" data-abroad-del="${escapeHtml(p.id)}">Sil</button>

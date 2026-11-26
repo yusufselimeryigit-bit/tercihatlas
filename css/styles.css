@@ -5291,3 +5291,1148 @@ button, a, input, select, textarea, .prog-card, .apple-list-row {
   color: var(--accent);
   font-weight: 700;
 }
+
+/* ==========================================================================
+   v29: Complete Mobile & iPhone Responsive Overhaul (Zero Overlapping Text)
+   ========================================================================== */
+
+/* Base desktop styles for extracted semantic wrappers */
+html, body {
+  overflow-x: clip;
+}
+
+.kpi-band-val {
+  font-size: 21px;
+}
+
+.card-top-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 5px;
+  flex-shrink: 0;
+}
+
+.card-top-badges {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.apple-list-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.drawer-head-main {
+  display: flex;
+  gap: 15px;
+  align-items: center;
+  min-width: 0;
+  flex: 1;
+}
+
+.drawer-avatar-wrap {
+  flex-shrink: 0;
+}
+
+.drawer-avatar-wrap .uni-avatar {
+  width: 52px;
+  height: 52px;
+  border-radius: 16px;
+}
+
+.drawer-title-text {
+  font-family: var(--font-display);
+  font-size: 21px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.2;
+  color: var(--text);
+}
+
+.drawer-subtitle-text {
+  font-size: 14.5px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  margin-top: 2px;
+}
+
+.drawer-meta-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 7px;
+}
+
+.mini-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  border-radius: var(--r-md);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03), 0 0 0 0.5px rgba(0, 0, 0, 0.04);
+}
+
+.mini-table-wrap .mini-table {
+  box-shadow: none;
+  border-radius: 0;
+}
+
+.spectrum-target-pill.align-left {
+  left: 0;
+  transform: translateX(0);
+}
+
+.spectrum-target-pill.align-right {
+  left: auto;
+  right: 0;
+  transform: translateX(0);
+}
+
+.spectrum-wrap {
+  padding: 28px 6px 18px;
+  overflow: hidden;
+}
+
+.spectrum-track {
+  margin: 34px 0 22px;
+}
+
+.abroad-sample-tiles {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  max-width: 780px;
+}
+
+.abroad-card-meta-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  padding: 12px 0;
+  border-top: 0.5px solid var(--separator-subtle);
+  border-bottom: 0.5px solid var(--separator-subtle);
+  font-size: 12.5px;
+}
+
+.abroad-check-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.abroad-sperr-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  font-size: 12px;
+  margin-bottom: 5px;
+}
+
+.section-heading {
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* Global flex/grid min-width guards so children never blow out card widths */
+.kpi-card,
+.prog-card,
+.panel,
+.detail-metric-tile,
+.matrix-card,
+.yks-input-card,
+.yks-hero-left,
+.sim-slider-card,
+.abroad-card,
+.bavarian-tile,
+.ring-stat-tile,
+.scenario-cmp-card,
+.discover-band-col {
+  min-width: 0;
+}
+
+/* ==========================================================================
+   Tablet & Large Phone (<= 760px)
+   ========================================================================== */
+@media (max-width: 760px) {
+  /* 1. Compact Liquid Glass Topbar — fits cleanly even on 360px phones */
+  .topbar {
+    padding: calc(8px + env(safe-area-inset-top, 0px)) 12px 6px;
+  }
+
+  .topbar-inner {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
+  }
+
+  .brand {
+    height: 36px;
+    padding: 0 11px 0 6px;
+    gap: 7px;
+    font-size: 14px;
+    max-width: 100%;
+  }
+
+  .brand-logo {
+    width: 22px;
+    height: 22px;
+  }
+
+  .topbar-actions {
+    gap: 5px;
+    flex-shrink: 0;
+  }
+
+  .glass-icon-btn {
+    height: 36px;
+    width: 36px;
+    padding: 0;
+    gap: 0;
+  }
+
+  .glass-icon-btn.circle {
+    width: 36px;
+    height: 36px;
+  }
+
+  .btn-primary-nav {
+    height: 36px;
+    padding: 0 12px;
+    font-size: 13px;
+    gap: 4px;
+  }
+
+  /* 2. Main Canvas & Safe Bottom Breathing Room above Mobile Nav */
+  .main {
+    padding: 12px 12px calc(108px + env(safe-area-inset-bottom, 0px));
+    max-width: 100vw;
+  }
+
+  .share-banner {
+    margin: 4px 12px 0;
+    border-radius: 16px;
+    padding: 10px 14px;
+    font-size: 12.5px;
+  }
+
+  /* 3. Page Header & Native Bottom-Sheet Actions Menu (never clips off-screen) */
+  .page-header {
+    align-items: flex-start;
+    gap: 10px;
+    margin-bottom: 16px;
+  }
+
+  .page-title {
+    font-size: 27px;
+    line-height: 1.1;
+  }
+
+  .page-status {
+    font-size: 12.5px;
+  }
+
+  .actions-menu-wrap {
+    width: 100%;
+    justify-content: flex-start;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+
+  .countdown-pill-btn,
+  .audit-warn-pill {
+    font-size: 11.5px;
+    height: 30px;
+    padding: 0 10px;
+  }
+
+  .actions-dropdown {
+    position: fixed;
+    left: 12px;
+    right: 12px;
+    top: auto;
+    bottom: calc(82px + env(safe-area-inset-bottom, 0px));
+    min-width: 0;
+    width: auto;
+    max-height: 60dvh;
+    overflow-y: auto;
+    transform-origin: bottom center;
+    border-radius: 20px;
+    padding: 8px;
+    z-index: 95;
+  }
+
+  .actions-dropdown .ctx-item {
+    padding: 10px 12px;
+    font-size: 14px;
+  }
+
+  .appearance-popover {
+    top: calc(54px + env(safe-area-inset-top, 0px));
+    right: 12px;
+    width: min(268px, calc(100vw - 24px));
+  }
+
+  /* 4. Scenario Bar & Filter Pills — sleek horizontal scroll instead of multi-row clutter */
+  .scenario-bar {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+    margin-bottom: 14px;
+    padding: 2px 1px 4px;
+    gap: 6px;
+  }
+
+  .scenario-bar::-webkit-scrollbar,
+  .filter-pills::-webkit-scrollbar {
+    display: none;
+  }
+
+  .scenario-pill {
+    flex-shrink: 0;
+    white-space: nowrap;
+    height: 32px;
+    min-height: 32px;
+    padding: 0 11px;
+    font-size: 12px;
+  }
+
+  .toolbar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 9px;
+    margin-bottom: 14px;
+  }
+
+  .toolbar-left {
+    min-width: 0;
+    width: 100%;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+
+  .search-box {
+    min-width: 0;
+    max-width: none;
+    width: 100%;
+  }
+
+  .filter-pills {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+    padding: 2px 1px 3px;
+    gap: 6px;
+  }
+
+  .filter-pill {
+    flex-shrink: 0;
+    white-space: nowrap;
+    min-height: 32px;
+    height: 32px;
+    padding: 0 11px;
+    font-size: 12px;
+  }
+
+  .toolbar-right {
+    width: 100%;
+    justify-content: space-between;
+    gap: 6px;
+    flex-wrap: nowrap;
+  }
+
+  .toolbar-right .toolbar-select {
+    flex: 1;
+    min-width: 0;
+    max-width: 100%;
+    text-overflow: ellipsis;
+  }
+
+  .toolbar-right .segmented {
+    flex-shrink: 0;
+  }
+
+  .toolbar-right .seg-btn {
+    padding: 0 9px;
+    font-size: 12px;
+  }
+
+  /* 5. KPI Strip (2x2 Bento) — zero overflow/overlap inside narrow cards */
+  .kpi-strip {
+    gap: 8px;
+    margin-bottom: 18px;
+  }
+
+  .kpi-card {
+    padding: 12px 12px;
+    border-radius: 16px;
+    gap: 7px;
+    overflow: hidden;
+  }
+
+  .kpi-head {
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+
+  .kpi-label {
+    font-size: 11.5px;
+    gap: 5px;
+  }
+
+  .sf-badge {
+    width: 21px;
+    height: 21px;
+    border-radius: 6px;
+  }
+
+  .sf-badge svg {
+    width: 12px;
+    height: 12px;
+  }
+
+  .kpi-value {
+    font-size: 20px;
+    flex-wrap: wrap;
+    line-height: 1.15;
+  }
+
+  .kpi-band-val {
+    font-size: 15.5px;
+    line-height: 1.2;
+    word-break: break-word;
+  }
+
+  .kpi-sub {
+    font-size: 11px;
+    line-height: 1.3;
+  }
+
+  .risk-legend {
+    flex-wrap: wrap;
+    gap: 4px 8px;
+    font-size: 11px;
+  }
+
+  .target-rank-input {
+    width: 100%;
+    max-width: 100%;
+    font-size: 18px;
+    padding: 5px 9px;
+  }
+
+  /* 6. Dead Preference Banner */
+  .dead-pref-banner {
+    padding: 12px 13px;
+    gap: 10px;
+    border-radius: 16px;
+  }
+
+  .dead-pref-banner .btn {
+    width: 100%;
+  }
+
+  /* 7. Panels, Analysis & Charts */
+  .panel {
+    padding: 15px 14px;
+    border-radius: 18px;
+  }
+
+  .panel-title {
+    font-size: 15.5px;
+    margin-bottom: 12px;
+    gap: 6px;
+  }
+
+  .analysis-grid {
+    gap: 12px;
+  }
+
+  .health-panel-head {
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+
+  .health-score-badge {
+    font-size: 19px;
+    padding: 6px 13px;
+  }
+
+  .spectrum-axis-labels {
+    font-size: 11px;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .spectrum-target-pill {
+    font-size: 10.5px;
+    padding: 2px 8px;
+  }
+
+  /* 8. Detail Bottom Sheet (Drawer) on iPhone */
+  .drawer {
+    height: 92dvh;
+    border-radius: 24px 24px 0 0;
+  }
+
+  .drawer-header {
+    padding: 10px 14px 12px;
+    gap: 10px;
+  }
+
+  .drawer-head-main {
+    gap: 11px;
+    align-items: flex-start;
+  }
+
+  .drawer-avatar-wrap .uni-avatar {
+    width: 42px;
+    height: 42px;
+    border-radius: 12px;
+  }
+
+  .drawer-title-text {
+    font-size: 17px;
+    line-height: 1.22;
+  }
+
+  .drawer-subtitle-text {
+    font-size: 13px;
+  }
+
+  .drawer-meta-row {
+    gap: 6px;
+    margin-top: 5px;
+  }
+
+  .drawer-scroll-pill {
+    display: none;
+  }
+
+  .drawer-header-actions {
+    width: 100%;
+    gap: 6px;
+    justify-content: flex-start;
+  }
+
+  .drawer-header-actions .btn-sm {
+    height: 30px;
+    padding: 0 10px;
+    font-size: 12px;
+  }
+
+  .drawer-body {
+    padding: 14px 12px calc(36px + env(safe-area-inset-bottom, 0px));
+    gap: 16px;
+  }
+
+  .detail-hero-metrics {
+    gap: 8px;
+  }
+
+  .detail-metric-tile {
+    padding: 11px 12px;
+  }
+
+  .detail-metric-tile strong {
+    font-size: 16.5px !important;
+    line-height: 1.2;
+    word-break: break-word;
+  }
+
+  .mini-table th,
+  .mini-table td {
+    padding: 8px 9px;
+    font-size: 12px;
+    white-space: nowrap;
+  }
+
+  .net-row-top {
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+
+  /* 9. Modals, Spotlight, Toast & Batch Action Bar */
+  .modal-overlay {
+    padding: 10px;
+  }
+
+  .modal-overlay.spotlight-overlay {
+    padding: 10px 10px 12px;
+    padding-top: calc(10px + env(safe-area-inset-top, 0px));
+  }
+
+  .modal {
+    border-radius: 22px;
+    max-height: 88dvh;
+  }
+
+  .modal-header {
+    padding: 14px 16px 12px;
+  }
+
+  .modal-header h3 {
+    font-size: 16.5px;
+  }
+
+  .modal-body {
+    padding: 14px 14px 18px;
+    gap: 12px;
+  }
+
+  .spotlight-bar {
+    padding: 12px 12px;
+    gap: 8px;
+  }
+
+  .spotlight-input {
+    font-size: 15px;
+  }
+
+  .spotlight-body {
+    padding: 12px;
+    gap: 10px;
+  }
+
+  .spotlight-filters {
+    gap: 6px;
+  }
+
+  .spotlight-filters .toolbar-select,
+  .spotlight-filters #spotMaxRank {
+    flex: 1 1 130px;
+    width: auto !important;
+    min-width: 0;
+  }
+
+  .spotlight-footer-hint {
+    display: none;
+  }
+
+  .toast-container {
+    bottom: calc(84px + env(safe-area-inset-bottom, 0px));
+    left: 12px;
+    right: 12px;
+    transform: none;
+    max-width: none;
+  }
+
+  .toast {
+    max-width: 100%;
+    border-radius: 16px;
+    padding: 10px 14px;
+    font-size: 12.5px;
+    white-space: normal;
+  }
+
+  .batch-action-bar {
+    left: 12px;
+    right: 12px;
+    bottom: calc(82px + env(safe-area-inset-bottom, 0px));
+    transform: translateY(140%);
+    max-width: none;
+    width: auto;
+    border-radius: 20px;
+    padding: 10px 10px;
+    gap: 6px;
+  }
+
+  .batch-action-bar.open {
+    transform: translateY(0);
+  }
+
+  .bk-popover {
+    max-width: calc(100vw - 24px);
+    padding: 12px 14px;
+  }
+
+  /* 10. Mobile Nav Capsule */
+  .mobile-nav {
+    left: 10px;
+    right: 10px;
+    bottom: max(10px, env(safe-area-inset-bottom, 0px));
+    padding: 4px 5px;
+  }
+
+  .mobile-nav-btn {
+    padding: 5px 2px;
+    font-size: 10px;
+  }
+
+  .mobile-nav-btn span {
+    white-space: nowrap;
+  }
+
+  /* 11. Compare View & Radar */
+  .radar-compare-wrap {
+    padding: 14px 12px;
+    border-radius: 18px;
+  }
+
+  .radar-svg {
+    max-width: 280px;
+  }
+
+  .radar-legend-item {
+    font-size: 12px;
+    padding: 8px 10px;
+  }
+
+  .compare-table {
+    min-width: 520px;
+  }
+
+  .compare-row-label {
+    width: 112px;
+    min-width: 112px;
+    font-size: 11.5px;
+  }
+
+  .compare-table th,
+  .compare-table td {
+    padding: 11px 11px;
+    font-size: 12.5px;
+  }
+
+  /* 12. YKS 16-Subject Calculator on Mobile */
+  .yks-obp-card {
+    padding: 13px 12px;
+    gap: 10px;
+  }
+
+  .yks-broken-toggle {
+    width: 100%;
+    padding: 10px 12px;
+  }
+
+  .yks-input-card {
+    padding: 13px 12px;
+    gap: 10px;
+  }
+
+  .yks-hero-result {
+    padding: 15px 13px;
+    gap: 14px;
+    border-radius: 18px;
+  }
+
+  .yks-hero-left {
+    min-width: 0;
+    width: 100%;
+    gap: 12px;
+  }
+
+  .yks-hero-controls {
+    gap: 8px;
+  }
+
+  .yks-hero-controls .segmented {
+    max-width: 100%;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .yks-hero-controls .seg-btn {
+    padding: 0 9px;
+    font-size: 12px;
+  }
+
+  .yks-hero-main {
+    gap: 12px;
+  }
+
+  .yks-hero-scores {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    width: 100%;
+    gap: 6px;
+  }
+
+  .yks-score-pill-box {
+    min-width: 0;
+    padding: 9px 8px;
+    border-radius: 12px;
+  }
+
+  .yks-score-pill-box span {
+    font-size: 10px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .yks-score-pill-box strong {
+    font-size: 15px;
+  }
+
+  .yks-hero-cta {
+    min-width: 0;
+    width: 100%;
+    flex-direction: column;
+  }
+
+  .yks-hero-cta .btn {
+    min-width: 0;
+    width: 100%;
+    height: auto;
+    min-height: 40px;
+    padding: 9px 14px;
+    white-space: normal;
+    line-height: 1.25;
+  }
+
+  .yks-coeff-strip {
+    gap: 5px;
+  }
+
+  .yks-coeff-pill {
+    font-size: 10.5px;
+    padding: 2.5px 7px;
+  }
+
+  /* 13. Abroad Samples */
+  .abroad-sample-tiles {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* ==========================================================================
+   Standard & Narrow Phones (<= 640px) — Program Cards, Lists & Rows
+   ========================================================================== */
+@media (max-width: 640px) {
+  /* Program Card: Full-Width Titles + 3-Col Metric Grid + Clean Footer */
+  .prog-card {
+    padding: 14px 14px 12px;
+    border-radius: 18px;
+  }
+
+  .card-top {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    padding-bottom: 12px;
+  }
+
+  .card-left-head {
+    gap: 11px;
+    align-items: flex-start;
+  }
+
+  .uni-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+  }
+
+  .card-dept {
+    font-size: 15.5px;
+    line-height: 1.25;
+    -webkit-line-clamp: 3;
+  }
+
+  .card-uni {
+    font-size: 13px;
+    white-space: normal;
+    line-height: 1.3;
+  }
+
+  .card-meta-line {
+    font-size: 11.5px;
+    white-space: normal;
+    line-height: 1.35;
+  }
+
+  .card-top-right {
+    width: 100%;
+    flex-direction: row-reverse;
+    align-items: center;
+    justify-content: space-between;
+    padding-top: 2px;
+  }
+
+  .card-top-badges {
+    justify-content: flex-end;
+  }
+
+  .card-metrics {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    padding: 11px 0;
+  }
+
+  .prog-card .metric-group {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+    width: 100%;
+  }
+
+  .prog-card .metric-item {
+    min-width: 0;
+    padding: 7px 8px;
+    border-radius: 10px;
+  }
+
+  .prog-card .metric-label {
+    font-size: 10px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .prog-card .metric-val {
+    font-size: 16px;
+  }
+
+  .prog-card .metric-val-sub {
+    font-size: 12.5px;
+    line-height: 1.2;
+    word-break: break-word;
+  }
+
+  .spark-col {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .card-footer {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 9px;
+    padding-top: 10px;
+  }
+
+  .card-footer-left {
+    gap: 6px;
+    font-size: 12px;
+  }
+
+  .card-footer-actions {
+    width: 100%;
+    justify-content: space-between;
+    padding-top: 8px;
+    border-top: 0.5px solid var(--separator-subtle);
+  }
+
+  /* Compact List View — zero crushed titles */
+  .apple-list-row {
+    flex-wrap: wrap;
+    row-gap: 8px;
+    padding: 11px 12px;
+  }
+
+  .apple-list-row + .apple-list-row::before {
+    left: 12px;
+  }
+
+  .apple-list-left {
+    flex: 1 1 100%;
+    gap: 10px;
+  }
+
+  .apple-list-left .uni-avatar {
+    width: 34px;
+    height: 34px;
+    border-radius: 10px;
+  }
+
+  .apple-list-dept {
+    white-space: normal;
+    line-height: 1.25;
+  }
+
+  .apple-list-right {
+    width: 100%;
+    justify-content: space-between;
+    padding-left: 30px;
+    gap: 8px;
+  }
+
+  .apple-list-rank-col {
+    min-width: 0;
+    text-align: left;
+  }
+
+  .apple-list-rank {
+    font-size: 15px;
+  }
+
+  /* Simulator, Gap Fillers, Search Rows, Similar & ÖSYM Rows */
+  .sim-unlock-row,
+  .gap-filler-item,
+  .search-result-row,
+  .osym-row,
+  .similar-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+
+  .osym-sim-verdict {
+    padding: 13px 14px;
+    gap: 8px;
+  }
+
+  .osym-sim-verdict strong {
+    display: flex !important;
+    align-items: flex-start !important;
+    font-size: 14px !important;
+    line-height: 1.35;
+  }
+
+  .osym-sim-verdict strong svg {
+    margin-top: 2px;
+  }
+
+  .subject-boost-summary {
+    padding: 11px 12px;
+    gap: 10px;
+  }
+
+  .exam-history-row {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .abroad-card-meta-grid {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .abroad-sample-tiles,
+  .sample-tiles {
+    grid-template-columns: 1fr;
+  }
+
+  #cmpAddSelect {
+    max-width: 100% !important;
+    width: 100%;
+  }
+
+  .roadmap-add-row input,
+  .roadmap-add-row .btn {
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+}
+
+/* ==========================================================================
+   Extra-Tight Phone Widths (<= 560px & <= 380px iPhone SE / mini)
+   ========================================================================== */
+@media (max-width: 560px) {
+  .yks-field-row {
+    padding: 10px 10px;
+  }
+
+  .yks-field-name {
+    flex-wrap: wrap;
+    white-space: normal;
+    overflow: visible;
+    font-size: 13px;
+    gap: 4px 6px;
+  }
+
+  .yks-dy-inputs {
+    gap: 6px;
+  }
+
+  .yks-mini-input {
+    flex: 1;
+    justify-content: space-between;
+    padding: 4px 8px;
+  }
+
+  .yks-mini-input input {
+    width: 100%;
+    max-width: 54px;
+    font-size: 15px;
+  }
+
+  .yks-net-badge {
+    min-width: 64px;
+    font-size: 12.5px;
+  }
+
+  .yks-hero-rank {
+    font-size: 30px;
+  }
+
+  #calcDiplomaInput {
+    width: 92px !important;
+  }
+
+  .hero-spotlight {
+    padding: 4px 4px 4px 12px;
+  }
+
+  .hero-spotlight input {
+    font-size: 13.5px;
+  }
+}
+
+@media (max-width: 380px) {
+  .brand {
+    padding: 0 9px 0 5px;
+    font-size: 13px;
+    gap: 5px;
+  }
+
+  .topbar-actions {
+    gap: 4px;
+  }
+
+  .glass-icon-btn,
+  .glass-icon-btn.circle {
+    width: 33px;
+    height: 33px;
+  }
+
+  .btn-primary-nav {
+    height: 33px;
+    padding: 0 9px;
+    font-size: 12px;
+  }
+
+  .kpi-card {
+    padding: 10px 10px;
+  }
+
+  .kpi-value {
+    font-size: 18px;
+  }
+
+  .kpi-band-val {
+    font-size: 14px;
+  }
+
+  .prog-card .metric-group {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .prog-card .metric-item:last-child {
+    grid-column: 1 / -1;
+  }
+
+  .nets-input-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .yks-hero-scores {
+    grid-template-columns: 1fr;
+  }
+}
