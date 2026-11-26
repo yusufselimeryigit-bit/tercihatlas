@@ -101,6 +101,7 @@ import {
   buildOsymOfficialTableText,
   openOfficialOsymPrintWindow,
 } from './dss-tools.js?v=26';
+import { createLiquidGlassTabBar, LG_ICONS } from './liquid-glass-tabs.js?v=31';
 
 const STATE_KEY = 'tercihatlas_state_v1';
 const SYNC_KEY_STORAGE = 'tercihatlas_sync_key';
@@ -1274,8 +1275,15 @@ function updateCollapsingHeader() {
 
 const segPrevRects = new Map();
 let navGlideTimer = null;
+let desktopLgNav = null;
+let mobileLgNav = null;
 
 function updateDesktopNavThumb({ animate = true } = {}) {
+  if (desktopLgNav) {
+    const activeNavKey = ui.region === 'ABROAD' ? 'abroad' : ui.tab;
+    desktopLgNav.setActive(activeNavKey, { animate });
+    return;
+  }
   const navCap = document.getElementById('desktopNav');
   if (!navCap || navCap.offsetWidth === 0) return;
   const activeNav = navCap.querySelector('.nav-pill-btn.active');
@@ -1314,6 +1322,11 @@ function updateDesktopNavThumb({ animate = true } = {}) {
 }
 
 function updateMobileNavThumb({ animate = true } = {}) {
+  if (mobileLgNav) {
+    const activeNavKey = ui.region === 'ABROAD' ? 'abroad' : ui.tab;
+    mobileLgNav.setActive(activeNavKey, { animate });
+    return;
+  }
   const mNav = document.getElementById('mobileNav');
   if (!mNav || mNav.offsetWidth === 0) return;
   const activeBtn = mNav.querySelector('.mobile-nav-btn.active');
@@ -1599,6 +1612,13 @@ function updateHeaderBadges() {
   if (prefBadge) prefBadge.textContent = String(state.programs.length);
   if (cmpBadge) cmpBadge.textContent = String(state.compareCodes.length);
   if (abroadBadge) abroadBadge.textContent = String(state.abroadPrograms.length);
+
+  desktopLgNav?.setBadge('preferences', state.programs.length);
+  desktopLgNav?.setBadge('compare', state.compareCodes.length);
+  desktopLgNav?.setBadge('abroad', state.abroadPrograms.length);
+  mobileLgNav?.setBadge('preferences', state.programs.length);
+  mobileLgNav?.setBadge('compare', state.compareCodes.length);
+  mobileLgNav?.setBadge('abroad', state.abroadPrograms.length);
 
   const activeNavKey = ui.region === 'ABROAD' ? 'abroad' : ui.tab;
   document.querySelectorAll('#desktopNav .nav-pill-btn').forEach((btn) => {
@@ -6510,31 +6530,48 @@ async function init() {
     renderAll();
   });
 
-  document.querySelectorAll('#desktopNav .nav-pill-btn').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const target = btn.dataset.tab;
-      if (target === 'abroad') {
-        ui.region = 'ABROAD';
-      } else {
-        ui.region = 'TR';
-        ui.tab = target;
-      }
-      renderAll();
-    });
-  });
+  const handleMainNavSelect = (target) => {
+    if (target === 'abroad') {
+      ui.region = 'ABROAD';
+    } else {
+      ui.region = 'TR';
+      ui.tab = target;
+    }
+    renderAll();
+  };
 
-  document.querySelectorAll('#mobileNav .mobile-nav-btn').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const target = btn.dataset.mobileTab;
-      if (target === 'abroad') {
-        ui.region = 'ABROAD';
-      } else {
-        ui.region = 'TR';
-        ui.tab = target;
-      }
-      renderAll();
+  const initialNavKey = ui.region === 'ABROAD' ? 'abroad' : ui.tab;
+  const desktopNavEl = document.getElementById('desktopNav');
+  if (desktopNavEl) {
+    desktopLgNav = createLiquidGlassTabBar(desktopNavEl, {
+      variant: 'desktop',
+      ariaLabel: 'Ana sekmeler',
+      initialId: initialNavKey,
+      items: [
+        { id: 'preferences', label: 'Tercihlerim', hasBadge: true, badge: state.programs.length },
+        { id: 'compare', label: 'Karşılaştır', hasBadge: true, badge: state.compareCodes.length },
+        { id: 'analysis', label: 'Analiz', hasBadge: false },
+        { id: 'abroad', label: 'Yurt Dışı', hasBadge: true, badge: state.abroadPrograms.length },
+      ],
+      onChange: handleMainNavSelect,
     });
-  });
+  }
+
+  const mobileNavEl = document.getElementById('mobileNav');
+  if (mobileNavEl) {
+    mobileLgNav = createLiquidGlassTabBar(mobileNavEl, {
+      variant: 'mobile',
+      ariaLabel: 'Mobil navigasyon',
+      initialId: initialNavKey,
+      items: [
+        { id: 'preferences', label: 'Tercihler', icon: LG_ICONS.preferences, hasBadge: true, badge: state.programs.length },
+        { id: 'compare', label: 'Karşılaştır', icon: LG_ICONS.compare, hasBadge: true, badge: state.compareCodes.length },
+        { id: 'analysis', label: 'Analiz', icon: LG_ICONS.analysis, hasBadge: false },
+        { id: 'abroad', label: 'Yurt Dışı', icon: LG_ICONS.abroad, hasBadge: true, badge: state.abroadPrograms.length },
+      ],
+      onChange: handleMainNavSelect,
+    });
+  }
 
   document.getElementById('themeToggleBtn')?.addEventListener('click', toggleAppearancePopover);
 
