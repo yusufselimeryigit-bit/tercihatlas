@@ -12,7 +12,7 @@
   <link rel="icon" type="image/png" sizes="64x64" href="favicon.png?v=26" />
   <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png?v=26" />
   <link rel="manifest" href="manifest.json?v=26" />
-  <link rel="stylesheet" href="css/styles.css?v=35" />
+  <link rel="stylesheet" href="css/styles.css?v=36" />
 </head>
 <body>
   <!-- macOS Tahoe / iPadOS Floating Liquid Glass Top Navigation -->
@@ -21,7 +21,10 @@
       <div class="brand-group">
         <a href="#" class="brand" id="brandHome">
           <img src="icon-192.png?v=13" alt="TercihAtlas" class="brand-logo" />
-          <span>TercihAtlas</span>
+          <span class="brand-title-stack">
+            <span class="brand-main-label">TercihAtlas</span>
+            <span class="brand-collapsed-label tabular" id="brandCollapsedLabel">Tercihlerim</span>
+          </span>
         </a>
       </div>
 
@@ -264,7 +267,21 @@
         <button class="seg-btn seg-btn-sm" style="flex:1;" data-live-pick="off">Kapalı</button>
       </div>
     </div>
+    <div class="ap-section">
+      <div class="ap-label">Odak Modu (Focus)</div>
+      <div class="segmented" style="width:100%;" id="focusModeSegmented" aria-label="Odak modu">
+        <button class="seg-btn seg-btn-sm" style="flex:1;" data-focus-pick="off">Kapalı</button>
+        <button class="seg-btn seg-btn-sm" style="flex:1;" data-focus-pick="on">Açık</button>
+      </div>
+    </div>
   </div>
+
+  <!-- Floating Focus Mode Exit Pill -->
+  <button class="focus-exit-pill" id="exitFocusModeBtn" type="button" aria-label="Odak modundan çık">
+    <span class="focus-exit-dot" aria-hidden="true"></span>
+    <span>Odak Modu</span>
+    <strong style="color:var(--accent);">Çık</strong>
+  </button>
 
   <!-- Floating Presentation / Reader Mode Exit Pill -->
   <button class="presentation-exit-pill" id="exitPresentationBtn" aria-label="Sunum modundan çık">
@@ -287,7 +304,8 @@
           <div class="shortcut-row"><span>Sekmeler (Tercih · Kıyasla · Analiz · Yurt Dışı)</span><span class="shortcut-keys"><kbd>1</kbd>–<kbd>4</kbd></span></div>
           <div class="shortcut-row"><span>Takvim & Yol Haritasına Git</span><span class="shortcut-keys"><kbd>5</kbd></span></div>
           <div class="shortcut-row"><span>Listede Aşağı / Yukarı Gezin</span><span class="shortcut-keys"><kbd>J</kbd> / <kbd>K</kbd></span></div>
-          <div class="shortcut-row"><span>Seçili Bölümün Detayını Aç</span><span class="shortcut-keys"><kbd>Space</kbd></span></div>
+          <div class="shortcut-row"><span>Seçili Bölümde Hızlı Bakış (Quick Look)</span><span class="shortcut-keys"><kbd>Space</kbd></span></div>
+          <div class="shortcut-row"><span>Son İşlemi Geri Al (Silme / Sıralama)</span><span class="shortcut-keys"><kbd>⌘</kbd><kbd>Z</kbd></span></div>
           <div class="shortcut-row"><span>Seçili Bölümü Yukarı / Aşağı Taşı</span><span class="shortcut-keys"><kbd>⇧</kbd><kbd>↑</kbd> / <kbd>↓</kbd></span></div>
           <div class="shortcut-row"><span>Çekmecede Önceki / Sonraki Bölüm</span><span class="shortcut-keys"><kbd>←</kbd> / <kbd>→</kbd></span></div>
           <div class="shortcut-row"><span>Çoklu Seçim Modunu Aç / Kapat</span><span class="shortcut-keys"><kbd>S</kbd></span></div>
@@ -326,9 +344,17 @@
     </div>
   </div>
 
+  <!-- Floating iPadOS Compare Dock (Mini Ceramic Avatar Tray) -->
+  <div class="compare-dock" id="compareDock" role="region" aria-label="Kıyaslama havuzu" aria-hidden="true"></div>
+
+  <!-- iOS 26 Quick Look / Peek & Pop Glass Preview Overlay -->
+  <div class="modal-overlay quicklook-overlay" id="quickLookOverlay" aria-hidden="true">
+    <div class="quicklook-host" id="quickLookHost" role="dialog" aria-label="Hızlı Bakış"></div>
+  </div>
+
   <!-- Floating Pill Toasts -->
   <div class="toast-container" id="toastContainer"></div>
 
-  <script type="module" src="js/app.js?v=35"></script>
+  <script type="module" src="js/app.js?v=36"></script>
 </body>
 </html>

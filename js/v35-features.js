@@ -165,6 +165,7 @@ const SPOTLIGHT_COMMANDS = [
   { id: 'open-nets', title: 'Netlerim & Dershane PDF Yükle', desc: 'TYT/AYT net profilini güncelle veya PDF yükle', badge: 'Profil', keywords: ['netlerim', 'pdf yukle', 'deneme', 'dershane'] },
   { id: 'open-osym', title: 'ÖSYM AİS Kopyalama & Paylaşım Linki', desc: 'Resmi 5 sütunlu PDF ve veritabanısız paylaşım linki', badge: 'Çıktı', keywords: ['pdf', 'yazdir', 'ais', 'osym', 'paylas', 'link kopyala'] },
   { id: 'toggle-live', title: 'Canlı Hedef Şeridini Aç / Kapat', desc: 'Üstteki YKS 2027 Live Activity çubuğunu değiştir', badge: 'Ayar', keywords: ['live activity', 'canli serit', 'hedef seridi'] },
+  { id: 'toggle-focus', title: 'Odak Modunu Aç / Kapat (Focus)', desc: 'Sakin, dikkatsiz inceleme ve gece çalışma modu', badge: 'Odak', keywords: ['odak modu', 'focus mode', 'sakin mod', 'dikkat', 'gece calisma'] },
   { id: 'toggle-haptics', title: 'Dokunsal Sesi (Haptik) Aç / Kapat', desc: 'Liquid Glass mekanik tık sesini aç/kapat', badge: 'Ayar', keywords: ['haptik', 'ses', 'dokunsal', 'tik sesi', 'sessiz'] },
 ];
 

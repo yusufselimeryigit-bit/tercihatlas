@@ -121,7 +121,16 @@ import {
   initWalletCard3DPhysics,
   exportWalletCardPng,
   bindJigglePointerReorder,
-} from './v35-features.js?v=35';
+} from './v35-features.js?v=36';
+import {
+  isFocusModeEnabled,
+  setFocusModeEnabled,
+  pushUndoSnapshot,
+  popUndoSnapshot,
+  renderQuickLookHtml,
+  renderCompareDockHtml,
+  initScrollEdgeFades,
+} from './apple-signature.js?v=36';
 
 const STATE_KEY = 'tercihatlas_state_v1';
 const SYNC_KEY_STORAGE = 'tercihatlas_sync_key';
@@ -240,6 +249,7 @@ const ui = {
   cmpScenarioB: null,
   jiggleMode: false,
   walletFinish: 'titanium',
+  quickLookCode: null,
   discover: {
     q: 'Bilgisayar',
     rank: null,
@@ -607,6 +617,7 @@ function applySurfaceStyle(surface) {
 
 function setPresentationMode(enabled) {
   document.body.classList.toggle('presentation-mode', Boolean(enabled));
+  renderCompareDock();
   if (enabled) {
     showToast('Sunum modu açıldı. Çıkmak için sağ üstteki Çık veya Esc kullan.', 'info');
   }
@@ -630,6 +641,178 @@ function syncLiveActivityUI() {
   const on = isLiveActivityEnabled();
   document.querySelectorAll('#liveActivitySegmented [data-live-pick]').forEach((btn) => {
     btn.classList.toggle('active', (btn.dataset.livePick === 'on') === on);
+  });
+}
+
+function syncFocusModeUI() {
+  const on = isFocusModeEnabled();
+  document.body.classList.toggle('focus-mode', on);
+  document.querySelectorAll('#focusModeSegmented [data-focus-pick]').forEach((btn) => {
+    btn.classList.toggle('active', (btn.dataset.focusPick === 'on') === on);
+  });
+}
+
+function updateCollapsedBrandTitle() {
+  const lbl = document.getElementById('brandCollapsedLabel');
+  if (!lbl) return;
+  if (ui.region === 'ABROAD') {
+    lbl.textContent = `Yurt Dışı · ${state.abroadPrograms.length}`;
+  } else if (ui.tab === 'compare') {
+    lbl.textContent = `Karşılaştır · ${state.compareCodes.length}/4`;
+  } else if (ui.tab === 'analysis') {
+    const names = {
+      overview: 'Analiz',
+      calculator: 'Puan Hesapla',
+      progression: 'Gelişim',
+      discover: 'Keşfet',
+      decision: 'Karar Skoru',
+      map: 'Harita',
+      simulator: 'Simülatör',
+      cost: 'Maliyet',
+      timeline: 'Takvim',
+    };
+    lbl.textContent = names[ui.analysisSubTab] || 'Analiz';
+  } else {
+    lbl.textContent = `Tercihlerim · ${state.programs.length}/24`;
+  }
+}
+
+function performUndo() {
+  const snap = popUndoSnapshot();
+  if (!snap) {
+    showToast('Geri alınacak işlem yok.');
+    return false;
+  }
+  const prevRects = captureProgramRects();
+  state.programs = snap.programs;
+  state.compareCodes = snap.compareCodes;
+  if (snap.targetRank !== undefined) state.targetRank = snap.targetRank;
+  saveState();
+  renderAll();
+  animateProgramFlip(prevRects);
+  playHapticTick('commit');
+  showToast(`Geri alındı: ${snap.label}`, 'success');
+  return true;
+}
+
+function showUndoToast(message) {
+  const container = document.getElementById('toastContainer');
+  if (!container) return;
+  while (container.children.length >= 2) container.firstElementChild?.remove();
+
+  const el = document.createElement('div');
+  el.className = 'toast dynamic-island-toast toast-undo';
+  el.innerHTML = `
+    <span class="undo-ring-wrap" aria-hidden="true">
+      <svg width="20" height="20" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="9" fill="none" stroke="rgba(255,255,255,0.2)" stroke-width="2.4"/>
+        <circle class="undo-ring-progress" cx="12" cy="12" r="9" fill="none" stroke="var(--accent)" stroke-width="2.4"
+          stroke-linecap="round" stroke-dasharray="56.55" stroke-dashoffset="0" transform="rotate(-90 12 12)"/>
+      </svg>
+    </span>
+    <span class="toast-msg">${escapeHtml(message)}</span>
+    <button class="undo-pill-btn" type="button">Geri Al</button>
+  `;
+  container.appendChild(el);
+
+  let dismissed = false;
+  const dismiss = () => {
+    if (dismissed) return;
+    dismissed = true;
+    el.classList.add('toast-leaving');
+    setTimeout(() => el.remove(), 250);
+  };
+
+  el.querySelector('.undo-pill-btn')?.addEventListener('click', () => {
+    dismiss();
+    performUndo();
+  });
+
+  setTimeout(dismiss, 5000);
+}
+
+function openQuickLook(code) {
+  const p = state.programs.find((item) => item.code === code);
+  const overlay = document.getElementById('quickLookOverlay');
+  const host = document.getElementById('quickLookHost');
+  if (!p || !overlay || !host) return;
+
+  ui.quickLookCode = code;
+  const idx = state.programs.findIndex((item) => item.code === code);
+  const proj = compute2027Projection(p);
+  const gap = compareWithMyNets(p, state.myNets);
+  const isCompared = state.compareCodes.includes(code);
+
+  host.innerHTML = renderQuickLookHtml(p, {
+    proj,
+    gap,
+    trendHtml: renderTrendBadge(p),
+    isCompared,
+    orderIndex: idx,
+    readOnlyShare: ui.readOnlyShare,
+  });
+
+  document.getElementById('closeQuickLookBtn')?.addEventListener('click', closeQuickLook);
+  document.getElementById('qlOpenDrawerBtn')?.addEventListener('click', () => {
+    closeQuickLook();
+    openDrawer(code);
+  });
+  document.getElementById('qlCompareBtn')?.addEventListener('click', () => {
+    toggleCompare(code);
+    openQuickLook(code);
+  });
+  document.getElementById('qlMoveTopBtn')?.addEventListener('click', () => {
+    closeQuickLook();
+    moveProgramToTop(code);
+  });
+
+  playHapticTick('step');
+  overlay.classList.add('open');
+  overlay.setAttribute('aria-hidden', 'false');
+}
+
+function closeQuickLook() {
+  ui.quickLookCode = null;
+  const overlay = document.getElementById('quickLookOverlay');
+  if (!overlay) return;
+  overlay.classList.remove('open');
+  overlay.setAttribute('aria-hidden', 'true');
+}
+
+function renderCompareDock() {
+  const dock = document.getElementById('compareDock');
+  if (!dock) return;
+  const selected = state.compareCodes.map((c) => state.programs.find((p) => p.code === c)).filter(Boolean);
+  const shouldShow =
+    selected.length >= 1 &&
+    ui.region === 'TR' &&
+    ui.tab !== 'compare' &&
+    !ui.selectMode &&
+    !document.body.classList.contains('presentation-mode');
+
+  if (!shouldShow) {
+    dock.classList.remove('open');
+    dock.setAttribute('aria-hidden', 'true');
+    return;
+  }
+
+  dock.innerHTML = renderCompareDockHtml(selected);
+  dock.classList.add('open');
+  dock.setAttribute('aria-hidden', 'false');
+
+  dock.querySelectorAll('[data-dock-remove]').forEach((btn) => {
+    btn.addEventListener('click', () => toggleCompare(btn.dataset.dockRemove));
+  });
+  document.getElementById('cmpDockGoBtn')?.addEventListener('click', () => {
+    ui.region = 'TR';
+    ui.tab = 'compare';
+    ui.compareMode = 'programs';
+    renderAll();
+  });
+  document.getElementById('cmpDockClearBtn')?.addEventListener('click', () => {
+    state.compareCodes = [];
+    saveState();
+    renderAll();
   });
 }
 
@@ -755,11 +938,12 @@ function executeSpotlightCommand(cmdId) {
       showToast(ui.jiggleMode ? 'Sıralama modu açıldı — kartları sürükleyerek diz.' : 'Sıralama modu kapatıldı.');
       break;
     case 'smart-sort': {
+      pushUndoSnapshot('Akıllı Sıralama', state);
       const prevRects = captureProgramRects();
       state.programs.sort((a, b) => (Number(a.latestRank) || 9e9) - (Number(b.latestRank) || 9e9));
       ui.sortBy = 'manual'; ui.region = 'TR'; ui.tab = 'preferences';
       saveState(); renderAll(); animateProgramFlip(prevRects);
-      showToast('Tercihler ÖSYM taban sıralamasına göre akıllı dizildi!', 'success');
+      showUndoToast('Tercihler taban sıralamasına göre dizildi.');
       break;
     }
     case 'theme-dark': applyThemeMode('dark'); showToast('Koyu tema aktif.', 'success'); break;
@@ -778,6 +962,12 @@ function executeSpotlightCommand(cmdId) {
       const next = !isLiveActivityEnabled();
       setLiveActivityEnabled(next); syncLiveActivityUI(); renderLiveActivityHost();
       showToast(next ? 'Canlı hedef şeridi açıldı.' : 'Canlı hedef şeridi gizlendi.');
+      break;
+    }
+    case 'toggle-focus': {
+      const next = setFocusModeEnabled(!isFocusModeEnabled());
+      syncFocusModeUI();
+      showToast(next ? 'Odak Modu açıldı — sakin inceleme.' : 'Odak Modu kapatıldı.');
       break;
     }
     case 'toggle-haptics': {
@@ -799,6 +989,7 @@ function toggleAppearancePopover(e) {
   if (willOpen) {
     syncHapticsUI();
     syncLiveActivityUI();
+    syncFocusModeUI();
     pop.classList.add('open');
     pop.setAttribute('aria-hidden', 'false');
     initSlidingSegmentedControls();
@@ -1142,6 +1333,7 @@ function moveProgramStep(code, delta) {
 function moveProgramToTop(code) {
   const idx = state.programs.findIndex((p) => p.code === code);
   if (idx <= 0) return;
+  pushUndoSnapshot('#01 Taşıma', state);
   const prevRects = captureProgramRects();
   const [moved] = state.programs.splice(idx, 1);
   state.programs.unshift(moved);
@@ -1149,7 +1341,7 @@ function moveProgramToTop(code) {
   saveState();
   renderAll();
   animateProgramFlip(prevRects);
-  showToast(`#01 sıraya taşındı: ${moved.university}`, 'success');
+  showUndoToast(`#01 sıraya taşındı: ${moved.university}`);
 }
 
 function openShortcutsModal() {
@@ -1289,13 +1481,14 @@ function renderBatchActionBar() {
       danger: true,
     });
     if (!ok) return;
+    pushUndoSnapshot(`${count} tercih silme`, state);
     state.programs = state.programs.filter((p) => !ui.selectedCodes.has(p.code));
     state.compareCodes = state.compareCodes.filter((c) => !ui.selectedCodes.has(c));
     ui.selectedCodes.clear();
     ui.selectMode = false;
     saveState();
     renderAll();
-    showToast(`${count} bölüm listeden kaldırıldı.`, 'success');
+    showUndoToast(`${count} bölüm listeden kaldırıldı.`);
   });
 
   document.getElementById('batchExitBtn')?.addEventListener('click', () => {
@@ -1397,12 +1590,13 @@ async function refreshAllProgramsLive() {
 function removeProgram(code) {
   const target = state.programs.find((p) => p.code === code);
   if (!target) return;
+  pushUndoSnapshot(`${target.department} silme`, state);
   state.programs = state.programs.filter((p) => p.code !== code);
   state.compareCodes = state.compareCodes.filter((c) => c !== code);
   if (ui.drawerCode === code) closeDrawer();
   saveState();
   renderAll();
-  showToast(`${target.department} listeden çıkarıldı.`);
+  showUndoToast(`${target.department} listeden çıkarıldı.`);
 }
 
 // ============================================================================
@@ -1461,12 +1655,21 @@ function renderShareBanner() {
 // Scroll-Aware Topbar, Sliding Segmented Thumbs, Swipe-to-Dismiss, Context Menu
 // ============================================================================
 let lastTopbarScrolled = null;
+let lastTitleCollapsed = null;
 function updateCollapsingHeader() {
-  const isScrolled = window.scrollY > 24;
-  if (isScrolled === lastTopbarScrolled) return;
-  lastTopbarScrolled = isScrolled;
   const topbar = document.getElementById('mainTopbar');
-  if (topbar) topbar.classList.toggle('scrolled', isScrolled);
+  if (!topbar) return;
+  const y = window.scrollY;
+  const isScrolled = y > 24;
+  if (isScrolled !== lastTopbarScrolled) {
+    lastTopbarScrolled = isScrolled;
+    topbar.classList.toggle('scrolled', isScrolled);
+  }
+  const isTitleCollapsed = y > 58;
+  if (isTitleCollapsed !== lastTitleCollapsed) {
+    lastTitleCollapsed = isTitleCollapsed;
+    topbar.classList.toggle('title-collapsed', isTitleCollapsed);
+  }
 }
 
 const segPrevRects = new Map();
@@ -1670,6 +1873,7 @@ function openContextMenu(e, code) {
   const isCmp = state.compareCodes.includes(code);
   const idx = state.programs.findIndex((item) => item.code === code);
   menu.innerHTML = `
+    <button class="ctx-item" data-ctx="quicklook">${SF.sparkles} Hızlı Bakış (Quick Look)</button>
     <button class="ctx-item" data-ctx="open">${SF.external} Detayı Aç</button>
     <button class="ctx-item" data-ctx="compare">${isCmp ? SF.check : SF.plus} ${isCmp ? 'Karşılaştırmadan Çıkar' : 'Karşılaştır'}</button>
     ${!ui.readOnlyShare && idx > 0 ? `<button class="ctx-item" data-ctx="move-top">${SF.up} En Üste Taşı (#01)</button>` : ''}
@@ -1701,7 +1905,8 @@ function openContextMenu(e, code) {
     btn.addEventListener('click', () => {
       const act = btn.dataset.ctx;
       closeContextMenu();
-      if (act === 'open') openDrawer(code);
+      if (act === 'quicklook') openQuickLook(code);
+      else if (act === 'open') openDrawer(code);
       else if (act === 'compare') toggleCompare(code);
       else if (act === 'move-top') moveProgramToTop(code);
       else if (act === 'move-up') moveProgramStep(code, -1);
@@ -1815,9 +2020,12 @@ function renderAll() {
       void root.offsetWidth;
       root.classList.add('view-enter');
     }
+    updateCollapsedBrandTitle();
     initSlidingSegmentedControls();
     enhanceLiquidGlassSliders(root);
     renderBatchActionBar();
+    renderCompareDock();
+    initScrollEdgeFades(root);
   };
 
   if (ui.region === 'ABROAD') {
@@ -5743,13 +5951,14 @@ function bindPreferencesEvents() {
   });
 
   document.getElementById('smartSortDeadBtn')?.addEventListener('click', () => {
+    pushUndoSnapshot('Akıllı Sıralama', state);
     const prevRects = captureProgramRects();
     state.programs.sort((a, b) => (Number(a.latestRank) || 9e9) - (Number(b.latestRank) || 9e9));
     ui.sortBy = 'manual';
     saveState();
     renderAll();
     animateProgramFlip(prevRects);
-    showToast('Tercih listesi ÖSYM taban sıralamasına göre akıllı dizildi!', 'success');
+    showUndoToast('Tercihler taban sıralamasına göre dizildi.');
   });
 
   document.querySelectorAll('[data-quick-add]').forEach((btn) => {
@@ -6874,6 +7083,28 @@ async function init() {
     });
   });
 
+  syncFocusModeUI();
+  document.querySelectorAll('#focusModeSegmented [data-focus-pick]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const next = btn.dataset.focusPick === 'on';
+      setFocusModeEnabled(next);
+      syncFocusModeUI();
+      initSlidingSegmentedControls();
+      showToast(next ? 'Odak Modu açıldı.' : 'Odak Modu kapatıldı.', 'info');
+    });
+  });
+
+  document.getElementById('exitFocusModeBtn')?.addEventListener('click', () => {
+    setFocusModeEnabled(false);
+    syncFocusModeUI();
+    initSlidingSegmentedControls();
+    showToast('Odak Modu kapatıldı.', 'info');
+  });
+
+  document.getElementById('quickLookOverlay')?.addEventListener('click', (e) => {
+    if (e.target.id === 'quickLookOverlay') closeQuickLook();
+  });
+
   document.getElementById('closeWalletCardBtn')?.addEventListener('click', closeWalletCardModal);
   document.getElementById('walletCardModalOverlay')?.addEventListener('click', (e) => {
     if (e.target.id === 'walletCardModalOverlay') closeWalletCardModal();
@@ -7010,9 +7241,19 @@ async function init() {
       return;
     }
 
+    if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key.toLowerCase() === 'z' && !isTyping && !ui.readOnlyShare) {
+      e.preventDefault();
+      performUndo();
+      return;
+    }
+
     if (e.key === 'Escape') {
       if (activeDialogClose) {
         activeDialogClose();
+        return;
+      }
+      if (ui.quickLookCode) {
+        closeQuickLook();
         return;
       }
       if (document.body.classList.contains('presentation-mode') && !ui.drawerCode) {
@@ -7036,6 +7277,7 @@ async function init() {
       closeSyncModal();
       closeShortcutsModal();
       closeWalletCardModal();
+      closeQuickLook();
       if (ui.jiggleMode) {
         ui.jiggleMode = false;
         renderAll();
@@ -7044,6 +7286,23 @@ async function init() {
     }
 
     if (isTyping || e.metaKey || e.ctrlKey || e.altKey) return;
+
+    // Quick Look keyboard controls (Space closes, Enter expands into full drawer)
+    if (ui.quickLookCode) {
+      if (e.key === ' ') {
+        e.preventDefault();
+        closeQuickLook();
+        return;
+      }
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        const codeToOpen = ui.quickLookCode;
+        closeQuickLook();
+        openDrawer(codeToOpen);
+        return;
+      }
+      return;
+    }
 
     // Drawer left/right navigation
     if (ui.drawerCode && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
@@ -7140,8 +7399,8 @@ async function init() {
 
       if (e.key === ' ' && ui.kbdFocusCode) {
         e.preventDefault();
-        if (ui.drawerCode === ui.kbdFocusCode) closeDrawer();
-        else openDrawer(ui.kbdFocusCode);
+        if (ui.quickLookCode === ui.kbdFocusCode) closeQuickLook();
+        else openQuickLook(ui.kbdFocusCode);
         return;
       }
 
