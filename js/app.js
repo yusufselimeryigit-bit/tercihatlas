@@ -41,7 +41,7 @@ import {
   renderMiniNetSparkline,
   renderAppleActivityRings,
   renderCompareRadarChart,
-} from './charts.js?v=29';
+} from './charts.js?v=30';
 import {
   compute2027Projection,
   compareWithMyNets,
@@ -68,7 +68,7 @@ import {
   renderCostCalculator,
   renderTimelineView,
   downloadTimelineIcs,
-} from './map-cost.js?v=26';
+} from './map-cost.js?v=30';
 import { findSimilarProgramsInCatalog, findGapFillersInCatalog, lookupProgramInCatalog } from './catalog.js?v=26';
 import {
   extractLogoAmbientColor,
@@ -727,7 +727,7 @@ function renderAvatar(program) {
   const initials = escapeHtml(getUniInitials(program.university));
   if (!logo) return `<div class="uni-avatar">${initials}</div>`;
   return `<div class="uni-avatar">
-    <img src="${escapeHtml(logo)}" alt="${escapeHtml(program.university)}" loading="lazy"
+    <img src="${escapeHtml(logo)}" alt="${escapeHtml(program.university)}" loading="lazy" decoding="async"
       onerror="this.style.display='none';this.parentElement.textContent='${initials}'" />
   </div>`;
 }
@@ -1263,9 +1263,13 @@ function renderShareBanner() {
 // ============================================================================
 // Scroll-Aware Topbar, Sliding Segmented Thumbs, Swipe-to-Dismiss, Context Menu
 // ============================================================================
+let lastTopbarScrolled = null;
 function updateCollapsingHeader() {
+  const isScrolled = window.scrollY > 24;
+  if (isScrolled === lastTopbarScrolled) return;
+  lastTopbarScrolled = isScrolled;
   const topbar = document.getElementById('mainTopbar');
-  if (topbar) topbar.classList.toggle('scrolled', window.scrollY > 24);
+  if (topbar) topbar.classList.toggle('scrolled', isScrolled);
 }
 
 const segPrevRects = new Map();
@@ -1925,11 +1929,14 @@ function renderPreferencesView() {
     </div>`;
   }
 
-  const contentHtml = ui.viewMode === 'table' ? renderTableView(filtered) : renderCardsView(filtered);
+  const contentHtml =
+    ui.viewMode === 'table'
+      ? renderTableView(filtered, { est, prefAudit })
+      : renderCardsView(filtered, { est, prefAudit });
   return `${headerHtml}${diffBannerHtml}${scenarioHtml}${kpiHtml}${deadBannerHtml}${toolbarHtml}${contentHtml}`;
 }
 
-function renderCardsView(programs) {
+function renderCardsView(programs, cached = {}) {
   const manualMode =
     !ui.readOnlyShare &&
     ui.sortBy === 'manual' &&
@@ -1940,10 +1947,9 @@ function renderCardsView(programs) {
     !ui.filterNewOnly &&
     !ui.filterQuotaUp &&
     !ui.filterCalcRank;
-  const est = estimateYksRankFromNets(state.myNets);
-  const deadMap = new Map(
-    (auditPreferenceOrder(state.programs, state.targetRank)?.deadPreferences || []).map((dp) => [dp.blocked.code, dp]),
-  );
+  const est = 'est' in cached ? cached.est : estimateYksRankFromNets(state.myNets);
+  const auditObj = 'prefAudit' in cached ? cached.prefAudit : auditPreferenceOrder(state.programs, state.targetRank);
+  const deadMap = new Map((auditObj?.deadPreferences || []).map((dp) => [dp.blocked.code, dp]));
   return `<section class="cards-grid" id="programList">
     ${programs
       .map((p) => {
@@ -2047,7 +2053,7 @@ function renderCardsView(programs) {
   </section>`;
 }
 
-function renderTableView(programs) {
+function renderTableView(programs, cached = {}) {
   const manualMode =
     !ui.readOnlyShare &&
     ui.sortBy === 'manual' &&
@@ -2058,10 +2064,9 @@ function renderTableView(programs) {
     !ui.filterNewOnly &&
     !ui.filterQuotaUp &&
     !ui.filterCalcRank;
-  const est = estimateYksRankFromNets(state.myNets);
-  const deadMap = new Map(
-    (auditPreferenceOrder(state.programs, state.targetRank)?.deadPreferences || []).map((dp) => [dp.blocked.code, dp]),
-  );
+  const est = 'est' in cached ? cached.est : estimateYksRankFromNets(state.myNets);
+  const auditObj = 'prefAudit' in cached ? cached.prefAudit : auditPreferenceOrder(state.programs, state.targetRank);
+  const deadMap = new Map((auditObj?.deadPreferences || []).map((dp) => [dp.blocked.code, dp]));
   return `<section class="apple-grouped-list" id="programList" role="list">
     ${programs
       .map((p) => {
@@ -2339,6 +2344,7 @@ function renderCompareView() {
 
   return `${headerHtml}
   ${selected.length >= 2 ? renderCompareRadarChart(selected) : ''}
+  ${selected.length >= 2 ? `<div class="compare-scroll-hint">← Tabloyu yana kaydırarak tüm üniversiteleri incele →</div>` : ''}
   <div class="compare-grid-wrap">
     <table class="compare-table">
       <thead>
@@ -5815,8 +5821,38 @@ function bindCompareEvents() {
     btn.addEventListener('click', () => toggleCompare(btn.dataset.cmpRemove));
   });
 
-  // Module 4: Personal Scoring Matrix (1-10) live slider updates
+  // Module 4: Personal Scoring Matrix (1-10) live slider updates (RAF-coalesced for 60fps mobile)
   let matrixSaveTimer = null;
+  let matrixRafId = 0;
+  const flushMatrixBanner = () => {
+    matrixRafId = 0;
+    const selected = state.compareCodes.map((c) => state.programs.find((p) => p.code === c)).filter(Boolean);
+    const ranked = computeMatrixRanking(selected);
+    const winner = ranked[0];
+    const runnerUp = ranked[1];
+    const margin = winner && runnerUp ? winner.scores.total - runnerUp.scores.total : 0;
+
+    for (const item of ranked) {
+      const totEl = document.getElementById(`matrixTotal_${item.program.code}`);
+      if (totEl) totEl.textContent = `${item.scores.total}/30`;
+      const cardEl = document.querySelector(`[data-matrix-card="${item.program.code}"]`);
+      cardEl?.classList.toggle('winner', Boolean(winner && winner.program.code === item.program.code && margin > 0));
+    }
+
+    const banner = document.getElementById('matrixWinnerBanner');
+    if (banner && winner) {
+      banner.innerHTML = `
+        <div>
+          <div style="font-size:11.5px;font-weight:650;text-transform:uppercase;letter-spacing:.04em;color:var(--green);">En Mantıklı Seçenek</div>
+          <strong style="font-size:15.5px;color:var(--text);">${escapeHtml(winner.program.university)} — ${escapeHtml(winner.program.department)}</strong>
+          <span style="display:block;font-size:12.5px;color:var(--text-secondary);margin-top:2px;">
+            ${margin > 0 ? `2. sıradaki ${escapeHtml(runnerUp.program.university)} seçeneğinden +${margin} puan önde.` : 'İlk iki seçenek eşit puanda — kişisel önceliğine göre netleştirebilirsin.'}
+          </span>
+        </div>
+        <div class="matrix-winner-score tabular">${winner.scores.total}<span>/ 30</span></div>`;
+    }
+  };
+
   document.querySelectorAll('[data-matrix-code][data-matrix-key]').forEach((slider) => {
     slider.addEventListener('input', () => {
       const code = slider.dataset.matrixCode;
@@ -5829,31 +5865,7 @@ function bindCompareEvents() {
       const valEl = document.getElementById(`matrixVal_${code}_${key}`);
       if (valEl) valEl.textContent = `${val} / 10`;
 
-      const selected = state.compareCodes.map((c) => state.programs.find((p) => p.code === c)).filter(Boolean);
-      const ranked = computeMatrixRanking(selected);
-      const winner = ranked[0];
-      const runnerUp = ranked[1];
-      const margin = winner && runnerUp ? winner.scores.total - runnerUp.scores.total : 0;
-
-      for (const item of ranked) {
-        const totEl = document.getElementById(`matrixTotal_${item.program.code}`);
-        if (totEl) totEl.textContent = `${item.scores.total}/30`;
-        const cardEl = document.querySelector(`[data-matrix-card="${item.program.code}"]`);
-        cardEl?.classList.toggle('winner', Boolean(winner && winner.program.code === item.program.code && margin > 0));
-      }
-
-      const banner = document.getElementById('matrixWinnerBanner');
-      if (banner && winner) {
-        banner.innerHTML = `
-          <div>
-            <div style="font-size:11.5px;font-weight:650;text-transform:uppercase;letter-spacing:.04em;color:var(--green);">En Mantıklı Seçenek</div>
-            <strong style="font-size:15.5px;color:var(--text);">${escapeHtml(winner.program.university)} — ${escapeHtml(winner.program.department)}</strong>
-            <span style="display:block;font-size:12.5px;color:var(--text-secondary);margin-top:2px;">
-              ${margin > 0 ? `2. sıradaki ${escapeHtml(runnerUp.program.university)} seçeneğinden +${margin} puan önde.` : 'İlk iki seçenek eşit puanda — kişisel önceliğine göre netleştirebilirsin.'}
-            </span>
-          </div>
-          <div class="matrix-winner-score tabular">${winner.scores.total}<span>/ 30</span></div>`;
-      }
+      if (!matrixRafId) matrixRafId = requestAnimationFrame(flushMatrixBanner);
 
       clearTimeout(matrixSaveTimer);
       matrixSaveTimer = setTimeout(() => saveState(), 320);
@@ -6631,10 +6643,18 @@ async function init() {
   document.getElementById('drawerBackdrop')?.addEventListener('click', closeDrawer);
 
   window.addEventListener('scroll', updateCollapsingHeader, { passive: true });
+  let lastResizeW = window.innerWidth;
+  let resizeRafId = 0;
   window.addEventListener('resize', () => {
-    updateDesktopNavThumb({ animate: false });
-    updateMobileNavThumb({ animate: false });
-    initSlidingSegmentedControls();
+    if (window.innerWidth === lastResizeW) return; // Ignore iOS Safari URL-bar height-only resize storms during scroll
+    lastResizeW = window.innerWidth;
+    if (resizeRafId) return;
+    resizeRafId = requestAnimationFrame(() => {
+      resizeRafId = 0;
+      updateDesktopNavThumb({ animate: false });
+      updateMobileNavThumb({ animate: false });
+      initSlidingSegmentedControls();
+    });
   });
   document.fonts?.ready?.then?.(() => {
     updateDesktopNavThumb({ animate: false });

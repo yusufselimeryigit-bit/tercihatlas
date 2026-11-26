@@ -138,7 +138,7 @@ export function renderTurkeyCampusMap(programs, selectedCity = null) {
         <span style="font-size:12.5px;font-weight:500;color:var(--text-tertiary)">${byCity.size} farklı şehir · Detay için bir şehre dokun</span>
       </div>
       <div class="map-stage">
-        <svg viewBox="0 0 940 420" width="100%" class="turkey-svg" role="img" aria-label="Türkiye kampüs haritası">
+        <svg viewBox="0 0 940 420" width="940" height="420" class="turkey-svg" role="img" aria-label="Türkiye kampüs haritası">
           <path d="${TURKEY_SILHOUETTE_PATH}" class="turkey-land"/>
           <!-- Cyprus outline -->
           <path d="M 332 406 L 392 396 L 418 408 L 366 420 Z" class="turkey-land"/>

@@ -150,7 +150,7 @@ export function renderDetailTrendChart(history, mode = 'rank') {
     .join('');
 
   return `<div class="interactive-chart-wrap" data-vb-w="${width}" data-vb-h="${height}">
-    <svg class="detail-chart" viewBox="0 0 ${width} ${height}" width="100%" role="img" aria-label="Yıllık trend grafiği">
+    <svg class="detail-chart" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" role="img" aria-label="Yıllık trend grafiği">
       <defs>
         <linearGradient id="${gradId}" x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%" stop-color="${color}" stop-opacity="0.22"/>
@@ -332,7 +332,7 @@ export function renderExamProgressionChart(exams, { examType = 'TYT', targetNet 
     .join('');
 
   return `<div class="interactive-chart-wrap" data-vb-w="${width}" data-vb-h="${height}">
-    <svg class="detail-chart" viewBox="0 0 ${width} ${height}" width="100%" role="img" aria-label="${examType} deneme gelişim grafiği">
+    <svg class="detail-chart" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" role="img" aria-label="${examType} deneme gelişim grafiği">
       <defs>
         <linearGradient id="${gradId}" x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%" stop-color="${color}" stop-opacity="0.24"/>
@@ -418,7 +418,7 @@ export function renderAppleActivityRings({ tytPct = 0, aytPct = 0, researchPct =
  */
 export function renderCompareRadarChart(programs) {
   if (!Array.isArray(programs) || programs.length < 2) return '';
-  const list = programs.slice(0, 3);
+  const list = programs.slice(0, 4);
 
   const axes = [
     { key: 'prestige', label: 'Prestij' },
@@ -430,9 +430,10 @@ export function renderCompareRadarChart(programs) {
   ];
 
   const palette = [
-    { stroke: '#0071E3', fill: 'rgba(0, 113, 227, 0.20)' },
-    { stroke: '#34C759', fill: 'rgba(52, 199, 89, 0.20)' },
-    { stroke: '#AF52DE', fill: 'rgba(175, 82, 222, 0.20)' },
+    { stroke: '#0071E3', fill: 'rgba(0, 113, 227, 0.17)' },
+    { stroke: '#34C759', fill: 'rgba(52, 199, 89, 0.17)' },
+    { stroke: '#AF52DE', fill: 'rgba(175, 82, 222, 0.17)' },
+    { stroke: '#FF9500', fill: 'rgba(255, 149, 0, 0.17)' },
   ];
 
   const scoreProgramAxes = (p) => {
@@ -476,15 +477,23 @@ export function renderCompareRadarChart(programs) {
     return { prestige, academic, campus, career, dorm, budget };
   };
 
-  const cx = 180;
-  const cy = 148;
-  const radius = 98;
+  const vbW = 380;
+  const vbH = 300;
+  const cx = 190;
+  const cy = 150;
+  const radius = 84;
+  const labelRadius = 108;
   const n = axes.length;
 
   const pointAt = (axisIdx, pct) => {
     const angle = -Math.PI / 2 + (axisIdx * 2 * Math.PI) / n;
     const r = (Math.max(8, Math.min(100, pct)) / 100) * radius;
     return [cx + r * Math.cos(angle), cy + r * Math.sin(angle)];
+  };
+
+  const labelPointAt = (axisIdx) => {
+    const angle = -Math.PI / 2 + (axisIdx * 2 * Math.PI) / n;
+    return [cx + labelRadius * Math.cos(angle), cy + labelRadius * Math.sin(angle)];
   };
 
   const webRings = [25, 50, 75, 100]
@@ -497,11 +506,12 @@ export function renderCompareRadarChart(programs) {
   const spokes = axes
     .map((ax, i) => {
       const [x2, y2] = pointAt(i, 100);
-      const [lx, ly] = pointAt(i, 122);
+      const [lx, ly] = labelPointAt(i);
       const anchor = Math.abs(lx - cx) < 10 ? 'middle' : lx > cx ? 'start' : 'end';
+      const dy = i === 0 ? -4 : i === 3 ? 11 : 4;
       return `
         <line x1="${cx}" y1="${cy}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" stroke="var(--separator)" stroke-width="0.9" />
-        <text x="${lx.toFixed(1)}" y="${(ly + 4).toFixed(1)}" text-anchor="${anchor}" fill="var(--text-secondary)" font-size="11" font-weight="600">${ax.label}</text>`;
+        <text x="${lx.toFixed(1)}" y="${(ly + dy).toFixed(1)}" text-anchor="${anchor}" fill="var(--text-secondary)" font-size="11.5" font-weight="650" font-family="var(--font-sans)">${ax.label}</text>`;
     })
     .join('');
 
@@ -514,13 +524,13 @@ export function renderCompareRadarChart(programs) {
       const dots = pts
         .map(
           ([x, y], i) => `
-          <circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="4" fill="${color.stroke}" stroke="var(--bg-elevated)" stroke-width="1.8">
+          <circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3.8" fill="${color.stroke}" stroke="var(--bg-elevated)" stroke-width="1.6">
             <title>${escapeHtml(program.university)} · ${axes[i].label}: ${values[axes[i].key]}/100</title>
           </circle>`,
         )
         .join('');
       return `
-        <polygon points="${polyPts}" fill="${color.fill}" stroke="${color.stroke}" stroke-width="2.2" stroke-linejoin="round" />
+        <polygon points="${polyPts}" fill="${color.fill}" stroke="${color.stroke}" stroke-width="2" stroke-linejoin="round" />
         ${dots}`;
     })
     .join('');
@@ -528,11 +538,17 @@ export function renderCompareRadarChart(programs) {
   const legend = scored
     .map(({ program, values, color }) => {
       const avg = Math.round(Object.values(values).reduce((s, v) => s + v, 0) / axes.length);
+      const axisChips = axes
+        .map((ax) => `<span class="radar-axis-chip"><span>${ax.label}</span><strong class="tabular">${values[ax.key]}</strong></span>`)
+        .join('');
       return `
         <div class="radar-legend-item">
-          <span class="radar-legend-dot" style="background:${color.stroke};"></span>
-          <span class="radar-legend-name">${escapeHtml(program.university)} · ${escapeHtml(program.department)}</span>
-          <strong class="tabular" style="color:${color.stroke};">${avg}/100</strong>
+          <div class="radar-legend-top">
+            <span class="radar-legend-dot" style="background:${color.stroke};"></span>
+            <span class="radar-legend-name">${escapeHtml(program.university)} · ${escapeHtml(program.department)}</span>
+            <strong class="tabular radar-legend-avg" style="color:${color.stroke};">${avg}/100</strong>
+          </div>
+          <div class="radar-axis-pills">${axisChips}</div>
         </div>`;
     })
     .join('');
@@ -540,16 +556,16 @@ export function renderCompareRadarChart(programs) {
   return `
     <div class="radar-compare-wrap">
       <div class="radar-svg-box">
-        <svg viewBox="0 0 360 296" class="radar-svg" role="img" aria-label="Bölüm karşılaştırma radar grafiği">
+        <svg viewBox="0 0 ${vbW} ${vbH}" width="${vbW}" height="${vbH}" class="radar-svg" role="img" aria-label="Bölüm karşılaştırma radar grafiği">
           ${webRings}
           ${spokes}
           ${polygons}
         </svg>
       </div>
       <div class="radar-legend-col">
-        <div style="font-size:12px;font-weight:700;color:var(--text-tertiary);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">6 Eksenli Profil Kıyaslaması</div>
+        <div style="font-size:12px;font-weight:700;color:var(--text-tertiary);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px;">6 Eksenli Profil Kıyaslaması</div>
         ${legend}
-        <div class="radar-hint">Alt kriter yıldızlarını detay çekmecesinden güncelledikçe Akademik, Kampüs, Kariyer ve Yurt eksenleri canlı olarak yenilenir.</div>
+        <div class="radar-hint">Alt kriter yıldızlarını detay çekmecesinden güncelledikçe Akademik, Kampüs, Kariyer ve Yurt eksenleri canlı yenilenir.</div>
       </div>
     </div>`;
 }
