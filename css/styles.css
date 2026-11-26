@@ -6702,11 +6702,12 @@ html, body {
    (Spring-Physics Magnifying Droplet, Chromatic Dispersion Rim & Specular Craft)
    ========================================================================== */
 
-/* 1. Liquid Glass Tab Bar Host Resets (Desktop & Mobile) */
+/* 1. Liquid Glass Tab Bar Host Resets (Desktop, iPad & Mobile) */
 #desktopNav.lg-tabbar-host.lg-desktop {
   display: inline-flex;
   align-items: center;
-  width: min(468px, 100%);
+  width: 512px;
+  min-width: 512px;
   padding: 0;
   background: transparent;
   box-shadow: none;
@@ -6717,9 +6718,47 @@ html, body {
   -webkit-user-select: none;
 }
 
+@media (max-width: 1080px) and (min-width: 761px) {
+  #desktopNav.lg-tabbar-host.lg-desktop {
+    width: 432px;
+    min-width: 432px;
+  }
+  .lg-desktop-icon {
+    display: none;
+  }
+}
+
+@media (max-width: 920px) and (min-width: 761px) {
+  #desktopNav.lg-tabbar-host.lg-desktop {
+    width: 364px;
+    min-width: 364px;
+  }
+  .lg-slot-desktop .lg-label {
+    font-size: 12.5px;
+  }
+  .lg-slot-desktop {
+    padding: 0 4px;
+    gap: 4px;
+  }
+}
+
+.lg-desktop-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.lg-desktop-icon .lg-icon {
+  width: 15px;
+  height: 15px;
+}
+
 @media (max-width: 760px) {
   #desktopNav.lg-tabbar-host.lg-desktop {
     display: none;
+    width: 0;
+    min-width: 0;
   }
 
   #mobileNav.lg-tabbar-host.lg-mobile {
@@ -6769,7 +6808,7 @@ html, body {
 }
 
 .lg-bar-desktop {
-  height: 42px;
+  height: 46px;
   padding: 0 4px;
 }
 
@@ -7305,4 +7344,342 @@ html, body {
     backdrop-filter: blur(18px) saturate(1.75);
     -webkit-backdrop-filter: blur(18px) saturate(1.75);
   }
+}
+
+/* ==========================================================================
+   v32: System-Wide Liquid Glass Button Language (Every Button, Pill & Chip)
+   Translucent Multi-Stop Glass + 1.5px Symmetric Specular Rim + Chromatic Edge
+   ========================================================================== */
+
+/* Shared Liquid Glass Specular Rim (::before) & Chromatic Edge Sheen (::after) */
+.btn:not(.btn-ghost),
+.glass-icon-btn,
+.brand,
+.filter-pill,
+.scenario-pill,
+.countdown-pill-btn,
+.audit-warn-pill,
+.mini-action,
+.quick-chip,
+.check-chip,
+.subject-boost-chip,
+.research-shortcut-chip,
+.bk-chip,
+.spot-check-pill,
+.presentation-exit-pill,
+.yks-broken-toggle,
+.sample-tile {
+  position: relative;
+  isolation: isolate;
+}
+
+/* Specular 1.5px Masked Top/Bottom Glass Rim on all solid/glass buttons & pills */
+.btn:not(.btn-ghost)::before,
+.glass-icon-btn::before,
+.brand::before,
+.filter-pill::before,
+.scenario-pill::before,
+.countdown-pill-btn::before,
+.audit-warn-pill::before,
+.subject-boost-chip::before,
+.presentation-exit-pill::before,
+.seg-thumb::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1.25px;
+  pointer-events: none;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.96) 0%,
+    rgba(255, 255, 255, 0.24) 48%,
+    rgba(255, 255, 255, 0.86) 100%
+  );
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  opacity: 0.78;
+  transition: opacity 200ms ease;
+}
+
+[data-theme="dark"] .btn:not(.btn-ghost)::before,
+[data-theme="dark"] .glass-icon-btn::before,
+[data-theme="dark"] .brand::before,
+[data-theme="dark"] .filter-pill::before,
+[data-theme="dark"] .scenario-pill::before,
+[data-theme="dark"] .countdown-pill-btn::before,
+[data-theme="dark"] .audit-warn-pill::before,
+[data-theme="dark"] .subject-boost-chip::before,
+[data-theme="dark"] .presentation-exit-pill::before,
+[data-theme="dark"] .seg-thumb::before {
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.42) 0%,
+    rgba(255, 255, 255, 0.08) 48%,
+    rgba(255, 255, 255, 0.28) 100%
+  );
+  opacity: 0.65;
+}
+
+/* Subtle Symmetric Cyan <-> Orange Chromatic Dispersion Edge on Hover / Active */
+.btn:not(.btn-ghost)::after,
+.glass-icon-btn::after,
+.filter-pill::after,
+.scenario-pill::after,
+.countdown-pill-btn::after,
+.subject-boost-chip::after,
+.seg-thumb::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1.5px;
+  pointer-events: none;
+  background: linear-gradient(
+    90deg,
+    rgba(56, 189, 248, 0.62) 0%,
+    transparent 24%,
+    transparent 76%,
+    rgba(251, 146, 60, 0.52) 100%
+  );
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  opacity: 0;
+  transition: opacity 220ms ease;
+}
+
+.btn:not(.btn-ghost):hover:not(:disabled)::after,
+.glass-icon-btn:hover::after,
+.filter-pill:hover::after,
+.filter-pill.active::after,
+.scenario-pill:hover::after,
+.scenario-pill.active::after,
+.countdown-pill-btn:hover::after,
+.subject-boost-chip:hover::after,
+.subject-boost-chip.active::after,
+.seg-thumb::after {
+  opacity: 0.68;
+}
+
+/* Liquid Glass Surface on Secondary/Mini/Chip/Tile Buttons */
+.mini-action {
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.72) 0%,
+    rgba(255, 255, 255, 0.46) 100%
+  );
+  box-shadow:
+    0 2px 8px -3px rgba(0, 0, 0, 0.08),
+    inset 0 1px 1px rgba(255, 255, 255, 0.86),
+    0 0 0 0.6px rgba(0, 0, 0, 0.06);
+}
+
+.mini-action:hover {
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.92) 0%,
+    rgba(255, 255, 255, 0.72) 100%
+  );
+  box-shadow:
+    0 5px 14px -4px rgba(0, 0, 0, 0.12),
+    inset 0 1px 1px rgba(255, 255, 255, 0.96),
+    0 0 0 0.75px rgba(0, 0, 0, 0.08);
+  transform: translateY(-0.5px);
+}
+
+.mini-action:active {
+  transform: scale(0.95);
+}
+
+.mini-action.active {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--accent) 18%, rgba(255, 255, 255, 0.78)) 0%,
+    color-mix(in srgb, var(--accent) 12%, rgba(255, 255, 255, 0.56)) 100%
+  );
+  box-shadow:
+    0 4px 12px -4px color-mix(in srgb, var(--accent) 34%, transparent),
+    inset 0 1px 1px rgba(255, 255, 255, 0.8),
+    0 0 0 0.75px color-mix(in srgb, var(--accent) 28%, transparent);
+}
+
+[data-theme="dark"] .mini-action {
+  background: linear-gradient(
+    180deg,
+    rgba(56, 56, 64, 0.74) 0%,
+    rgba(38, 38, 44, 0.64) 100%
+  );
+  box-shadow:
+    0 3px 10px -4px rgba(0, 0, 0, 0.48),
+    inset 0 1px 1px rgba(255, 255, 255, 0.16),
+    0 0 0 0.6px rgba(255, 255, 255, 0.10);
+}
+
+[data-theme="dark"] .mini-action:hover {
+  background: linear-gradient(
+    180deg,
+    rgba(68, 68, 76, 0.84) 0%,
+    rgba(48, 48, 56, 0.74) 100%
+  );
+}
+
+[data-theme="dark"] .mini-action.active {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--accent) 28%, rgba(30, 30, 36, 0.76)) 0%,
+    color-mix(in srgb, var(--accent) 18%, rgba(24, 24, 30, 0.76)) 100%
+  );
+  box-shadow:
+    inset 0 1px 1px rgba(255, 255, 255, 0.2),
+    0 0 0 0.75px color-mix(in srgb, var(--accent) 40%, transparent);
+}
+
+/* Liquid Glass Chips (Quick Chips, Checklist, Subject Boost, Research Shortcuts, Bk. Chips) */
+.quick-chip,
+.check-chip,
+.subject-boost-chip,
+.research-shortcut-chip,
+.bk-chip,
+.spot-check-pill {
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.74) 0%,
+    rgba(255, 255, 255, 0.52) 100%
+  );
+  box-shadow:
+    0 2px 8px -3px rgba(0, 0, 0, 0.08),
+    inset 0 1px 1px rgba(255, 255, 255, 0.88),
+    0 0 0 0.6px rgba(0, 0, 0, 0.06);
+}
+
+[data-theme="dark"] .quick-chip,
+[data-theme="dark"] .check-chip,
+[data-theme="dark"] .subject-boost-chip,
+[data-theme="dark"] .research-shortcut-chip,
+[data-theme="dark"] .bk-chip,
+[data-theme="dark"] .spot-check-pill {
+  background: linear-gradient(
+    180deg,
+    rgba(52, 52, 60, 0.74) 0%,
+    rgba(36, 36, 42, 0.66) 100%
+  );
+  box-shadow:
+    0 3px 10px -4px rgba(0, 0, 0, 0.45),
+    inset 0 1px 1px rgba(255, 255, 255, 0.16),
+    0 0 0 0.6px rgba(255, 255, 255, 0.10);
+}
+
+.research-shortcut-chip {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--accent) 16%, rgba(255, 255, 255, 0.72)) 0%,
+    color-mix(in srgb, var(--accent) 10%, rgba(255, 255, 255, 0.56)) 100%
+  );
+  box-shadow:
+    inset 0 1px 1px rgba(255, 255, 255, 0.78),
+    0 0 0 0.6px color-mix(in srgb, var(--accent) 24%, transparent);
+}
+
+[data-theme="dark"] .research-shortcut-chip {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--accent) 26%, rgba(30, 30, 36, 0.72)) 0%,
+    color-mix(in srgb, var(--accent) 16%, rgba(24, 24, 30, 0.72)) 100%
+  );
+}
+
+.check-chip.checked {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--green-bright) 22%, rgba(255, 255, 255, 0.72)) 0%,
+    color-mix(in srgb, var(--green-bright) 14%, rgba(255, 255, 255, 0.56)) 100%
+  );
+  box-shadow:
+    inset 0 1px 1px rgba(255, 255, 255, 0.78),
+    0 0 0 0.6px color-mix(in srgb, var(--green-bright) 34%, transparent);
+}
+
+[data-theme="dark"] .check-chip.checked {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--green-bright) 28%, rgba(24, 28, 26, 0.75)) 0%,
+    color-mix(in srgb, var(--green-bright) 18%, rgba(20, 24, 22, 0.75)) 100%
+  );
+}
+
+.subject-boost-chip.active {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--accent) 20%, rgba(255, 255, 255, 0.8)) 0%,
+    color-mix(in srgb, var(--accent) 12%, rgba(255, 255, 255, 0.64)) 100%
+  );
+  box-shadow:
+    0 6px 16px -6px color-mix(in srgb, var(--accent) 36%, transparent),
+    inset 0 1px 1px rgba(255, 255, 255, 0.85),
+    0 0 0 1px color-mix(in srgb, var(--accent) 44%, transparent);
+}
+
+[data-theme="dark"] .subject-boost-chip.active {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--accent) 30%, rgba(30, 30, 38, 0.8)) 0%,
+    color-mix(in srgb, var(--accent) 20%, rgba(24, 24, 30, 0.8)) 100%
+  );
+}
+
+/* Liquid Glass Sample Tiles & OBP Broken Toggle */
+.sample-tile,
+.yks-broken-toggle {
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.80) 0%,
+    rgba(255, 255, 255, 0.62) 100%
+  );
+  box-shadow:
+    0 4px 14px -6px rgba(0, 0, 0, 0.10),
+    inset 0 1.5px 1.5px rgba(255, 255, 255, 0.92),
+    0 0 0 0.75px rgba(0, 0, 0, 0.06);
+}
+
+[data-theme="dark"] .sample-tile,
+[data-theme="dark"] .yks-broken-toggle {
+  background: linear-gradient(
+    180deg,
+    rgba(48, 48, 54, 0.82) 0%,
+    rgba(34, 34, 40, 0.74) 100%
+  );
+  box-shadow:
+    0 6px 18px -6px rgba(0, 0, 0, 0.55),
+    inset 0 1px 1px rgba(255, 255, 255, 0.20),
+    0 0 0 0.75px rgba(255, 255, 255, 0.11);
+}
+
+/* Liquid Glass Select Dropdowns */
+.toolbar-select {
+  background-color: rgba(255, 255, 255, 0.76);
+  box-shadow:
+    0 4px 12px -4px rgba(0, 0, 0, 0.09),
+    inset 0 1.5px 1px rgba(255, 255, 255, 0.92),
+    0 0 0 0.75px rgba(0, 0, 0, 0.06);
+}
+
+[data-theme="dark"] .toolbar-select {
+  background-color: rgba(44, 44, 50, 0.82);
+  box-shadow:
+    0 5px 14px -4px rgba(0, 0, 0, 0.52),
+    inset 0 1px 1px rgba(255, 255, 255, 0.18),
+    0 0 0 0.75px rgba(255, 255, 255, 0.11);
+}
+
+/* Tactile Glass Spring Feedback on All Buttons */
+.btn:active:not(:disabled),
+.glass-icon-btn:active,
+.filter-pill:active,
+.scenario-pill:active,
+.countdown-pill-btn:active,
+.audit-warn-pill:active,
+.subject-boost-chip:active {
+  transform: scale(0.955);
 }

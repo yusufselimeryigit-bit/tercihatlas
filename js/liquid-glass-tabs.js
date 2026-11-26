@@ -50,10 +50,10 @@ export function createLiquidGlassTabBar(
 
   const isDesktop = variant === 'desktop';
   const padding = isDesktop ? 4 : 5;
-  const defaultHeight = isDesktop ? 42 : 64;
-  const liftExtraW = isDesktop ? 16 : 24;
-  const liftExtraH = isDesktop ? 12 : 18;
-  const magAmount = isDesktop ? 0.1 : 0.16;
+  const defaultHeight = isDesktop ? 46 : 64;
+  const liftExtraW = isDesktop ? 18 : 24;
+  const liftExtraH = isDesktop ? 14 : 18;
+  const magAmount = isDesktop ? 0.11 : 0.16;
 
   let activeId = initialId || items[0].id;
   let activeIndex = Math.max(
@@ -67,6 +67,7 @@ export function createLiquidGlassTabBar(
       : '';
     if (isDesktop) {
       return `<div class="lg-slot lg-slot-desktop" ${!isAccentLayer ? `role="tab" aria-selected="${idx === activeIndex}"` : ''} data-lg-tab="${item.id}">
+        ${item.icon ? `<span class="lg-desktop-icon">${item.icon}</span>` : ''}
         <span class="lg-label">${item.label}</span>
         ${badgeHtml}
       </div>`;

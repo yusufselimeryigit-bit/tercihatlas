@@ -101,7 +101,7 @@ import {
   buildOsymOfficialTableText,
   openOfficialOsymPrintWindow,
 } from './dss-tools.js?v=26';
-import { createLiquidGlassTabBar, LG_ICONS } from './liquid-glass-tabs.js?v=31';
+import { createLiquidGlassTabBar, LG_ICONS } from './liquid-glass-tabs.js?v=32';
 
 const STATE_KEY = 'tercihatlas_state_v1';
 const SYNC_KEY_STORAGE = 'tercihatlas_sync_key';
@@ -6548,10 +6548,10 @@ async function init() {
       ariaLabel: 'Ana sekmeler',
       initialId: initialNavKey,
       items: [
-        { id: 'preferences', label: 'Tercihlerim', hasBadge: true, badge: state.programs.length },
-        { id: 'compare', label: 'Karşılaştır', hasBadge: true, badge: state.compareCodes.length },
-        { id: 'analysis', label: 'Analiz', hasBadge: false },
-        { id: 'abroad', label: 'Yurt Dışı', hasBadge: true, badge: state.abroadPrograms.length },
+        { id: 'preferences', label: 'Tercihlerim', icon: LG_ICONS.preferences, hasBadge: true, badge: state.programs.length },
+        { id: 'compare', label: 'Karşılaştır', icon: LG_ICONS.compare, hasBadge: true, badge: state.compareCodes.length },
+        { id: 'analysis', label: 'Analiz', icon: LG_ICONS.analysis, hasBadge: false },
+        { id: 'abroad', label: 'Yurt Dışı', icon: LG_ICONS.abroad, hasBadge: true, badge: state.abroadPrograms.length },
       ],
       onChange: handleMainNavSelect,
     });
