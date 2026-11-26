@@ -12,7 +12,7 @@
   <link rel="icon" type="image/png" sizes="64x64" href="favicon.png?v=26" />
   <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png?v=26" />
   <link rel="manifest" href="manifest.json?v=26" />
-  <link rel="stylesheet" href="css/styles.css?v=34" />
+  <link rel="stylesheet" href="css/styles.css?v=35" />
 </head>
 <body>
   <!-- macOS Tahoe / iPadOS Floating Liquid Glass Top Navigation -->
@@ -66,6 +66,9 @@
 
   <!-- Read-Only Share Mode Banner Host -->
   <div id="shareBannerHost"></div>
+
+  <!-- Apple Live Activity Strip (YKS 2027 Countdown + Next Unlock Target) -->
+  <div id="liveActivityHost"></div>
 
   <!-- Main Workspace -->
   <main class="main" id="mainRoot"></main>
@@ -254,6 +257,13 @@
         <button class="seg-btn seg-btn-sm" style="flex:1;" data-haptics-pick="off">Kapalı</button>
       </div>
     </div>
+    <div class="ap-section">
+      <div class="ap-label">Canlı Hedef Şeridi</div>
+      <div class="segmented" style="width:100%;" id="liveActivitySegmented" aria-label="Canlı hedef şeridi">
+        <button class="seg-btn seg-btn-sm" style="flex:1;" data-live-pick="on">Açık</button>
+        <button class="seg-btn seg-btn-sm" style="flex:1;" data-live-pick="off">Kapalı</button>
+      </div>
+    </div>
   </div>
 
   <!-- Floating Presentation / Reader Mode Exit Pill -->
@@ -303,9 +313,22 @@
   <!-- macOS Liquid Glass Right-Click / Long-Press Context Menu -->
   <div class="context-menu" id="contextMenu" role="menu" aria-hidden="true"></div>
 
+  <!-- Apple Wallet 3D Holographic YKS 2027 Candidate Card Modal -->
+  <div class="modal-overlay" id="walletCardModalOverlay" aria-hidden="true">
+    <div class="modal" style="width:min(520px, 100%);" role="dialog" aria-labelledby="walletCardModalTitle">
+      <div class="modal-header">
+        <h3 id="walletCardModalTitle">YKS 2027 Aday Kartı</h3>
+        <button class="btn btn-ghost btn-icon btn-sm" id="closeWalletCardBtn" aria-label="Kapat">
+          <svg class="sf-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <div class="modal-body" id="walletCardModalBody"></div>
+    </div>
+  </div>
+
   <!-- Floating Pill Toasts -->
   <div class="toast-container" id="toastContainer"></div>
 
-  <script type="module" src="js/app.js?v=34"></script>
+  <script type="module" src="js/app.js?v=35"></script>
 </body>
 </html>

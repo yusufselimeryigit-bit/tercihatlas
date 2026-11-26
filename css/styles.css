@@ -8261,7 +8261,6 @@ body.drawer-depth-dragging .main {
 @media (prefers-reduced-motion: reduce) {
   .order-pill::after,
   .sim-unlock-row::after,
-  .matrix-card::after,
   .apple-spark-burst {
     animation: none !important;
     display: none !important;
@@ -8270,4 +8269,598 @@ body.drawer-depth-dragging .main {
     transform: none !important;
     filter: none !important;
   }
+}
+
+/* ==========================================================================
+   v35: iOS Jiggle Mode, 3D Holographic Wallet Card, Spotlight Commands &
+        Apple Live Activity Target Strip
+   ========================================================================== */
+
+/* Feature 6: Apple Live Activity Strip */
+.live-activity-wrap {
+  max-width: 1140px;
+  margin: 2px auto 0;
+  padding: 0 24px;
+}
+
+.live-activity-pill {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 10px 6px 14px;
+  border-radius: 9999px;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.78) 0%,
+    rgba(255, 255, 255, 0.58) 100%
+  );
+  box-shadow:
+    0 6px 18px -6px rgba(0, 0, 0, 0.11),
+    inset 0 1.5px 1.5px rgba(255, 255, 255, 0.94),
+    inset 0 -1px 1.5px rgba(255, 255, 255, 0.62),
+    0 0 0 0.75px rgba(0, 0, 0, 0.06);
+  font-size: 12.5px;
+}
+
+[data-theme="dark"] .live-activity-pill {
+  background: linear-gradient(
+    180deg,
+    rgba(38, 38, 44, 0.86) 0%,
+    rgba(26, 26, 30, 0.82) 100%
+  );
+  box-shadow:
+    0 8px 22px -6px rgba(0, 0, 0, 0.58),
+    inset 0 1px 1px rgba(255, 255, 255, 0.22),
+    0 0 0 0.75px rgba(255, 255, 255, 0.10);
+}
+
+.la-countdown-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text);
+  white-space: nowrap;
+  flex-shrink: 0;
+  padding: 3px 6px;
+  border-radius: 999px;
+  transition: background 150ms ease;
+}
+
+.la-countdown-btn:hover {
+  background: var(--bg-grouped);
+}
+
+.la-countdown-btn strong {
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.la-countdown-btn span:last-child {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.la-live-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--green-bright);
+  box-shadow: 0 0 8px rgba(52, 199, 89, 0.75);
+  animation: pulse 1.8s ease-in-out infinite;
+  flex-shrink: 0;
+}
+
+.la-sep {
+  width: 1px;
+  height: 15px;
+  background: var(--separator);
+  flex-shrink: 0;
+}
+
+.la-mission-btn {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  font-size: 12.5px;
+  font-weight: 550;
+  color: var(--text-secondary);
+  padding: 3px 6px;
+  border-radius: 999px;
+  transition: background 150ms ease, color 150ms ease;
+}
+
+.la-mission-btn:hover {
+  background: var(--bg-grouped);
+  color: var(--text);
+}
+
+.la-mission-btn.tone-green {
+  color: var(--green);
+}
+
+.la-mission-btn.tone-amber {
+  color: var(--text);
+}
+
+.la-mission-text {
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.la-right-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.la-mini-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 650;
+  color: var(--accent);
+  background: var(--accent-soft);
+  transition: transform 150ms var(--spring), background 150ms ease;
+}
+
+.la-mini-btn:hover {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+.la-mini-btn:active {
+  transform: scale(0.95);
+}
+
+.la-close-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  color: var(--text-tertiary);
+  transition: background 140ms ease, color 140ms ease;
+}
+
+.la-close-btn:hover {
+  background: var(--bg-grouped);
+  color: var(--text);
+}
+
+@media (max-width: 760px) {
+  .live-activity-wrap {
+    padding: 0 12px;
+    margin-top: 2px;
+  }
+
+  .live-activity-pill {
+    flex-wrap: wrap;
+    border-radius: 18px;
+    padding: 8px 10px;
+    gap: 6px 8px;
+  }
+
+  .la-sep {
+    display: none;
+  }
+
+  .la-mission-btn {
+    order: 3;
+    flex: 1 1 100%;
+    padding: 2px 4px;
+    font-size: 12px;
+  }
+
+  .la-mission-text {
+    white-space: normal;
+    line-height: 1.3;
+  }
+
+  .la-right-actions {
+    margin-left: auto;
+  }
+}
+
+/* Feature 1: iOS Home Screen Jiggle Mode (Touch & Mouse Drag-to-Reorder) */
+@keyframes iosJiggleEven {
+  0%, 100% { transform: rotate(-0.65deg); }
+  50% { transform: rotate(0.65deg); }
+}
+
+@keyframes iosJiggleOdd {
+  0%, 100% { transform: rotate(0.65deg); }
+  50% { transform: rotate(-0.65deg); }
+}
+
+.jiggle-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 10px 14px;
+  margin-bottom: 14px;
+  border-radius: 16px;
+  background: var(--accent-soft);
+  color: var(--text);
+  font-size: 12.5px;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 26%, transparent);
+}
+
+.jiggle-mode [data-code] {
+  cursor: grab !important;
+  touch-action: none !important;
+  user-select: none;
+  -webkit-user-select: none;
+  animation: iosJiggleEven 290ms ease-in-out infinite;
+}
+
+.jiggle-mode [data-code]:nth-child(odd) {
+  animation-name: iosJiggleOdd;
+  animation-duration: 315ms;
+}
+
+.jiggle-mode [data-code].jiggle-grabbed {
+  animation: none !important;
+  z-index: 40;
+  cursor: grabbing !important;
+  box-shadow: 0 24px 56px rgba(0, 0, 0, 0.28), 0 0 0 2px var(--accent) !important;
+  transition: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .jiggle-mode [data-code] {
+    animation: none !important;
+  }
+}
+
+/* Feature 2: Apple Wallet 3D Holographic YKS 2027 Candidate Card */
+.wallet-modal-shell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+
+.wallet-controls-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  width: 100%;
+}
+
+.wallet-stage {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  padding: 6px 0;
+  perspective: 1100px;
+}
+
+.wallet-holo-card {
+  position: relative;
+  width: 100%;
+  max-width: 410px;
+  border-radius: 26px;
+  padding: 20px 20px 18px;
+  overflow: hidden;
+  transform-style: preserve-3d;
+  will-change: transform;
+  touch-action: none;
+  user-select: none;
+  box-shadow:
+    0 26px 56px -14px rgba(0, 0, 0, 0.36),
+    0 6px 18px rgba(0, 0, 0, 0.14);
+}
+
+.wallet-holo-card.finish-titanium {
+  background: linear-gradient(135deg, #F8FAFC 0%, #E2E8F0 48%, #CBD5E1 100%);
+  color: #0F172A;
+}
+
+.wallet-holo-card.finish-obsidian {
+  background: linear-gradient(135deg, #27272E 0%, #141418 52%, #1F212B 100%);
+  color: #F5F5F7;
+}
+
+.wallet-holo-card.finish-aurora {
+  background: linear-gradient(135deg, #1D4ED8 0%, #4338CA 48%, #0F766E 100%);
+  color: #FFFFFF;
+}
+
+/* Moving Holographic Rainbow Foil */
+.wallet-foil {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+  mix-blend-mode: color-dodge;
+  opacity: 0.45;
+  background:
+    radial-gradient(circle at var(--hx, 50%) var(--hy, 50%), rgba(255, 255, 255, 0.65) 0%, transparent 55%),
+    linear-gradient(
+      var(--hangle, 118deg),
+      transparent 16%,
+      rgba(56, 189, 248, 0.45) 34%,
+      rgba(192, 132, 252, 0.48) 50%,
+      rgba(251, 146, 60, 0.40) 66%,
+      transparent 84%
+    );
+}
+
+.wallet-holo-card.finish-titanium .wallet-foil {
+  mix-blend-mode: multiply;
+  opacity: 0.28;
+}
+
+.wallet-sheen {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 2;
+  background: radial-gradient(
+    280px circle at var(--hx, 50%) var(--hy, 50%),
+    rgba(255, 255, 255, 0.42) 0%,
+    transparent 65%
+  );
+}
+
+.wallet-rim {
+  position: absolute;
+  inset: 0;
+  border-radius: 26px;
+  padding: 1.5px;
+  pointer-events: none;
+  z-index: 3;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.92) 0%,
+    rgba(255, 255, 255, 0.24) 50%,
+    rgba(255, 255, 255, 0.72) 100%
+  );
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+}
+
+.wallet-card-content {
+  position: relative;
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  gap: 13px;
+}
+
+.wallet-top-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.wallet-brand-mark {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.wallet-brand-mark img {
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.18);
+  flex-shrink: 0;
+}
+
+.wallet-kicker {
+  display: block;
+  font-size: 9.5px;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+  opacity: 0.72;
+}
+
+.wallet-plan-name {
+  display: block;
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.wallet-days-badge {
+  padding: 5px 11px;
+  border-radius: 13px;
+  background: rgba(128, 128, 140, 0.18);
+  text-align: center;
+  line-height: 1.1;
+  flex-shrink: 0;
+}
+
+.wallet-days-badge strong {
+  display: block;
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.wallet-days-badge span {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  opacity: 0.72;
+}
+
+.wallet-hero-target {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 16px;
+  background: rgba(128, 128, 140, 0.14);
+}
+
+.wallet-uni-sq {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.94);
+  color: #0071E3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 750;
+  font-size: 13px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.wallet-uni-sq img {
+  width: 78%;
+  height: 78%;
+  object-fit: contain;
+}
+
+.wallet-sub-label {
+  display: block;
+  font-size: 9.5px;
+  font-weight: 750;
+  letter-spacing: 0.06em;
+  opacity: 0.68;
+}
+
+.wallet-dept {
+  font-family: var(--font-display);
+  font-size: 15.5px;
+  font-weight: 750;
+  line-height: 1.2;
+  margin-top: 2px;
+}
+
+.wallet-uni {
+  font-size: 12px;
+  opacity: 0.76;
+  margin-top: 2px;
+}
+
+.wallet-stats-strip {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.wallet-stat {
+  padding: 8px 9px;
+  border-radius: 12px;
+  background: rgba(128, 128, 140, 0.14);
+}
+
+.wallet-stat span {
+  display: block;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  opacity: 0.68;
+}
+
+.wallet-stat strong {
+  display: block;
+  font-family: var(--font-display);
+  font-size: 14.5px;
+  font-weight: 750;
+  margin-top: 2px;
+}
+
+.wallet-risk-bar {
+  display: flex;
+  gap: 3px;
+  height: 6px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: rgba(128, 128, 140, 0.2);
+}
+
+.wallet-risk-bar i {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+}
+
+.wallet-risk-meta {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  font-weight: 600;
+  opacity: 0.74;
+  margin-top: -6px;
+}
+
+.wallet-top3-list {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding-top: 4px;
+  border-top: 0.5px solid rgba(128, 128, 140, 0.28);
+}
+
+.wallet-top3-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11.5px;
+}
+
+.wallet-top3-ord {
+  font-family: var(--font-mono);
+  font-weight: 750;
+  opacity: 0.75;
+  flex-shrink: 0;
+}
+
+.wallet-top3-name {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 550;
+}
+
+.wallet-hint {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-tertiary);
+  text-align: center;
+}
+
+.wallet-footer-actions {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+}
+
+.wallet-footer-actions .btn {
+  width: 100%;
+  height: 42px;
+}
+
+/* Feature 3: Spotlight Smart Command Row Polish */
+.spot-cmd-row {
+  background: color-mix(in srgb, var(--accent) 5%, var(--surface));
+}
+
+.spot-cmd-row:hover {
+  background: var(--accent-soft);
 }

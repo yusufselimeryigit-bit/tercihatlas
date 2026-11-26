@@ -111,6 +111,17 @@ import {
   initDesktopGlassPhysics,
   triggerCelebrationSpark,
 } from './apple-craft.js?v=34';
+import {
+  isLiveActivityEnabled,
+  setLiveActivityEnabled,
+  computeLiveActivityData,
+  renderLiveActivityStrip,
+  matchSpotlightCommands,
+  renderWalletCardModalHtml,
+  initWalletCard3DPhysics,
+  exportWalletCardPng,
+  bindJigglePointerReorder,
+} from './v35-features.js?v=35';
 
 const STATE_KEY = 'tercihatlas_state_v1';
 const SYNC_KEY_STORAGE = 'tercihatlas_sync_key';
@@ -227,6 +238,8 @@ const ui = {
   compareMode: 'programs', // 'programs' | 'scenarios'
   cmpScenarioA: null,
   cmpScenarioB: null,
+  jiggleMode: false,
+  walletFinish: 'titanium',
   discover: {
     q: 'Bilgisayar',
     rank: null,
@@ -613,6 +626,170 @@ function syncHapticsUI() {
   });
 }
 
+function syncLiveActivityUI() {
+  const on = isLiveActivityEnabled();
+  document.querySelectorAll('#liveActivitySegmented [data-live-pick]').forEach((btn) => {
+    btn.classList.toggle('active', (btn.dataset.livePick === 'on') === on);
+  });
+}
+
+let cleanupWalletPhysics = null;
+
+function openWalletCardModal() {
+  const overlay = document.getElementById('walletCardModalOverlay');
+  const body = document.getElementById('walletCardModalBody');
+  if (!overlay || !body) return;
+
+  const renderWallet = () => {
+    cleanupWalletPhysics?.();
+    cleanupWalletPhysics = null;
+    const sc = getActiveScenario();
+    body.innerHTML = renderWalletCardModalHtml(state, {
+      finish: ui.walletFinish || 'titanium',
+      activeScenarioName: sc?.name || 'Plan A',
+    });
+
+    const cardEl = document.getElementById('walletHoloCard');
+    const gyroBtn = document.getElementById('walletGyroBtn');
+    cleanupWalletPhysics = initWalletCard3DPhysics(cardEl, gyroBtn);
+
+    body.querySelectorAll('[data-wallet-finish]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        ui.walletFinish = btn.dataset.walletFinish;
+        renderWallet();
+      });
+    });
+
+    document.getElementById('walletExportPngBtn')?.addEventListener('click', () => {
+      const ok = exportWalletCardPng(state, {
+        finish: ui.walletFinish || 'titanium',
+        activeScenarioName: sc?.name || 'Plan A',
+      });
+      if (ok) showToast('3D Holografik YKS 2027 Kartın PNG olarak indirildi!', 'success');
+    });
+
+    initSlidingSegmentedControls();
+  };
+
+  renderWallet();
+  overlay.classList.add('open');
+  overlay.setAttribute('aria-hidden', 'false');
+}
+
+function closeWalletCardModal() {
+  cleanupWalletPhysics?.();
+  cleanupWalletPhysics = null;
+  const overlay = document.getElementById('walletCardModalOverlay');
+  if (!overlay) return;
+  overlay.classList.remove('open');
+  overlay.setAttribute('aria-hidden', 'true');
+}
+
+function renderLiveActivityHost() {
+  const host = document.getElementById('liveActivityHost');
+  if (!host) return;
+  if (!isLiveActivityEnabled() || document.body.classList.contains('presentation-mode')) {
+    host.innerHTML = '';
+    return;
+  }
+  const data = computeLiveActivityData(state, { estimateYksRankFromNets, compareWithMyNets });
+  host.innerHTML = renderLiveActivityStrip(data);
+
+  document.getElementById('laOpenTimelineBtn')?.addEventListener('click', () => {
+    ui.region = 'TR';
+    ui.tab = 'analysis';
+    ui.analysisSubTab = 'timeline';
+    renderAll();
+  });
+
+  document.getElementById('laMissionBtn')?.addEventListener('click', (e) => {
+    const act = e.currentTarget.dataset.laAction;
+    const code = e.currentTarget.dataset.laCode;
+    if (act === 'drawer' && code) {
+      ui.region = 'TR';
+      ui.tab = 'preferences';
+      renderAll();
+      openDrawer(code);
+    } else if (act === 'add') {
+      openAddModal();
+    } else {
+      openMyNetsModal();
+    }
+  });
+
+  document.getElementById('laOpenWalletBtn')?.addEventListener('click', openWalletCardModal);
+  document.getElementById('laDismissBtn')?.addEventListener('click', () => {
+    setLiveActivityEnabled(false);
+    syncLiveActivityUI();
+    renderLiveActivityHost();
+    showToast('Canlı şerit gizlendi. Görünüm menüsünden tekrar açabilirsin.');
+  });
+}
+
+function swapProgramsWithFlip(fromCode, toCode) {
+  const fromIdx = state.programs.findIndex((p) => p.code === fromCode);
+  const toIdx = state.programs.findIndex((p) => p.code === toCode);
+  if (fromIdx === -1 || toIdx === -1 || fromIdx === toIdx) return;
+  const prevRects = captureProgramRects();
+  const [moved] = state.programs.splice(fromIdx, 1);
+  state.programs.splice(toIdx, 0, moved);
+  ui.sortBy = 'manual';
+  saveState();
+  renderAll();
+  animateProgramFlip(prevRects);
+}
+
+function executeSpotlightCommand(cmdId) {
+  closeAddModal();
+  playHapticTick('commit');
+  switch (cmdId) {
+    case 'calc':
+      ui.region = 'TR'; ui.tab = 'analysis'; ui.analysisSubTab = 'calculator'; renderAll();
+      break;
+    case 'wallet':
+      openWalletCardModal();
+      break;
+    case 'jiggle':
+      ui.region = 'TR'; ui.tab = 'preferences'; ui.sortBy = 'manual'; ui.selectMode = false;
+      ui.jiggleMode = !ui.jiggleMode; renderAll();
+      showToast(ui.jiggleMode ? 'Sıralama modu açıldı — kartları sürükleyerek diz.' : 'Sıralama modu kapatıldı.');
+      break;
+    case 'smart-sort': {
+      const prevRects = captureProgramRects();
+      state.programs.sort((a, b) => (Number(a.latestRank) || 9e9) - (Number(b.latestRank) || 9e9));
+      ui.sortBy = 'manual'; ui.region = 'TR'; ui.tab = 'preferences';
+      saveState(); renderAll(); animateProgramFlip(prevRects);
+      showToast('Tercihler ÖSYM taban sıralamasına göre akıllı dizildi!', 'success');
+      break;
+    }
+    case 'theme-dark': applyThemeMode('dark'); showToast('Koyu tema aktif.', 'success'); break;
+    case 'theme-light': applyThemeMode('light'); showToast('Açık tema aktif.', 'success'); break;
+    case 'theme-auto': applyThemeMode('auto'); showToast('Sistem teması aktif.'); break;
+    case 'surface-aurora': applySurfaceStyle('aurora'); showToast('Aurora cam atmosferi aktif.', 'success'); break;
+    case 'tab-compare': ui.region = 'TR'; ui.tab = 'compare'; renderAll(); break;
+    case 'tab-simulator': ui.region = 'TR'; ui.tab = 'analysis'; ui.analysisSubTab = 'simulator'; renderAll(); break;
+    case 'tab-map': ui.region = 'TR'; ui.tab = 'analysis'; ui.analysisSubTab = 'map'; renderAll(); break;
+    case 'tab-cost': ui.region = 'TR'; ui.tab = 'analysis'; ui.analysisSubTab = 'cost'; renderAll(); break;
+    case 'tab-timeline': ui.region = 'TR'; ui.tab = 'analysis'; ui.analysisSubTab = 'timeline'; renderAll(); break;
+    case 'tab-abroad': ui.region = 'ABROAD'; renderAll(); break;
+    case 'open-nets': openMyNetsModal(); break;
+    case 'open-osym': openOsymModal(); break;
+    case 'toggle-live': {
+      const next = !isLiveActivityEnabled();
+      setLiveActivityEnabled(next); syncLiveActivityUI(); renderLiveActivityHost();
+      showToast(next ? 'Canlı hedef şeridi açıldı.' : 'Canlı hedef şeridi gizlendi.');
+      break;
+    }
+    case 'toggle-haptics': {
+      const next = !isHapticsEnabled();
+      setHapticsEnabled(next); syncHapticsUI();
+      showToast(next ? 'Dokunsal ses açıldı.' : 'Dokunsal ses kapatıldı.');
+      break;
+    }
+    default: break;
+  }
+}
+
 function toggleAppearancePopover(e) {
   e?.stopPropagation();
   const pop = document.getElementById('appearancePopover');
@@ -621,6 +798,7 @@ function toggleAppearancePopover(e) {
   closeContextMenu();
   if (willOpen) {
     syncHapticsUI();
+    syncLiveActivityUI();
     pop.classList.add('open');
     pop.setAttribute('aria-hidden', 'false');
     initSlidingSegmentedControls();
@@ -1622,6 +1800,7 @@ let lastRenderedViewKey = '';
 
 function renderAll() {
   renderShareBanner();
+  renderLiveActivityHost();
   updateHeaderBadges();
   const root = document.getElementById('mainRoot');
   if (!root) return;
@@ -1776,6 +1955,7 @@ function renderPreferencesView() {
           </button>
           <div class="actions-dropdown" id="prefActionsDropdown" role="menu">
             <button class="ctx-item" id="openCalcMenuBtn">${SF.chartBadge} Net & Sıralama Hesapla</button>
+            <button class="ctx-item" id="openWalletMenuBtn">${SF.sparkles} 3D Holografik Aday Kartı</button>
             <div class="ctx-sep"></div>
             ${!ui.readOnlyShare
               ? `<button class="ctx-item" id="refreshAllBtn" ${ui.refreshBusy ? 'disabled' : ''}>${SF.refresh} Tümünü Canlı Güncelle</button>
@@ -1906,6 +2086,9 @@ function renderPreferencesView() {
     </div>
 
     <div class="toolbar-right">
+      ${!ui.readOnlyShare && state.programs.length >= 2
+        ? `<button class="btn btn-sm ${ui.jiggleMode ? 'btn-primary' : ''}" id="toggleJiggleModeBtn" type="button" title="Kartları sürükleyerek sırala (iPhone Jiggle Modu)">${ui.jiggleMode ? `${SF.check} Bitir` : `${SF.grip} Sırala`}</button>`
+        : ''}
       ${!ui.readOnlyShare
         ? `<button class="btn btn-sm ${ui.selectMode ? 'btn-primary' : ''}" id="toggleSelectModeBtn" type="button" title="Çoklu seçim modu (S)">${ui.selectMode ? `${SF.check} Bitti` : 'Seç'}</button>`
         : ''}
@@ -1938,11 +2121,19 @@ function renderPreferencesView() {
     </div>`;
   }
 
+  const jiggleBannerHtml =
+    ui.jiggleMode && !ui.readOnlyShare
+      ? `<div class="jiggle-banner">
+          <span><strong>Sıralama Modu Aktif:</strong> Herhangi bir bölümü tutup istediğin sıranın üzerine sürükle.</span>
+          <button class="btn btn-primary btn-sm" id="exitJiggleBannerBtn" type="button">${SF.check} Sıralamayı Bitir</button>
+        </div>`
+      : '';
+
   const contentHtml =
     ui.viewMode === 'table'
       ? renderTableView(filtered, { est, prefAudit })
       : renderCardsView(filtered, { est, prefAudit });
-  return `${headerHtml}${diffBannerHtml}${scenarioHtml}${kpiHtml}${deadBannerHtml}${toolbarHtml}${contentHtml}`;
+  return `${headerHtml}${diffBannerHtml}${scenarioHtml}${kpiHtml}${deadBannerHtml}${toolbarHtml}${jiggleBannerHtml}${contentHtml}`;
 }
 
 function renderCardsView(programs, cached = {}) {
@@ -1959,7 +2150,7 @@ function renderCardsView(programs, cached = {}) {
   const est = 'est' in cached ? cached.est : estimateYksRankFromNets(state.myNets);
   const auditObj = 'prefAudit' in cached ? cached.prefAudit : auditPreferenceOrder(state.programs, state.targetRank);
   const deadMap = new Map((auditObj?.deadPreferences || []).map((dp) => [dp.blocked.code, dp]));
-  return `<section class="cards-grid" id="programList">
+  return `<section class="cards-grid ${ui.jiggleMode ? 'jiggle-mode' : ''}" id="programList">
     ${programs
       .map((p) => {
         const net0 = p.nets?.[0];
@@ -2076,7 +2267,7 @@ function renderTableView(programs, cached = {}) {
   const est = 'est' in cached ? cached.est : estimateYksRankFromNets(state.myNets);
   const auditObj = 'prefAudit' in cached ? cached.prefAudit : auditPreferenceOrder(state.programs, state.targetRank);
   const deadMap = new Map((auditObj?.deadPreferences || []).map((dp) => [dp.blocked.code, dp]));
-  return `<section class="apple-grouped-list" id="programList" role="list">
+  return `<section class="apple-grouped-list ${ui.jiggleMode ? 'jiggle-mode' : ''}" id="programList" role="list">
     ${programs
       .map((p) => {
         const proj = compute2027Projection(p);
@@ -4018,47 +4209,71 @@ function renderSpotlightLocalHits(rawQuery) {
   const host = document.getElementById('spotlightLocalHits');
   if (!host) return;
   const q = String(rawQuery || '').trim().toLocaleLowerCase('tr');
-  if (q.length < 2) {
-    host.innerHTML = '';
-    return;
-  }
+  const cmdHits = matchSpotlightCommands(rawQuery);
 
-  const trHits = state.programs
-    .filter((p) => {
-      const hay = [
-        p.code,
-        p.university,
-        p.department,
-        p.city,
-        p.notes,
-        ...(p.pros || []),
-        ...(p.cons || []),
-        ...(p.links || []).map((l) => `${l.title} ${l.url}`),
-      ]
-        .filter(Boolean)
-        .join(' ')
-        .toLocaleLowerCase('tr');
-      return hay.includes(q);
-    })
-    .slice(0, 5);
+  const trHits =
+    q.length >= 2
+      ? state.programs
+          .filter((p) => {
+            const hay = [
+              p.code,
+              p.university,
+              p.department,
+              p.city,
+              p.notes,
+              ...(p.pros || []),
+              ...(p.cons || []),
+              ...(p.links || []).map((l) => `${l.title} ${l.url}`),
+            ]
+              .filter(Boolean)
+              .join(' ')
+              .toLocaleLowerCase('tr');
+            return hay.includes(q);
+          })
+          .slice(0, 5)
+      : [];
 
-  const abHits = state.abroadPrograms
-    .filter((a) => {
-      const hay = [a.university, a.department, a.city, a.country, a.portal, a.notes]
-        .filter(Boolean)
-        .join(' ')
-        .toLocaleLowerCase('tr');
-      return hay.includes(q);
-    })
-    .slice(0, 3);
+  const abHits =
+    q.length >= 2
+      ? state.abroadPrograms
+          .filter((a) => {
+            const hay = [a.university, a.department, a.city, a.country, a.portal, a.notes]
+              .filter(Boolean)
+              .join(' ')
+              .toLocaleLowerCase('tr');
+            return hay.includes(q);
+          })
+          .slice(0, 3)
+      : [];
 
-  if (!trHits.length && !abHits.length) {
+  if (!cmdHits.length && !trHits.length && !abHits.length) {
     host.innerHTML = '';
     return;
   }
 
   host.innerHTML = `
     <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:6px;">
+      ${cmdHits.length
+        ? `<div>
+            <div class="spotlight-group-label">${q.length >= 2 ? `Akıllı Komutlar (${cmdHits.length})` : 'Hızlı Komutlar (⌘K)'}</div>
+            <div class="search-results-list" style="max-height:190px;">
+              ${cmdHits
+                .map(
+                  (c) => `<div class="search-result-row spot-cmd-row" style="cursor:pointer;" data-spot-cmd="${escapeHtml(c.id)}">
+                    <div style="display:flex;align-items:center;gap:10px;min-width:0;">
+                      <span class="sf-badge sf-badge-blue">${SF.sparkles}</span>
+                      <div style="min-width:0;">
+                        <div style="font-weight:650;font-size:13.5px;">${escapeHtml(c.title)}</div>
+                        <div style="font-size:11.5px;color:var(--text-secondary);">${escapeHtml(c.desc)}</div>
+                      </div>
+                    </div>
+                    <span class="pill pill-accent">${escapeHtml(c.badge)}</span>
+                  </div>`,
+                )
+                .join('')}
+            </div>
+          </div>`
+        : ''}
       ${trHits.length
         ? `<div>
             <div class="spotlight-group-label">Listendeki Tercihler & Notların (${trHits.length})</div>
@@ -4100,6 +4315,10 @@ function renderSpotlightLocalHits(rawQuery) {
         : ''}
     </div>
   `;
+
+  host.querySelectorAll('[data-spot-cmd]').forEach((row) => {
+    row.addEventListener('click', () => executeSpotlightCommand(row.dataset.spotCmd));
+  });
 
   host.querySelectorAll('[data-spot-local-tr]').forEach((row) => {
     row.addEventListener('click', () => {
@@ -5444,6 +5663,10 @@ function bindPreferencesEvents() {
     ui.analysisSubTab = 'calculator';
     renderAll();
   });
+  document.getElementById('openWalletMenuBtn')?.addEventListener('click', () => {
+    prefDropdown?.classList.remove('open');
+    openWalletCardModal();
+  });
   document.getElementById('clearCalcFilterChip')?.addEventListener('click', () => {
     ui.filterCalcRank = null;
     renderAll();
@@ -5468,8 +5691,24 @@ function bindPreferencesEvents() {
     prefDropdown?.classList.remove('open');
     openShortcutsModal();
   });
+  document.getElementById('toggleJiggleModeBtn')?.addEventListener('click', () => {
+    ui.jiggleMode = !ui.jiggleMode;
+    if (ui.jiggleMode) {
+      ui.selectMode = false;
+      ui.selectedCodes.clear();
+      ui.sortBy = 'manual';
+      playHapticTick('commit');
+    }
+    renderAll();
+  });
+  document.getElementById('exitJiggleBannerBtn')?.addEventListener('click', () => {
+    ui.jiggleMode = false;
+    playHapticTick('commit');
+    renderAll();
+  });
   document.getElementById('toggleSelectModeBtn')?.addEventListener('click', () => {
     ui.selectMode = !ui.selectMode;
+    if (ui.selectMode) ui.jiggleMode = false;
     if (!ui.selectMode) ui.selectedCodes.clear();
     renderAll();
   });
@@ -5629,12 +5868,16 @@ function bindPreferencesEvents() {
     });
   });
 
+  if (ui.jiggleMode && !ui.readOnlyShare) {
+    bindJigglePointerReorder(listEl, swapProgramsWithFlip);
+  }
+
   listEl.querySelectorAll('[data-code]').forEach((item) => {
     const code = item.dataset.code;
     let suppressClickUntil = 0;
 
     item.addEventListener('click', () => {
-      if (Date.now() < suppressClickUntil) return;
+      if (Date.now() < suppressClickUntil || ui.jiggleMode) return;
       if (ui.selectMode) {
         if (ui.selectedCodes.has(code)) ui.selectedCodes.delete(code);
         else ui.selectedCodes.add(code);
@@ -5644,7 +5887,15 @@ function bindPreferencesEvents() {
       ui.kbdFocusCode = code;
       openDrawer(code);
     });
-    item.addEventListener('contextmenu', (e) => openContextMenu(e, code));
+    item.addEventListener('contextmenu', (e) => {
+      if (ui.jiggleMode) {
+        e.preventDefault();
+        return;
+      }
+      openContextMenu(e, code);
+    });
+
+    if (ui.jiggleMode) return; // Jiggle Mode owns pointer/touch drag-to-reorder cleanly
 
     // Feature #2 (iPadOS/iPhone Swipe Actions) + Feature #4 (520ms Long-Press Context Menu)
     let touchStartX = 0;
@@ -6613,6 +6864,21 @@ async function init() {
     });
   });
 
+  syncLiveActivityUI();
+  document.querySelectorAll('#liveActivitySegmented [data-live-pick]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      setLiveActivityEnabled(btn.dataset.livePick === 'on');
+      syncLiveActivityUI();
+      renderLiveActivityHost();
+      initSlidingSegmentedControls();
+    });
+  });
+
+  document.getElementById('closeWalletCardBtn')?.addEventListener('click', closeWalletCardModal);
+  document.getElementById('walletCardModalOverlay')?.addEventListener('click', (e) => {
+    if (e.target.id === 'walletCardModalOverlay') closeWalletCardModal();
+  });
+
   initDesktopGlassPhysics();
 
   document.getElementById('exitPresentationBtn')?.addEventListener('click', () => setPresentationMode(false));
@@ -6769,6 +7035,11 @@ async function init() {
       closeSnapshotModal();
       closeSyncModal();
       closeShortcutsModal();
+      closeWalletCardModal();
+      if (ui.jiggleMode) {
+        ui.jiggleMode = false;
+        renderAll();
+      }
       return;
     }
 
