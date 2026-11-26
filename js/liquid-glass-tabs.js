@@ -3,6 +3,7 @@
  * Spring-physics magnifying glass droplet, evenodd clip-path silhouette cutout,
  * velocity stretch/squash, rubber-band overscroll & symmetric chromatic rim.
  */
+import { playHapticTick } from './apple-craft.js?v=34';
 
 export const LG_ICONS = {
   preferences: `<svg viewBox="0 0 24 24" class="lg-icon" fill="currentColor" aria-hidden="true">
@@ -136,6 +137,7 @@ export function createLiquidGlassTabBar(
     downTime: 0,
     didDrag: false,
     startCenterX: 0,
+    lastHoverIdx: activeIndex,
   };
 
   let rafId = null;
@@ -312,8 +314,9 @@ export function createLiquidGlassTabBar(
     }
 
     startLoop();
-    if (changed && typeof onChange === 'function') {
-      onChange(targetItem.id);
+    if (changed) {
+      playHapticTick('commit');
+      if (typeof onChange === 'function') onChange(targetItem.id);
     }
   };
 
@@ -351,6 +354,8 @@ export function createLiquidGlassTabBar(
     gesture.downTime = performance.now();
     gesture.didDrag = false;
     gesture.startCenterX = exactCenter;
+    gesture.lastHoverIdx = touchedIdx;
+    playHapticTick('step');
 
     startLoop();
   });
@@ -366,7 +371,13 @@ export function createLiquidGlassTabBar(
     const minX = getTabCenter(0, physics.slotWidth, physics.padding);
     const maxX = getTabCenter(items.length - 1, physics.slotWidth, physics.padding);
     const nextX = gesture.startCenterX + deltaX;
-    physics.targetX = rubberBandClamp(nextX, minX, maxX, 14);
+    const clampedX = rubberBandClamp(nextX, minX, maxX, 14);
+    physics.targetX = clampedX;
+    const hoverIdx = findNearestIndex(clampedX, physics.slotWidth, physics.padding);
+    if (hoverIdx !== gesture.lastHoverIdx) {
+      gesture.lastHoverIdx = hoverIdx;
+      playHapticTick('step');
+    }
     startLoop();
   });
 
@@ -570,11 +581,12 @@ export function enhanceLiquidGlassSegmented(seg, keyFallback = '') {
     return best;
   };
 
-  const setHoverBtn = (btn) => {
+  const setHoverBtn = (btn, withTick = false) => {
     if (hoveredBtn === btn) return;
     hoveredBtn?.classList.remove('lg-hover-target');
     hoveredBtn = btn;
     hoveredBtn?.classList.add('lg-hover-target');
+    if (withTick && btn) playHapticTick('step');
   };
 
   const applyDOM = (centerX, curW, vx, lift) => {
@@ -765,7 +777,7 @@ export function enhanceLiquidGlassSegmented(seg, keyFallback = '') {
     gesture.activePointerId = e.pointerId;
 
     seg.classList.add('is-dragging');
-    setHoverBtn(touched.btn);
+    setHoverBtn(touched.btn, true);
     startLoop();
   });
 
@@ -801,7 +813,7 @@ export function enhanceLiquidGlassSegmented(seg, keyFallback = '') {
     const nearest = findNearestMetric(metrics, nextX);
     if (nearest) {
       physics.targetW = nearest.width;
-      setHoverBtn(nearest.btn);
+      setHoverBtn(nearest.btn, true);
     }
     startLoop();
   });
@@ -875,6 +887,7 @@ export function enhanceLiquidGlassSegmented(seg, keyFallback = '') {
     }
 
     startLoop();
+    playHapticTick('commit');
 
     // Prevent the browser's own follow-up click from double-firing, then trigger target button
     if (e.type !== 'pointercancel') {

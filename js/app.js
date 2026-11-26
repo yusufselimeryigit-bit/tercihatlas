@@ -87,7 +87,7 @@ import {
   buildCalcInputFromMyNets,
   renderYksCalculatorPanel,
   renderYksResultsBlockHtml,
-} from './yks-calculator.js?v=28';
+} from './yks-calculator.js?v=34';
 import {
   translateBkCondition,
   deriveProgramBkTags,
@@ -101,7 +101,16 @@ import {
   buildOsymOfficialTableText,
   openOfficialOsymPrintWindow,
 } from './dss-tools.js?v=26';
-import { createLiquidGlassTabBar, enhanceLiquidGlassSegmented, LG_ICONS } from './liquid-glass-tabs.js?v=33';
+import { createLiquidGlassTabBar, enhanceLiquidGlassSegmented, LG_ICONS } from './liquid-glass-tabs.js?v=34';
+import {
+  isHapticsEnabled,
+  setHapticsEnabled,
+  playHapticTick,
+  animateNumberRoll,
+  enhanceLiquidGlassSliders,
+  initDesktopGlassPhysics,
+  triggerCelebrationSpark,
+} from './apple-craft.js?v=34';
 
 const STATE_KEY = 'tercihatlas_state_v1';
 const SYNC_KEY_STORAGE = 'tercihatlas_sync_key';
@@ -597,6 +606,13 @@ function closeAppearancePopover() {
   pop.setAttribute('aria-hidden', 'true');
 }
 
+function syncHapticsUI() {
+  const on = isHapticsEnabled();
+  document.querySelectorAll('#hapticsSegmented [data-haptics-pick]').forEach((btn) => {
+    btn.classList.toggle('active', (btn.dataset.hapticsPick === 'on') === on);
+  });
+}
+
 function toggleAppearancePopover(e) {
   e?.stopPropagation();
   const pop = document.getElementById('appearancePopover');
@@ -604,6 +620,7 @@ function toggleAppearancePopover(e) {
   const willOpen = !pop.classList.contains('open');
   closeContextMenu();
   if (willOpen) {
+    syncHapticsUI();
     pop.classList.add('open');
     pop.setAttribute('aria-hidden', 'false');
     initSlidingSegmentedControls();
@@ -615,8 +632,11 @@ function toggleAppearancePopover(e) {
 function showToast(message, type = 'info') {
   const container = document.getElementById('toastContainer');
   if (!container) return;
+  if (type === 'success') playHapticTick('success');
+  // Keep Dynamic Island crisp: replace stale toast if already 2+ queued
+  while (container.children.length >= 2) container.firstElementChild?.remove();
   const el = document.createElement('div');
-  el.className = 'toast';
+  el.className = `toast dynamic-island-toast toast-${type}`;
   const badgeBg = type === 'error' ? 'var(--rose)' : type === 'success' ? 'var(--green-bright)' : 'var(--accent)';
   const badgeIcon =
     type === 'error'
@@ -624,14 +644,12 @@ function showToast(message, type = 'info') {
       : type === 'success'
         ? '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>'
         : '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M12 16v-4M12 8h.01"/></svg>';
-  el.innerHTML = `<span class="toast-badge" style="background:${badgeBg}">${badgeIcon}</span><span>${escapeHtml(message)}</span>`;
+  el.innerHTML = `<span class="toast-badge" style="background:${badgeBg}">${badgeIcon}</span><span class="toast-msg">${escapeHtml(message)}</span>`;
   container.appendChild(el);
   setTimeout(() => {
-    el.style.opacity = '0';
-    el.style.transform = 'translateY(6px) scale(0.96)';
-    el.style.transition = 'opacity 200ms ease, transform 200ms ease';
-    setTimeout(() => el.remove(), 220);
-  }, 3000);
+    el.classList.add('toast-leaving');
+    setTimeout(() => el.remove(), 260);
+  }, 2900);
 }
 
 // ============================================================================
@@ -1552,6 +1570,9 @@ function initSheetSwipeDismiss() {
     if (dy > 0) {
       currentDy = dy;
       drawer.style.transform = `translateY(${dy}px)`;
+      const depth = Math.max(0, 1 - dy / 340);
+      document.body.classList.add('drawer-depth-dragging');
+      document.documentElement.style.setProperty('--sheet-depth', depth.toFixed(3));
     }
   }, { passive: true });
 
@@ -1559,11 +1580,13 @@ function initSheetSwipeDismiss() {
     if (!dragging) return;
     dragging = false;
     drawer.style.transition = '';
+    document.body.classList.remove('drawer-depth-dragging');
     if (currentDy > 110) {
       drawer.style.transform = '';
       closeDrawer();
     } else {
       drawer.style.transform = '';
+      document.documentElement.style.setProperty('--sheet-depth', '1');
     }
   });
 }
@@ -1614,6 +1637,7 @@ function renderAll() {
       root.classList.add('view-enter');
     }
     initSlidingSegmentedControls();
+    enhanceLiquidGlassSliders(root);
     renderBatchActionBar();
   };
 
@@ -3227,6 +3251,8 @@ function openDrawer(code) {
   const drawer = document.getElementById('detailDrawer');
   drawer.classList.add('open');
   drawer.setAttribute('aria-hidden', 'false');
+  document.body.classList.add('drawer-depth-open');
+  document.documentElement.style.setProperty('--sheet-depth', '1');
 }
 
 function closeDrawer() {
@@ -3235,6 +3261,8 @@ function closeDrawer() {
   const drawer = document.getElementById('detailDrawer');
   drawer.classList.remove('open');
   drawer.setAttribute('aria-hidden', 'true');
+  document.body.classList.remove('drawer-depth-open', 'drawer-depth-dragging');
+  document.documentElement.style.setProperty('--sheet-depth', '0');
 }
 
 function stepDrawerProgram(delta) {
@@ -5809,6 +5837,7 @@ function bindCompareEvents() {
   // Module 4: Personal Scoring Matrix (1-10) live slider updates (RAF-coalesced for 60fps mobile)
   let matrixSaveTimer = null;
   let matrixRafId = 0;
+  let lastWinnerCode = null;
   const flushMatrixBanner = () => {
     matrixRafId = 0;
     const selected = state.compareCodes.map((c) => state.programs.find((p) => p.code === c)).filter(Boolean);
@@ -5826,6 +5855,7 @@ function bindCompareEvents() {
 
     const banner = document.getElementById('matrixWinnerBanner');
     if (banner && winner) {
+      const newWinCode = margin > 0 ? winner.program.code : null;
       banner.innerHTML = `
         <div>
           <div style="font-size:11.5px;font-weight:650;text-transform:uppercase;letter-spacing:.04em;color:var(--green);">En Mantıklı Seçenek</div>
@@ -5834,7 +5864,13 @@ function bindCompareEvents() {
             ${margin > 0 ? `2. sıradaki ${escapeHtml(runnerUp.program.university)} seçeneğinden +${margin} puan önde.` : 'İlk iki seçenek eşit puanda — kişisel önceliğine göre netleştirebilirsin.'}
           </span>
         </div>
-        <div class="matrix-winner-score tabular">${winner.scores.total}<span>/ 30</span></div>`;
+        <div class="matrix-winner-score tabular"><span id="matrixWinScoreNum">${winner.scores.total}</span><span>/ 30</span></div>`;
+      const scoreNumEl = document.getElementById('matrixWinScoreNum');
+      if (scoreNumEl) animateNumberRoll(scoreNumEl, 'matrixWinnerTotal', winner.scores.total, (v) => String(Math.round(v)), { duration: 200 });
+      if (newWinCode && lastWinnerCode && newWinCode !== lastWinnerCode) {
+        triggerCelebrationSpark(banner);
+      }
+      lastWinnerCode = newWinCode;
     }
   };
 
@@ -6293,6 +6329,20 @@ function bindYksCalculatorEvents() {
       selectedType: calc.selectedType || 'SAY',
       selectedYear: calc.selectedYear || 2026,
     });
+    const activeBranch = res.branches[calc.selectedType || 'SAY'] || res.branches.SAY;
+    const yrKey = calc.selectedYear || 2026;
+    const rankNum = activeBranch?.ranks?.[yrKey];
+    const rawNum = activeBranch?.rawByYear?.[yrKey] ?? activeBranch?.raw;
+    const placeNum = activeBranch?.placementByYear?.[yrKey] ?? activeBranch?.placement;
+    if (Number.isFinite(rankNum)) {
+      animateNumberRoll(document.getElementById('calcHeroRankVal'), 'calcHeroRank', rankNum, (v) => formatRank(Math.round(v)), { duration: 280 });
+    }
+    if (Number.isFinite(rawNum)) {
+      animateNumberRoll(document.getElementById('calcHeroRawVal'), 'calcHeroRaw', rawNum, (v) => v.toFixed(3).replace('.', ','), { duration: 260 });
+    }
+    if (Number.isFinite(placeNum)) {
+      animateNumberRoll(document.getElementById('calcHeroPlaceVal'), 'calcHeroPlace', placeNum, (v) => v.toFixed(3).replace('.', ','), { duration: 260 });
+    }
     wireResultsButtons();
     initSlidingSegmentedControls();
   };
@@ -6553,6 +6603,17 @@ async function init() {
   document.querySelectorAll('#surfaceStyleSegmented [data-surface-pick]').forEach((btn) => {
     btn.addEventListener('click', () => applySurfaceStyle(btn.dataset.surfacePick));
   });
+
+  syncHapticsUI();
+  document.querySelectorAll('#hapticsSegmented [data-haptics-pick]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      setHapticsEnabled(btn.dataset.hapticsPick === 'on');
+      syncHapticsUI();
+      initSlidingSegmentedControls();
+    });
+  });
+
+  initDesktopGlassPhysics();
 
   document.getElementById('exitPresentationBtn')?.addEventListener('click', () => setPresentationMode(false));
 

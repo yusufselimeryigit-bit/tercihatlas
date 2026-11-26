@@ -677,7 +677,7 @@ export function renderYksResultsBlockHtml(results, { selectedType = 'SAY', selec
         <div class="yks-hero-main">
           <div class="yks-hero-rank-block">
             <span class="yks-hero-eyebrow">${st} · ${yr} YKS Tahmini Yerleştirme Sıralaması</span>
-            <div class="yks-hero-rank tabular">${formatRank(heroRank)}</div>
+            <div class="yks-hero-rank tabular" id="calcHeroRankVal">${formatRank(heroRank)}</div>
             <div class="yks-hero-band tabular">
               2023–2026 aralığı: <strong>${formatRank(activeBranch.bestYearRank)}</strong> – <strong>${formatRank(activeBranch.worstYearRank)}</strong>
             </div>
@@ -686,11 +686,11 @@ export function renderYksResultsBlockHtml(results, { selectedType = 'SAY', selec
           <div class="yks-hero-scores tabular">
             <div class="yks-score-pill-box">
               <span>Ham Puan (${yr})</span>
-              <strong>${fmtPts(heroRaw)}</strong>
+              <strong id="calcHeroRawVal">${fmtPts(heroRaw)}</strong>
             </div>
             <div class="yks-score-pill-box accent">
               <span>Yerleştirme (${yr})</span>
-              <strong>${fmtPts(heroPlacement)}</strong>
+              <strong id="calcHeroPlaceVal">${fmtPts(heroPlacement)}</strong>
             </div>
             <div class="yks-score-pill-box">
               <span>OBP Katkısı ${results.obpBroken ? '(Kırık)' : ''}</span>
