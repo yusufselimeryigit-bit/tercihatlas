@@ -454,3 +454,453 @@ export function createLiquidGlassTabBar(
     },
   };
 }
+
+// ============================================================================
+// Universal Draggable Liquid Glass Segmented Control Engine
+// Powers ALL .segmented switchers (Kart/Liste, Risk, Analiz 9 Tabs, Puan Türü,
+// Sınav Yılı, Karşılaştır, Detay Çekmecesi, Görünüm/Tema, Yurt Dışı Filtre)
+// ============================================================================
+const attachedSegmentedMap = new WeakMap();
+const segmentedHandoffState = new Map();
+
+/**
+ * Enhances a `.segmented` element with hold-to-lift, drag-across-options
+ * spring physics, rubber-band overscroll, velocity stretch/squash, and
+ * Liquid Glass optical droplet shell + chromatic dispersion rim.
+ * Safe to call repeatedly after DOM updates or resize events.
+ */
+export function enhanceLiquidGlassSegmented(seg, keyFallback = '') {
+  if (!seg || seg.offsetWidth === 0) return;
+
+  const existing = attachedSegmentedMap.get(seg);
+  if (existing) {
+    existing.syncActive({ animate: true });
+    return;
+  }
+
+  const key = seg.id || seg.getAttribute('aria-label') || keyFallback;
+  const getButtons = () => Array.from(seg.querySelectorAll('.seg-btn'));
+
+  let thumb = seg.querySelector('.seg-thumb');
+  if (!thumb) {
+    thumb = document.createElement('div');
+    thumb.className = 'seg-thumb seg-lg-thumb';
+    thumb.setAttribute('aria-hidden', 'true');
+    thumb.innerHTML = `
+      <div class="seg-lg-rest-fill"></div>
+      <div class="seg-lg-shell">
+        <div class="seg-lg-specular"></div>
+        <div class="seg-lg-chromatic"></div>
+      </div>
+    `;
+    seg.prepend(thumb);
+  } else if (!thumb.classList.contains('seg-lg-thumb')) {
+    thumb.classList.add('seg-lg-thumb');
+    thumb.innerHTML = `
+      <div class="seg-lg-rest-fill"></div>
+      <div class="seg-lg-shell">
+        <div class="seg-lg-specular"></div>
+        <div class="seg-lg-chromatic"></div>
+      </div>
+    `;
+  }
+
+  seg.classList.add('has-thumb', 'lg-draggable-seg');
+
+  const restFillEl = thumb.querySelector('.seg-lg-rest-fill');
+  const shellEl = thumb.querySelector('.seg-lg-shell');
+
+  const physics = {
+    x: 0,
+    vx: 0,
+    targetX: 0,
+    w: 0,
+    vw: 0,
+    targetW: 0,
+    lift: 0,
+    vLift: 0,
+    targetLift: 0,
+    dragging: false,
+    initialized: false,
+    barHeight: 34,
+    visible: false,
+    reducedMotion:
+      typeof window !== 'undefined' &&
+      window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches,
+  };
+
+  const gesture = {
+    downX: 0,
+    downTime: 0,
+    didDrag: false,
+    startCenterX: 0,
+    activePointerId: null,
+    suppressNextClick: false,
+  };
+
+  let rafId = null;
+  let lastTime = null;
+  let settleTimer = null;
+  let hoveredBtn = null;
+
+  const measureButtons = () => {
+    const btns = getButtons();
+    if (!btns.length) return [];
+    const segRect = seg.getBoundingClientRect();
+    const padOffset = seg.scrollLeft || 0;
+    return btns.map((btn, idx) => {
+      const r = btn.getBoundingClientRect();
+      const left = r.left - segRect.left + padOffset;
+      const width = r.width;
+      return { btn, idx, left, width, center: left + width / 2 };
+    });
+  };
+
+  const findNearestMetric = (metrics, cx) => {
+    if (!metrics.length) return null;
+    let best = metrics[0];
+    let bestDist = Math.abs(cx - best.center);
+    for (let i = 1; i < metrics.length; i += 1) {
+      const d = Math.abs(cx - metrics[i].center);
+      if (d < bestDist) {
+        bestDist = d;
+        best = metrics[i];
+      }
+    }
+    return best;
+  };
+
+  const setHoverBtn = (btn) => {
+    if (hoveredBtn === btn) return;
+    hoveredBtn?.classList.remove('lg-hover-target');
+    hoveredBtn = btn;
+    hoveredBtn?.classList.add('lg-hover-target');
+  };
+
+  const applyDOM = (centerX, curW, vx, lift) => {
+    if (!physics.visible || curW <= 2) {
+      thumb.style.opacity = '0';
+      return;
+    }
+
+    const H = physics.barHeight || seg.offsetHeight || 34;
+    const clampedLift = Math.max(0, Math.min(1.18, lift));
+    const visualLift = Math.max(0, Math.min(1, lift));
+
+    const restH = Math.max(22, H - 6);
+    const liftedH = H + 10;
+    const extraW = 14 * clampedLift;
+
+    const speed = physics.reducedMotion ? 0 : Math.abs(vx);
+    const velNorm = Math.min(1, speed / 900);
+    const velStretchX = 1 + velNorm * 0.24 * visualLift;
+    const velSquashY = 1 - velNorm * 0.14 * visualLift;
+
+    const w = Math.max(24, (curW + extraW) * velStretchX);
+    const h = Math.max(restH, (restH + (liftedH - restH) * clampedLift) * velSquashY);
+
+    const bx = centerX - w / 2;
+    const by = H / 2 - h / 2;
+
+    thumb.style.opacity = '1';
+    thumb.style.width = `${w.toFixed(2)}px`;
+    thumb.style.height = `${h.toFixed(2)}px`;
+    thumb.style.transform = `translate3d(${bx.toFixed(2)}px, ${by.toFixed(2)}px, 0)`;
+
+    if (restFillEl) {
+      restFillEl.style.opacity = `${Math.max(0, 1 - visualLift * 1.85).toFixed(3)}`;
+    }
+    if (shellEl) {
+      shellEl.style.opacity = `${Math.min(1, visualLift * 1.3).toFixed(3)}`;
+    }
+  };
+
+  const startLoop = () => {
+    if (rafId !== null) return;
+    lastTime = performance.now();
+
+    const step = (now) => {
+      const prev = lastTime ?? now;
+      const dt = Math.min(0.032, Math.max(0.001, (now - prev) / 1000));
+      lastTime = now;
+
+      const posStiffness = physics.dragging ? 560 : 300;
+      const posDamping = physics.dragging ? 32 : 22;
+
+      const ax = (physics.targetX - physics.x) * posStiffness - physics.vx * posDamping;
+      physics.vx += ax * dt;
+      physics.x += physics.vx * dt;
+
+      const aw = (physics.targetW - physics.w) * 340 - physics.vw * 24;
+      physics.vw += aw * dt;
+      physics.w += physics.vw * dt;
+
+      const liftStiffness = physics.targetLift > physics.lift ? 440 : 280;
+      const liftDamping = physics.targetLift > physics.lift ? 23 : 22;
+      const aLift = (physics.targetLift - physics.lift) * liftStiffness - physics.vLift * liftDamping;
+      physics.vLift += aLift * dt;
+      physics.lift += physics.vLift * dt;
+      if (physics.lift < 0) physics.lift = 0;
+
+      applyDOM(physics.x, physics.w, physics.vx, physics.lift);
+
+      const settled =
+        !physics.dragging &&
+        Math.abs(physics.targetX - physics.x) < 0.08 &&
+        Math.abs(physics.vx) < 0.4 &&
+        Math.abs(physics.targetW - physics.w) < 0.12 &&
+        Math.abs(physics.targetLift - physics.lift) < 0.003 &&
+        Math.abs(physics.vLift) < 0.02;
+
+      if (settled) {
+        physics.x = physics.targetX;
+        physics.vx = 0;
+        physics.w = physics.targetW;
+        physics.vw = 0;
+        physics.lift = physics.targetLift;
+        physics.vLift = 0;
+        applyDOM(physics.x, physics.w, 0, physics.lift);
+        rafId = null;
+        return;
+      }
+
+      rafId = requestAnimationFrame(step);
+    };
+
+    rafId = requestAnimationFrame(step);
+  };
+
+  const syncActive = ({ animate = true, useHandoff = false } = {}) => {
+    const metrics = measureButtons();
+    physics.barHeight = seg.offsetHeight || 34;
+    const activeMetric = metrics.find((m) => m.btn.classList.contains('active'));
+    if (!activeMetric) {
+      physics.visible = false;
+      applyDOM(0, 0, 0, 0);
+      return;
+    }
+
+    physics.visible = true;
+    physics.targetX = activeMetric.center;
+    physics.targetW = activeMetric.width;
+
+    if (useHandoff && key) {
+      const prev = segmentedHandoffState.get(key);
+      if (prev && performance.now() - prev.ts < 500) {
+        physics.x = prev.x;
+        physics.w = prev.w;
+        physics.vx = prev.vx || 0;
+        physics.lift = prev.lift;
+        physics.targetLift = 0;
+        physics.initialized = true;
+        segmentedHandoffState.delete(key);
+        applyDOM(physics.x, physics.w, physics.vx, physics.lift);
+        startLoop();
+        return;
+      }
+    }
+
+    if (!physics.initialized || !animate) {
+      physics.x = activeMetric.center;
+      physics.w = activeMetric.width;
+      physics.vx = 0;
+      physics.vw = 0;
+      physics.initialized = true;
+      applyDOM(physics.x, physics.w, 0, physics.lift);
+    } else if (!physics.dragging) {
+      startLoop();
+    }
+  };
+
+  // Capture-phase click guard so pointer-drag commits fire exactly once (no double click)
+  seg.addEventListener(
+    'click',
+    (e) => {
+      if (gesture.suppressNextClick) {
+        gesture.suppressNextClick = false;
+        e.stopPropagation();
+        e.preventDefault();
+      }
+    },
+    true,
+  );
+
+  seg.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0 && e.pointerType === 'mouse') return;
+    const metrics = measureButtons();
+    if (!metrics.length) return;
+
+    if (settleTimer !== null) {
+      window.clearTimeout(settleTimer);
+      settleTimer = null;
+    }
+
+    try {
+      seg.setPointerCapture(e.pointerId);
+    } catch {
+      /* ignore capture errors */
+    }
+
+    physics.barHeight = seg.offsetHeight || 34;
+    const segRect = seg.getBoundingClientRect();
+    const localX = e.clientX - segRect.left + (seg.scrollLeft || 0);
+    const touched = findNearestMetric(metrics, localX);
+    if (!touched) return;
+
+    physics.visible = true;
+    physics.dragging = true;
+    physics.targetLift = 1;
+    physics.targetX = touched.center;
+    physics.targetW = touched.width;
+    if (!physics.initialized) {
+      physics.x = touched.center;
+      physics.w = touched.width;
+      physics.initialized = true;
+    }
+
+    gesture.downX = e.clientX;
+    gesture.downTime = performance.now();
+    gesture.didDrag = false;
+    gesture.startCenterX = touched.center;
+    gesture.activePointerId = e.pointerId;
+
+    seg.classList.add('is-dragging');
+    setHoverBtn(touched.btn);
+    startLoop();
+  });
+
+  seg.addEventListener('pointermove', (e) => {
+    if (!physics.dragging) return;
+    const deltaX = e.clientX - gesture.downX;
+    if (!gesture.didDrag) {
+      if (Math.abs(deltaX) <= 3) return;
+      gesture.didDrag = true;
+    }
+
+    const metrics = measureButtons();
+    if (!metrics.length) return;
+
+    // Auto-pan scrollable parent (.analysis-tabs-scroll) if user drags near its edges
+    const scrollParent = seg.closest('.analysis-tabs-scroll');
+    if (scrollParent && scrollParent.scrollWidth > scrollParent.clientWidth + 4) {
+      const spRect = scrollParent.getBoundingClientRect();
+      if (e.clientX > spRect.right - 34) {
+        scrollParent.scrollLeft += 10;
+        gesture.startCenterX += 10;
+      } else if (e.clientX < spRect.left + 34) {
+        scrollParent.scrollLeft -= 10;
+        gesture.startCenterX -= 10;
+      }
+    }
+
+    const minX = metrics[0].center;
+    const maxX = metrics[metrics.length - 1].center;
+    const nextX = rubberBandClamp(gesture.startCenterX + deltaX, minX, maxX, 11);
+    physics.targetX = nextX;
+
+    const nearest = findNearestMetric(metrics, nextX);
+    if (nearest) {
+      physics.targetW = nearest.width;
+      setHoverBtn(nearest.btn);
+    }
+    startLoop();
+  });
+
+  const handlePointerEnd = (e) => {
+    if (!physics.dragging) return;
+    physics.dragging = false;
+    seg.classList.remove('is-dragging');
+    setHoverBtn(null);
+
+    try {
+      if (gesture.activePointerId !== null && seg.hasPointerCapture?.(gesture.activePointerId)) {
+        seg.releasePointerCapture(gesture.activePointerId);
+      }
+    } catch {
+      /* ignore */
+    }
+    gesture.activePointerId = null;
+
+    const metrics = measureButtons();
+    if (!metrics.length) {
+      physics.targetLift = 0;
+      startLoop();
+      return;
+    }
+
+    const elapsed = performance.now() - gesture.downTime;
+    const isQuickTap = !gesture.didDrag && elapsed < 240;
+    const projectedX = gesture.didDrag ? physics.targetX + physics.vx * 0.025 : physics.targetX;
+    const target = findNearestMetric(metrics, projectedX);
+
+    if (!target) {
+      physics.targetLift = 0;
+      startLoop();
+      return;
+    }
+
+    physics.targetX = target.center;
+    physics.targetW = target.width;
+
+    const alreadyActive = target.btn.classList.contains('active');
+    if (alreadyActive) {
+      physics.targetLift = 0;
+      gesture.suppressNextClick = gesture.didDrag;
+      startLoop();
+      return;
+    }
+
+    // Store live momentum/lift state so if target.btn.click() triggers renderAll(),
+    // the freshly mounted .segmented seamlessly lands the Liquid Glass droplet!
+    if (key) {
+      segmentedHandoffState.set(key, {
+        x: physics.x,
+        w: physics.w,
+        vx: physics.vx,
+        lift: Math.max(physics.lift, isQuickTap ? 0.88 : 0.72),
+        ts: performance.now(),
+      });
+    }
+
+    if (isQuickTap) {
+      physics.targetLift = 1;
+      settleTimer = window.setTimeout(() => {
+        if (!physics.dragging) {
+          physics.targetLift = 0;
+          startLoop();
+        }
+      }, 175);
+    } else {
+      physics.targetLift = 0;
+    }
+
+    startLoop();
+
+    // Prevent the browser's own follow-up click from double-firing, then trigger target button
+    if (e.type !== 'pointercancel') {
+      gesture.suppressNextClick = true;
+      setTimeout(() => {
+        gesture.suppressNextClick = false;
+      }, 80);
+      // Temporarily allow our programmatic click through the capture guard
+      gesture.suppressNextClick = false;
+      target.btn.click();
+      // Suppress any subsequent native click that fires right after pointerup
+      gesture.suppressNextClick = true;
+      requestAnimationFrame(() => {
+        gesture.suppressNextClick = false;
+      });
+    }
+  };
+
+  seg.addEventListener('pointerup', handlePointerEnd);
+  seg.addEventListener('pointercancel', handlePointerEnd);
+  seg.addEventListener('contextmenu', (e) => {
+    if (physics.dragging) e.preventDefault();
+  });
+
+  const api = { syncActive };
+  attachedSegmentedMap.set(seg, api);
+  syncActive({ animate: false, useHandoff: true });
+}
+

@@ -7683,3 +7683,177 @@ html, body {
 .subject-boost-chip:active {
   transform: scale(0.955);
 }
+
+/* ==========================================================================
+   v33: Universal Draggable Liquid Glass Segmented Controls
+   (Hold-to-Lift & Drag-Across-Options Spring Droplet on Every Switcher!)
+   ========================================================================== */
+.segmented.lg-draggable-seg {
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  overflow: visible;
+  isolation: isolate;
+}
+
+.segmented.lg-draggable-seg.is-dragging {
+  cursor: grabbing;
+}
+
+.filter-pills .segmented {
+  flex-shrink: 0;
+}
+
+/* Disable CSS transform/width transition on JS-spring-driven Liquid Glass droplet */
+.seg-thumb.seg-lg-thumb {
+  top: 0;
+  bottom: auto;
+  left: 0;
+  background: transparent;
+  box-shadow: none;
+  transition: none !important;
+  overflow: hidden;
+  border-radius: 9999px;
+  z-index: 2;
+  pointer-events: none;
+  will-change: transform, width, height;
+}
+
+.seg-thumb.seg-lg-thumb::before,
+.seg-thumb.seg-lg-thumb::after {
+  display: none;
+}
+
+/* Ensure button labels sit cleanly readable inside resting pill AND magnified under lifted droplet */
+.segmented.lg-draggable-seg .seg-btn {
+  position: relative;
+  z-index: 3;
+  transition: color 160ms ease, transform 180ms cubic-bezier(0.22, 1, 0.36, 1);
+  pointer-events: auto;
+}
+
+.segmented.lg-draggable-seg.is-dragging .seg-btn {
+  transform: scale(1);
+}
+
+.segmented.lg-draggable-seg .seg-btn.lg-hover-target {
+  color: var(--accent);
+  font-weight: 650;
+  transform: scale(1.06);
+}
+
+/* Resting Liquid Glass Pill Fill */
+.seg-lg-rest-fill {
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.96) 0%,
+    rgba(255, 255, 255, 0.84) 100%
+  );
+  box-shadow:
+    0 3px 10px -2px rgba(0, 0, 0, 0.13),
+    0 1px 2px rgba(0, 0, 0, 0.06),
+    inset 0 1.5px 1px rgba(255, 255, 255, 1),
+    inset 0 -1px 1px rgba(255, 255, 255, 0.65),
+    0 0 0 0.5px rgba(0, 0, 0, 0.06);
+}
+
+[data-theme="dark"] .seg-lg-rest-fill {
+  background: linear-gradient(
+    180deg,
+    rgba(82, 82, 92, 0.92) 0%,
+    rgba(58, 58, 66, 0.88) 100%
+  );
+  box-shadow:
+    0 4px 12px rgba(0, 0, 0, 0.48),
+    inset 0 1px 1px rgba(255, 255, 255, 0.28),
+    0 0 0 0.5px rgba(255, 255, 255, 0.14);
+}
+
+/* Lifted / Dragged Optical Liquid Glass Droplet Shell */
+.seg-lg-shell {
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  opacity: 0;
+  backdrop-filter: saturate(1.75) contrast(1.06) brightness(1.04);
+  -webkit-backdrop-filter: saturate(1.75) contrast(1.06) brightness(1.04);
+  background: radial-gradient(
+    ellipse at 50% 50%,
+    rgba(255, 255, 255, 0.06) 40%,
+    rgba(255, 255, 255, 0.24) 84%,
+    rgba(255, 255, 255, 0.42) 100%
+  );
+  box-shadow:
+    0 8px 22px rgba(0, 0, 0, 0.18),
+    0 0 0 0.75px rgba(0, 0, 0, 0.08),
+    inset 0 1.5px 2px rgba(255, 255, 255, 0.96),
+    inset 0 -1.5px 2px rgba(255, 255, 255, 0.82),
+    inset 0 0 10px rgba(255, 255, 255, 0.18);
+}
+
+[data-theme="dark"] .seg-lg-shell {
+  background: radial-gradient(
+    ellipse at 50% 50%,
+    rgba(255, 255, 255, 0.04) 40%,
+    rgba(255, 255, 255, 0.14) 84%,
+    rgba(255, 255, 255, 0.26) 100%
+  );
+  box-shadow:
+    0 10px 26px rgba(0, 0, 0, 0.55),
+    0 0 0 0.75px rgba(255, 255, 255, 0.18),
+    inset 0 1.5px 2px rgba(255, 255, 255, 0.46),
+    inset 0 -1.5px 2px rgba(255, 255, 255, 0.24),
+    inset 0 0 10px rgba(255, 255, 255, 0.10);
+}
+
+/* Symmetric Top & Bottom Specular Rim on Segmented Droplet */
+.seg-lg-specular {
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  padding: 1.5px;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.98) 0%,
+    rgba(255, 255, 255, 0.34) 48%,
+    rgba(255, 255, 255, 0.92) 100%
+  );
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+}
+
+[data-theme="dark"] .seg-lg-specular {
+  opacity: 0.55;
+}
+
+/* Symmetric Lateral Cyan <-> Warm Orange Chromatic Dispersion on Segmented Droplet */
+.seg-lg-chromatic {
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  opacity: 0.68;
+  padding: 2px;
+  background: linear-gradient(
+    90deg,
+    rgba(56, 189, 248, 0.58) 0%,
+    transparent 20%,
+    transparent 80%,
+    rgba(251, 146, 60, 0.48) 100%
+  );
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+}
+
+/* Ensure lifted droplet is never clipped vertically inside scrollable tab strip */
+.analysis-tabs-scroll {
+  padding-top: 7px;
+  padding-bottom: 7px;
+  margin-top: -5px;
+  margin-bottom: -5px;
+}

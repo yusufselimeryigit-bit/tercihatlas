@@ -61,7 +61,7 @@ import {
   SUBJECT_BOOST_PRESETS,
   simulateSubjectNetBoost,
 } from './analytics.js?v=28';
-import { ABROAD_PRESETS, DEFAULT_ABROAD_TOOLS, createAbroadRecord, renderAbroadView } from './abroad.js?v=29';
+import { ABROAD_PRESETS, DEFAULT_ABROAD_TOOLS, createAbroadRecord, renderAbroadView } from './abroad.js?v=33';
 import { parseExamPdfFile } from './pdf-parser.js?v=26';
 import {
   renderTurkeyCampusMap,
@@ -101,7 +101,7 @@ import {
   buildOsymOfficialTableText,
   openOfficialOsymPrintWindow,
 } from './dss-tools.js?v=26';
-import { createLiquidGlassTabBar, LG_ICONS } from './liquid-glass-tabs.js?v=32';
+import { createLiquidGlassTabBar, enhanceLiquidGlassSegmented, LG_ICONS } from './liquid-glass-tabs.js?v=33';
 
 const STATE_KEY = 'tercihatlas_state_v1';
 const SYNC_KEY_STORAGE = 'tercihatlas_sync_key';
@@ -1435,44 +1435,7 @@ function initSlidingSegmentedControls() {
   requestAnimationFrame(() => {
     document.querySelectorAll('.segmented').forEach((seg, idx) => {
       if (seg.offsetWidth === 0) return;
-      const activeBtn = seg.querySelector('.seg-btn.active');
-      if (!activeBtn) return;
-
-      const key = seg.id || seg.getAttribute('aria-label') || `seg-${idx}`;
-      const segRect = seg.getBoundingClientRect();
-      const btnRect = activeBtn.getBoundingClientRect();
-      const targetLeft = Math.round((btnRect.left - segRect.left + seg.scrollLeft) * 10) / 10;
-      const targetWidth = Math.round(btnRect.width * 10) / 10;
-
-      let thumb = seg.querySelector('.seg-thumb');
-      const isNewThumb = !thumb;
-      if (!thumb) {
-        thumb = document.createElement('div');
-        thumb.className = 'seg-thumb';
-        seg.prepend(thumb);
-      }
-      seg.classList.add('has-thumb');
-
-      const prev = segPrevRects.get(key);
-      if (isNewThumb && prev && (Math.abs(prev.left - targetLeft) > 1 || Math.abs(prev.width - targetWidth) > 1)) {
-        thumb.style.transition = 'none';
-        thumb.style.width = `${prev.width}px`;
-        thumb.style.transform = `translate3d(${prev.left}px, 0, 0)`;
-        void thumb.offsetWidth;
-        thumb.style.transition = '';
-      } else if (isNewThumb) {
-        thumb.style.transition = 'none';
-        thumb.style.width = `${targetWidth}px`;
-        thumb.style.transform = `translate3d(${targetLeft}px, 0, 0)`;
-        void thumb.offsetWidth;
-        thumb.style.transition = '';
-        segPrevRects.set(key, { left: targetLeft, width: targetWidth });
-        return;
-      }
-
-      thumb.style.width = `${targetWidth}px`;
-      thumb.style.transform = `translate3d(${targetLeft}px, 0, 0)`;
-      segPrevRects.set(key, { left: targetLeft, width: targetWidth });
+      enhanceLiquidGlassSegmented(seg, `seg-${idx}`);
     });
   });
 }
@@ -1889,12 +1852,14 @@ function renderPreferencesView() {
       </div>
 
       <div class="filter-pills">
-        ${['all', 'hayal', 'hedef', 'guvenli']
-          .map((rk) => {
-            const label = rk === 'all' ? 'Tümü' : RISK_META[rk].label;
-            return `<button class="filter-pill ${ui.filterRisk === rk && !ui.filterReachable && !ui.filterNewOnly && !ui.filterQuotaUp ? 'active' : ''}" data-filter-risk="${rk}">${label}</button>`;
-          })
-          .join('')}
+        <div class="segmented" role="tablist" aria-label="Risk filtresi">
+          ${['all', 'hayal', 'hedef', 'guvenli']
+            .map((rk) => {
+              const label = rk === 'all' ? 'Tümü' : RISK_META[rk].label;
+              return `<button class="seg-btn seg-btn-sm ${ui.filterRisk === rk && !ui.filterReachable && !ui.filterNewOnly && !ui.filterQuotaUp ? 'active' : ''}" data-filter-risk="${rk}">${label}</button>`;
+            })
+            .join('')}
+        </div>
         ${est
           ? `<button class="filter-pill ${ui.filterReachable ? 'active' : ''}" data-filter-reachable="1" title="Mevcut netlerinle şu an girebildiğin bölümler">✓ Şu An Giriyorsun (${reachableCount})</button>`
           : ''}
@@ -2505,7 +2470,7 @@ function renderSimulatorPanel() {
         <div class="panel-title" style="flex-wrap:wrap;gap:8px;">
           <span>"Hangi Dersten +3 Net Hangi Bölümün Kilidini Açar?"</span>
           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-            <div class="segmented">
+            <div class="segmented" role="tablist" aria-label="Ders kilidi puan türü">
               ${['SAY', 'EA', 'SÖZ', 'DİL']
                 .map((st) => `<button class="seg-btn seg-btn-sm ${boostSt === st ? 'active' : ''}" data-boost-st="${st}">${st}</button>`)
                 .join('')}
@@ -3392,7 +3357,7 @@ function renderDrawer({ animateSwap = false } = {}) {
           <section class="drawer-section">
             <div class="section-heading">
               <span>4 Yıllık Taban Trendi</span>
-              <div class="segmented">
+              <div class="segmented" role="tablist" aria-label="Detay grafik modu">
                 <button class="seg-btn seg-btn-sm ${ui.drawerChartMode === 'rank' ? 'active' : ''}" data-chart-mode="rank">Sıralama</button>
                 <button class="seg-btn seg-btn-sm ${ui.drawerChartMode === 'score' ? 'active' : ''}" data-chart-mode="score">Puan</button>
               </div>
@@ -3434,7 +3399,7 @@ function renderDrawer({ animateSwap = false } = {}) {
               <div style="display:flex;align-items:center;gap:6px;">
                 <button class="mini-action active" id="drawerEditMyNetsBtn" style="height:26px;font-size:11.5px;">Netlerim / PDF</button>
                 ${p.nets && p.nets.length > 1
-                  ? `<div class="segmented">
+                  ? `<div class="segmented" role="tablist" aria-label="Detay net yılı">
                       ${p.nets
                         .map(
                           (n) => `<button class="seg-btn seg-btn-sm ${activeNet?.year === n.year ? 'active' : ''}" data-net-year="${n.year}">${n.year}</button>`,
@@ -3491,7 +3456,7 @@ function renderDrawer({ animateSwap = false } = {}) {
             </div>
             <div class="sheet-card" style="display:flex;flex-direction:column;gap:12px;">
               <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
-                <div class="segmented">
+                <div class="segmented" role="tablist" aria-label="Detay risk kategorisi">
                   ${['hayal', 'hedef', 'guvenli']
                     .map(
                       (rk) => `<button class="seg-btn seg-btn-sm ${p.risk === rk ? 'active' : ''}" data-set-risk="${rk}">${RISK_META[rk].label}</button>`,

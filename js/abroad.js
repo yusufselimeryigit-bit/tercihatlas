@@ -316,11 +316,11 @@ export function renderAbroadView(abroadPrograms, activeFilter = 'ALL', abroadToo
   const toolsHtml = renderAbroadToolsSection(abroadTools, eurTry);
 
   const filterBar = `<div class="toolbar">
-    <div class="filter-pills">
-      <button class="filter-pill ${activeFilter === 'ALL' ? 'active' : ''}" data-abroad-filter="ALL">Tümü (${abroadPrograms.length})</button>
-      <button class="filter-pill ${activeFilter === 'DE' ? 'active' : ''}" data-abroad-filter="DE">Almanya (${deCount})</button>
-      <button class="filter-pill ${activeFilter === 'IT' ? 'active' : ''}" data-abroad-filter="IT">İtalya (${itCount})</button>
-      <button class="filter-pill ${activeFilter === 'OTHER' ? 'active' : ''}" data-abroad-filter="OTHER">Diğer</button>
+    <div class="segmented" role="tablist" aria-label="Yurt dışı ülke filtresi">
+      <button class="seg-btn seg-btn-sm ${activeFilter === 'ALL' ? 'active' : ''}" data-abroad-filter="ALL">Tümü (${abroadPrograms.length})</button>
+      <button class="seg-btn seg-btn-sm ${activeFilter === 'DE' ? 'active' : ''}" data-abroad-filter="DE">Almanya (${deCount})</button>
+      <button class="seg-btn seg-btn-sm ${activeFilter === 'IT' ? 'active' : ''}" data-abroad-filter="IT">İtalya (${itCount})</button>
+      <button class="seg-btn seg-btn-sm ${activeFilter === 'OTHER' ? 'active' : ''}" data-abroad-filter="OTHER">Diğer</button>
     </div>
   </div>`;
 
