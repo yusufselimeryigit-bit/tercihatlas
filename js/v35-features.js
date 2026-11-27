@@ -169,6 +169,8 @@ const SPOTLIGHT_COMMANDS = [
   { id: 'standby', title: 'StandBy Çalışma & Pomodoro Ekranı', desc: 'iOS StandBy tam ekran etüt zamanlayıcı + canlı YKS 2027 sayacı', badge: 'StandBy', keywords: ['standby', 'pomodoro', 'etut', 'calisma modu', 'zamanlayici', 'masa saati'] },
   { id: 'stage-manager', title: 'Stage Manager: 3D Plan Destesi', desc: 'Tüm tercih senaryolarını Mission Control kartları olarak gör', badge: 'Planlar', keywords: ['stage manager', 'mission control', 'plan destesi', 'senaryolar', 'plan degistir'] },
   { id: 'split-view', title: 'iPadOS Split View İkili İnceleme', desc: 'İki bölümü sürüklenebilir cam ayırıcıyla yan yana incele', badge: 'Split', keywords: ['split view', 'yan yana', 'ikili inceleme', 'bolunmus ekran', 'iki bolum'] },
+  { id: 'master-detail', title: 'macOS Bölünmüş Çalışma Alanı (Master-Detail)', desc: 'Sol listede gezerken sağda canlı detay grafiğini izle', badge: 'Düzen', keywords: ['master detail', 'bolunmus', 'iki sutun', 'notes gorunumu', 'calisma alani'] },
+  { id: 'widget-studio', title: 'Ana Ekran Widget Stüdyosu', desc: 'Bento Kokpit, Tercih Doktoru ve canlı atmosferi özelleştir', badge: 'Stüdyo', keywords: ['widget', 'ozellestir', 'studyo', 'kokpit', 'bento', 'tercih doktoru'] },
   { id: 'toggle-haptics', title: 'Dokunsal Sesi (Haptik) Aç / Kapat', desc: 'Liquid Glass mekanik tık sesini aç/kapat', badge: 'Ayar', keywords: ['haptik', 'ses', 'dokunsal', 'tik sesi', 'sessiz'] },
 ];
 

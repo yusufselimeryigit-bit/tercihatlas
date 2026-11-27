@@ -232,7 +232,7 @@ export function renderRankSpectrum(programs, targetRank) {
  * Apple Health / Stocks style Exam Progression Chart for uploaded TYT / AYT PDFs.
  * Optionally overlays a horizontal dashed goal line for the #1 preference's average net!
  */
-export function renderExamProgressionChart(exams, { examType = 'TYT', targetNet = null, targetLabel = '' } = {}) {
+export function renderExamProgressionChart(exams, { examType = 'TYT', targetNet = null, targetLabel = '', thresholds = [] } = {}) {
   const list = [...(exams || [])]
     .filter((e) => e.examType === examType && Number.isFinite(Number(e.total)))
     .reverse(); // chronological oldest -> newest
@@ -242,7 +242,7 @@ export function renderExamProgressionChart(exams, { examType = 'TYT', targetNet 
   }
 
   const width = 620;
-  const height = 224;
+  const height = 236;
   const padL = 44;
   const padR = 44;
   const padT = 36;
@@ -250,8 +250,14 @@ export function renderExamProgressionChart(exams, { examType = 'TYT', targetNet 
   const innerW = width - padL - padR;
   const innerH = height - padT - padB;
 
+  const activeThresholds = Array.isArray(thresholds) && thresholds.length
+    ? thresholds.filter((t) => Number.isFinite(Number(t?.value)))
+    : targetNet !== null && Number.isFinite(Number(targetNet))
+      ? [{ label: targetLabel || '1. Tercih', value: Number(targetNet), color: 'var(--amber-bright)' }]
+      : [];
+
   const vals = list.map((e) => Number(e.total));
-  if (targetNet !== null && Number.isFinite(Number(targetNet))) vals.push(Number(targetNet));
+  activeThresholds.forEach((t) => vals.push(Number(t.value)));
   const minV = Math.max(0, Math.floor(Math.min(...vals) - 6));
   const maxV = Math.ceil(Math.max(...vals) + 6);
   const span = maxV - minV || 1;
@@ -280,15 +286,35 @@ export function renderExamProgressionChart(exams, { examType = 'TYT', targetNet 
     })
     .join('');
 
-  let targetLineSvg = '';
-  if (targetNet !== null && Number.isFinite(Number(targetNet))) {
-    const ty = yFor(Number(targetNet)).toFixed(1);
-    targetLineSvg = `
-      <line x1="${padL}" y1="${ty}" x2="${width - padR}" y2="${ty}" stroke="var(--amber-bright)" stroke-width="1.8" stroke-dasharray="5 5"/>
-      <text x="${width - padR}" y="${Math.max(14, Number(ty) - 6)}" text-anchor="end" fill="var(--amber)" font-size="11" font-weight="650" font-family="var(--font-sans)">
-        Hedef (${targetLabel || '1. Tercih'}): ${Number(targetNet).toLocaleString('tr-TR', { maximumFractionDigits: 1 })} net
-      </text>`;
-  }
+  const escSvg = (s) =>
+    String(s ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+
+  const usedLabelYs = [];
+  const targetLineSvg = activeThresholds
+    .map((th, idx) => {
+      const tyNum = yFor(Number(th.value));
+      const ty = tyNum.toFixed(1);
+      let labelY = Math.max(14, tyNum - 5);
+      for (const prevY of usedLabelYs) {
+        if (Math.abs(labelY - prevY) < 13) {
+          labelY = Math.min(height - padB - 4, prevY + 13);
+        }
+      }
+      usedLabelYs.push(labelY);
+      const isLeft = idx % 2 === 1;
+      const xPos = isLeft ? padL + 2 : width - padR;
+      const anchor = isLeft ? 'start' : 'end';
+      const valStr = Number(th.value).toLocaleString('tr-TR', { maximumFractionDigits: 1 });
+      return `
+        <line x1="${padL}" y1="${ty}" x2="${width - padR}" y2="${ty}" stroke="${th.color || 'var(--amber-bright)'}" stroke-width="${idx === 0 ? '1.8' : '1.35'}" stroke-dasharray="5 5" opacity="${idx === 0 ? '0.92' : '0.72'}"/>
+        <text x="${xPos}" y="${labelY.toFixed(1)}" text-anchor="${anchor}" fill="${th.color || 'var(--amber)'}" font-size="10.5" font-weight="650" font-family="var(--font-sans)">
+          ${escSvg(th.label)} · ${valStr}
+        </text>`;
+    })
+    .join('');
 
   const escAttr = (s) =>
     String(s ?? '')

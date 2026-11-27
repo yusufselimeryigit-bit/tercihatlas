@@ -41,7 +41,7 @@ import {
   renderMiniNetSparkline,
   renderAppleActivityRings,
   renderCompareRadarChart,
-} from './charts.js?v=30';
+} from './charts.js?v=38';
 import {
   compute2027Projection,
   compareWithMyNets,
@@ -121,7 +121,7 @@ import {
   initWalletCard3DPhysics,
   exportWalletCardPng,
   bindJigglePointerReorder,
-} from './v35-features.js?v=37';
+} from './v35-features.js?v=38';
 import {
   isFocusModeEnabled,
   setFocusModeEnabled,
@@ -143,6 +143,21 @@ import {
   bindSwipeActions,
   closeActiveSwipe,
 } from './apple-os-suite.js?v=37';
+import {
+  DEFAULT_WIDGET_PREFS,
+  loadWidgetPrefs,
+  saveWidgetPrefs,
+  renderWidgetStudioModalHtml,
+  renderBentoCockpitHtml,
+  computeCardReadiness,
+  renderReadinessBarHtml,
+  analyzePreferenceIntelligence,
+  renderIntelligenceDoctorHtml,
+  renderProsConsBalanceHtml,
+  renderMasterDetailViewHtml,
+  buildProgressionThresholds,
+  renderThresholdUnlockStripHtml,
+} from './apple-redesign.js?v=38';
 
 const STATE_KEY = 'tercihatlas_state_v1';
 const SYNC_KEY_STORAGE = 'tercihatlas_sync_key';
@@ -265,6 +280,9 @@ const ui = {
   fitnessExpanded: false,
   splitLeftCode: null,
   splitRightCode: null,
+  widgetPrefs: loadWidgetPrefs(),
+  aiDoctorCollapsed: false,
+  masterDetailCode: null,
   discover: {
     q: 'Bilgisayar',
     rank: null,
@@ -969,6 +987,82 @@ function cycleProgramRisk(code) {
   showToast(`${p.university} → ${RISK_META[next].label} olarak güncellendi.`, 'success');
 }
 
+// Feature 2 (v38): Live #1 University Adaptive Mesh Gradient Atmosphere
+let lastAmbientUniKey = '';
+function applyTopUniAmbientMesh() {
+  const rootEl = document.documentElement;
+  if (!ui.widgetPrefs?.ambientMesh || !state.programs?.length) {
+    rootEl.removeAttribute('data-ambient-uni');
+    rootEl.style.removeProperty('--ambient-uni-rgb');
+    lastAmbientUniKey = '';
+    return;
+  }
+  const top = state.programs[0];
+  const logoSrc = getLogoUrl(top);
+  const key = `${top.universityId || top.code}:${logoSrc || ''}`;
+  if (key === lastAmbientUniKey && rootEl.getAttribute('data-ambient-uni') === '1') return;
+  lastAmbientUniKey = key;
+
+  if (!logoSrc) {
+    rootEl.removeAttribute('data-ambient-uni');
+    return;
+  }
+  extractLogoAmbientColor(logoSrc)
+    .then((col) => {
+      if (!col?.rgb || !ui.widgetPrefs?.ambientMesh) return;
+      rootEl.style.setProperty('--ambient-uni-rgb', col.rgb);
+      rootEl.setAttribute('data-ambient-uni', '1');
+    })
+    .catch(() => {});
+}
+
+// Feature 8 (v38): iOS Dashboard Widget Studio Modal
+function openWidgetStudio() {
+  closeAppearancePopover();
+  const overlay = document.getElementById('widgetStudioModalOverlay');
+  const body = document.getElementById('widgetStudioModalBody');
+  if (!overlay || !body) return;
+
+  const renderStudio = () => {
+    body.innerHTML = renderWidgetStudioModalHtml(ui.widgetPrefs);
+    body.querySelectorAll('[data-widget-toggle]').forEach((inp) => {
+      inp.addEventListener('change', () => {
+        const k = inp.dataset.widgetToggle;
+        ui.widgetPrefs = saveWidgetPrefs({ ...ui.widgetPrefs, [k]: inp.checked });
+        if (k === 'liveActivity') {
+          setLiveActivityEnabled(inp.checked);
+          syncLiveActivityUI();
+        }
+        playHapticTick('step');
+        applyTopUniAmbientMesh();
+        renderAll();
+      });
+    });
+    body.querySelector('#resetWidgetPrefsBtn')?.addEventListener('click', () => {
+      ui.widgetPrefs = saveWidgetPrefs({ ...DEFAULT_WIDGET_PREFS });
+      setLiveActivityEnabled(true);
+      syncLiveActivityUI();
+      playHapticTick('commit');
+      applyTopUniAmbientMesh();
+      renderStudio();
+      renderAll();
+      showToast('Ana ekran widget düzeni varsayılana sıfırlandı.', 'success');
+    });
+    body.querySelector('#doneWidgetStudioBtn')?.addEventListener('click', closeWidgetStudio);
+  };
+
+  renderStudio();
+  overlay.classList.add('open');
+  overlay.setAttribute('aria-hidden', 'false');
+}
+
+function closeWidgetStudio() {
+  const overlay = document.getElementById('widgetStudioModalOverlay');
+  if (!overlay) return;
+  overlay.classList.remove('open');
+  overlay.setAttribute('aria-hidden', 'true');
+}
+
 let cleanupWalletPhysics = null;
 
 function openWalletCardModal() {
@@ -1024,7 +1118,7 @@ function closeWalletCardModal() {
 function renderLiveActivityHost() {
   const host = document.getElementById('liveActivityHost');
   if (!host) return;
-  if (!isLiveActivityEnabled() || document.body.classList.contains('presentation-mode')) {
+  if (!isLiveActivityEnabled() || ui.widgetPrefs?.liveActivity === false || document.body.classList.contains('presentation-mode')) {
     host.innerHTML = '';
     return;
   }
@@ -1131,6 +1225,17 @@ function executeSpotlightCommand(cmdId) {
       break;
     case 'split-view':
       openSplitView();
+      break;
+    case 'master-detail':
+      ui.region = 'TR';
+      ui.tab = 'preferences';
+      ui.viewMode = 'master-detail';
+      localStorage.setItem('tercihatlas_view_mode', 'master-detail');
+      renderAll();
+      showToast('macOS Bölünmüş Çalışma Alanı (Master-Detail) açıldı.', 'success');
+      break;
+    case 'widget-studio':
+      openWidgetStudio();
       break;
     case 'toggle-haptics': {
       const next = !isHapticsEnabled();
@@ -2183,15 +2288,20 @@ function renderAll() {
       root.classList.add('view-enter');
     }
     closeActiveSwipe();
+    applyTopUniAmbientMesh();
     updateCollapsedBrandTitle();
     initSlidingSegmentedControls();
     enhanceLiquidGlassSliders(root);
     renderBatchActionBar();
     renderCompareDock();
     initScrollEdgeFades(root);
+    if (ui.region === 'TR' && ui.tab === 'preferences' && ui.viewMode === 'master-detail') {
+      bindInteractiveCharts(root);
+    }
     const showScrubber =
       ui.region === 'TR' &&
       ui.tab === 'preferences' &&
+      ui.viewMode !== 'master-detail' &&
       !ui.jiggleMode &&
       !ui.selectMode &&
       !document.body.classList.contains('presentation-mode');
@@ -2375,17 +2485,30 @@ function renderPreferencesView() {
       </div>`
     : '';
 
-  const scenarioHtml = renderScenarioBar();
-  const kpiHtml = renderKpiStrip();
+  const wp = ui.widgetPrefs || DEFAULT_WIDGET_PREFS;
+  const scenarioHtml = wp.scenarioBar ? renderScenarioBar() : '';
   const ringsData = computeActivityRings(state, {
     estimateYksRankFromNets,
     compareWithMyNets,
     auditPreferenceOrder,
   });
-  const fitnessRingsHtml = renderActivityRingsCard(ringsData, { expanded: ui.fitnessExpanded });
+  const bentoHtml = wp.bentoCockpit
+    ? renderBentoCockpitHtml(state, { ringsData, expanded: ui.fitnessExpanded, readOnlyShare: ui.readOnlyShare })
+    : '';
+  const intelData =
+    wp.intelligenceDoctor && state.programs.length
+      ? analyzePreferenceIntelligence(state, {
+          estimateYksRankFromNets,
+          compareWithMyNets,
+          auditPreferenceOrder,
+          analyzeSubjectLeverage,
+          getQuotaChangeInfo,
+        })
+      : null;
+  const aiDoctorHtml = intelData ? renderIntelligenceDoctorHtml(intelData, { collapsed: ui.aiDoctorCollapsed }) : '';
 
   if (state.programs.length === 0) {
-    return `${headerHtml}${diffBannerHtml}${scenarioHtml}${kpiHtml}${fitnessRingsHtml}
+    return `${headerHtml}${diffBannerHtml}${scenarioHtml}${bentoHtml}
     <section class="apple-hero">
       <div class="apple-hero-content">
         <img src="icon-192.png?v=13" alt="TercihAtlas" class="apple-hero-icon" />
@@ -2496,12 +2619,16 @@ function renderPreferencesView() {
           <svg class="sf-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
           <span>Liste</span>
         </button>
+        <button class="seg-btn seg-btn-sm md-view-btn ${ui.viewMode === 'master-detail' ? 'active' : ''}" data-view="master-detail" title="macOS Bölünmüş Çalışma Alanı">
+          <svg class="sf-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="M9.5 4v16"/></svg>
+          <span>Bölünmüş</span>
+        </button>
       </div>
     </div>
   </section>`;
 
   if (!filtered.length) {
-    return `${headerHtml}${diffBannerHtml}${scenarioHtml}${kpiHtml}${fitnessRingsHtml}${deadBannerHtml}${toolbarHtml}<div class="empty-state" style="padding:40px 24px;">
+    return `${headerHtml}${diffBannerHtml}${scenarioHtml}${bentoHtml}${aiDoctorHtml}${deadBannerHtml}${toolbarHtml}<div class="empty-state" style="padding:40px 24px;">
       <h2>Eşleşen program bulunamadı</h2>
       <p>Arama kelimesini veya seçili filtreyi temizleyerek tüm tercihlerini görebilirsin.</p>
       <button class="btn" id="clearFiltersBtn">Filtreleri Temizle</button>
@@ -2517,10 +2644,19 @@ function renderPreferencesView() {
       : '';
 
   const contentHtml =
-    ui.viewMode === 'table'
-      ? renderTableView(filtered, { est, prefAudit })
-      : renderCardsView(filtered, { est, prefAudit });
-  return `${headerHtml}${diffBannerHtml}${scenarioHtml}${kpiHtml}${fitnessRingsHtml}${deadBannerHtml}${toolbarHtml}${jiggleBannerHtml}${contentHtml}`;
+    ui.viewMode === 'master-detail'
+      ? renderMasterDetailViewHtml(filtered, ui.masterDetailCode || ui.kbdFocusCode || filtered[0]?.code, {
+          myNets: state.myNets,
+          est,
+          compareCodes: state.compareCodes,
+          compute2027Projection,
+          compareWithMyNets,
+          isProgramCurrentlyReachable,
+        })
+      : ui.viewMode === 'table'
+        ? renderTableView(filtered, { est, prefAudit })
+        : renderCardsView(filtered, { est, prefAudit });
+  return `${headerHtml}${diffBannerHtml}${scenarioHtml}${bentoHtml}${aiDoctorHtml}${deadBannerHtml}${toolbarHtml}${jiggleBannerHtml}${contentHtml}`;
 }
 
 function renderCardsView(programs, cached = {}) {
@@ -2564,6 +2700,7 @@ function renderCardsView(programs, cached = {}) {
         const deadInfo = deadMap.get(p.code);
         const quotaInfo = getQuotaChangeInfo(p);
         const bkTags = deriveProgramBkTags(p).slice(0, 2);
+        const readiness = computeCardReadiness(p, { myNets: state.myNets, est, gap, isReachable });
 
         return `<article class="prog-card ${isSel ? 'is-selected' : ''} ${isKbd ? 'kbd-focused' : ''} ${deadInfo ? 'is-dead-pref' : ''}" data-code="${escapeHtml(p.code)}" draggable="${manualMode && !ui.selectMode ? 'true' : 'false'}">
           <div class="card-top">
@@ -2607,6 +2744,8 @@ function renderCardsView(programs, cached = {}) {
               ${renderTrendBadge(p)}
             </div>
           </div>
+
+          ${renderReadinessBarHtml(readiness)}
 
           <div class="card-footer">
             <div class="card-footer-left">
@@ -3315,11 +3454,15 @@ function renderProgressionPanel() {
             </div>
           </div>`
         : ''}
-      ${renderExamProgressionChart(state.examHistory, {
-        examType: ui.progressionType,
-        targetNet,
-        targetLabel,
-      })}
+      ${(() => {
+        const thresholds = buildProgressionThresholds(state.programs, ui.progressionType);
+        return `${renderExamProgressionChart(state.examHistory, {
+          examType: ui.progressionType,
+          targetNet,
+          targetLabel,
+          thresholds,
+        })}${renderThresholdUnlockStripHtml(state.examHistory, thresholds, ui.progressionType)}`;
+      })()}
       ${topProg && targetNet
         ? `<div style="font-size:12px;color:var(--text-tertiary);margin-top:8px;">Turuncu kesikli çizgi, 1. tercihin olan <strong>${escapeHtml(topProg.university)} — ${escapeHtml(topProg.department)}</strong> son yerleşen ortalama ${ui.progressionType} netini (${formatNet(targetNet)}) gösterir.</div>`
         : ''}
@@ -4097,6 +4240,8 @@ function renderDrawer({ animateSwap = false } = {}) {
                 }).join('')}
               </div>
             </div>
+
+            ${renderProsConsBalanceHtml(p)}
 
             <div class="pros-cons-grid">
               <div class="pc-box">
@@ -6073,6 +6218,44 @@ function bindPreferencesEvents() {
     e.stopPropagation();
     openStandbyMode();
   });
+  document.getElementById('bentoOpenCalcBtn')?.addEventListener('click', () => {
+    ui.region = 'TR';
+    ui.tab = 'analysis';
+    ui.analysisSubTab = 'calculator';
+    renderAll();
+  });
+  document.getElementById('bentoOpenWalletBtn')?.addEventListener('click', openWalletCardModal);
+  document.getElementById('bentoOpenStageBtn')?.addEventListener('click', openStageManager);
+  document.getElementById('openWidgetStudioBtn')?.addEventListener('click', openWidgetStudio);
+
+  document.getElementById('aiDoctorToggle')?.addEventListener('click', () => {
+    ui.aiDoctorCollapsed = !ui.aiDoctorCollapsed;
+    playHapticTick('step');
+    renderAll();
+  });
+  document.querySelectorAll('[data-ai-action]').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const act = btn.dataset.aiAction;
+      playHapticTick('commit');
+      if (act === 'aiSmartSortBtn') {
+        executeSpotlightCommand('smart-sort');
+      } else if (act === 'aiOpenDiscoverBtn') {
+        ui.region = 'TR'; ui.tab = 'analysis'; ui.analysisSubTab = 'discover'; renderAll();
+      } else if (act === 'aiOpenSimulatorBtn') {
+        ui.region = 'TR'; ui.tab = 'analysis'; ui.analysisSubTab = 'simulator'; renderAll();
+      } else if (act === 'aiOpenCalcBtn') {
+        ui.region = 'TR'; ui.tab = 'analysis'; ui.analysisSubTab = 'calculator'; renderAll();
+      } else if (act === 'aiOpenNetsBtn') {
+        openMyNetsModal();
+      } else if (act === 'aiOpenSplitBtn') {
+        openSplitView();
+      } else if (act === 'aiOpenProgBtn' && btn.dataset.aiCode) {
+        openDrawer(btn.dataset.aiCode);
+      }
+    });
+  });
+
   const ringsToggle = document.getElementById('fitnessRingsToggle');
   ringsToggle?.addEventListener('click', (e) => {
     if (e.target.closest('button')) return;
@@ -6255,6 +6438,27 @@ function bindPreferencesEvents() {
 
   const listEl = document.getElementById('programList');
   if (!listEl) return;
+
+  if (ui.viewMode === 'master-detail') {
+    listEl.querySelectorAll('[data-md-select]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        ui.masterDetailCode = btn.dataset.mdSelect;
+        ui.kbdFocusCode = ui.masterDetailCode;
+        playHapticTick('step');
+        renderAll();
+      });
+    });
+    listEl.querySelector('[data-md-open-drawer]')?.addEventListener('click', (e) => {
+      openDrawer(e.currentTarget.dataset.mdOpenDrawer);
+    });
+    listEl.querySelector('[data-md-compare]')?.addEventListener('click', (e) => {
+      toggleCompare(e.currentTarget.dataset.mdCompare);
+    });
+    listEl.querySelector('[data-md-split]')?.addEventListener('click', (e) => {
+      openSplitView(e.currentTarget.dataset.mdSplit);
+    });
+    return;
+  }
 
   listEl.querySelectorAll('[data-stop-card="1"]').forEach((el) => {
     el.addEventListener('click', (e) => e.stopPropagation());
@@ -7268,6 +7472,12 @@ async function init() {
     if (e.target.id === 'splitViewOverlay') closeSplitView();
   });
 
+  document.getElementById('openWidgetStudioPopoverBtn')?.addEventListener('click', openWidgetStudio);
+  document.getElementById('closeWidgetStudioBtn')?.addEventListener('click', closeWidgetStudio);
+  document.getElementById('widgetStudioModalOverlay')?.addEventListener('click', (e) => {
+    if (e.target.id === 'widgetStudioModalOverlay') closeWidgetStudio();
+  });
+
   initPullToRefresh({
     canRefresh: () => ui.region === 'TR' && ui.tab === 'preferences' && !ui.readOnlyShare && !ui.refreshBusy && state.programs.length > 0,
     onRefresh: () => refreshAllProgramsLive(),
@@ -7458,6 +7668,7 @@ async function init() {
       closeStageManager();
       closeSplitView();
       closeStandbyMode();
+      closeWidgetStudio();
       if (ui.jiggleMode) {
         ui.jiggleMode = false;
         renderAll();
@@ -7559,6 +7770,12 @@ async function init() {
         e.preventDefault();
         const nextIdx = curIdx === -1 ? 0 : Math.min(visible.length - 1, curIdx + 1);
         ui.kbdFocusCode = visible[nextIdx].code;
+        if (ui.viewMode === 'master-detail') {
+          ui.masterDetailCode = ui.kbdFocusCode;
+          playHapticTick('step');
+          renderAll();
+          return;
+        }
         document.querySelectorAll('#programList [data-code]').forEach((el) => {
           el.classList.toggle('kbd-focused', el.dataset.code === ui.kbdFocusCode);
         });
@@ -7570,6 +7787,12 @@ async function init() {
         e.preventDefault();
         const nextIdx = curIdx <= 0 ? 0 : curIdx - 1;
         ui.kbdFocusCode = visible[nextIdx].code;
+        if (ui.viewMode === 'master-detail') {
+          ui.masterDetailCode = ui.kbdFocusCode;
+          playHapticTick('step');
+          renderAll();
+          return;
+        }
         document.querySelectorAll('#programList [data-code]').forEach((el) => {
           el.classList.toggle('kbd-focused', el.dataset.code === ui.kbdFocusCode);
         });
