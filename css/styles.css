@@ -9441,3 +9441,1192 @@ body.presentation-mode .focus-exit-pill {
     transition: none !important;
   }
 }
+
+/* ==========================================================================
+   v37 — Apple OS Mastery Suite
+   1. iOS Swipe Actions Floating Glass HUD
+   2. Apple Fitness+ YKS Activity Rings Card
+   3. iOS StandBy Fullscreen Study & Pomodoro Mode
+   4. macOS Stage Manager / Mission Control 3D Scenario Deck
+   5. iOS Quick-Jump Scrubber (#01-#24) + Elastic Pull-to-Refresh
+   6. iPadOS Split View Draggable Glass Divider Modal
+   ========================================================================== */
+
+body.focus-mode .fitness-rings-card,
+body.presentation-mode .fitness-rings-card {
+  display: none !important;
+}
+
+/* 2. Apple Fitness+ YKS Activity Rings Card */
+.fitness-rings-card {
+  margin-bottom: 18px;
+  border-radius: 22px;
+  background: var(--surface);
+  box-shadow: var(--shadow-card);
+  border: 0.5px solid var(--separator-subtle);
+  overflow: hidden;
+  transition: box-shadow 220ms var(--ease-apple);
+}
+
+.fitness-rings-main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 12px 16px;
+  cursor: pointer;
+}
+
+.fitness-rings-left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+  flex: 1;
+}
+
+.fitness-rings-svg {
+  flex-shrink: 0;
+  width: 68px;
+  height: 68px;
+}
+
+.fitness-ring-arc {
+  transition: stroke-dashoffset 700ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.fitness-rings-stats {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.fitness-rings-kicker {
+  font-family: var(--font-display);
+  font-size: 13.5px;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  color: var(--text);
+}
+
+.fitness-rings-pills {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.fitness-ring-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3.5px 9px;
+  border-radius: 9999px;
+  background: var(--fill-quaternary);
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.fitness-ring-pill i {
+  width: 7px;
+  height: 7px;
+  border-radius: 9999px;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+.fitness-ring-pill strong {
+  color: var(--text);
+  font-weight: 700;
+}
+
+.fitness-rings-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.fitness-chevron {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 9999px;
+  color: var(--text-tertiary);
+  background: var(--fill-quaternary);
+  transition: transform 240ms var(--spring);
+}
+
+.fitness-rings-card.expanded .fitness-chevron {
+  transform: rotate(180deg);
+}
+
+.fitness-rings-drawer {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  padding: 12px 16px 14px;
+  border-top: 0.5px solid var(--separator-subtle);
+  background: var(--fill-quaternary);
+}
+
+.fitness-tip-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 10px 11px;
+  border-radius: 14px;
+  background: var(--surface);
+  border: 0.5px solid var(--separator-subtle);
+}
+
+.fitness-tip-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 9999px;
+  margin-top: 4px;
+  flex-shrink: 0;
+}
+
+.fitness-tip-row strong {
+  display: block;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.fitness-tip-row p {
+  margin: 3px 0 0;
+  font-size: 11.5px;
+  line-height: 1.38;
+  color: var(--text-secondary);
+}
+
+/* 1. iOS Swipe Actions Floating Glass HUD */
+.swipe-action-hud {
+  position: fixed;
+  z-index: 64;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 4px;
+  pointer-events: none;
+}
+
+.swipe-action-hud.open {
+  display: flex;
+  pointer-events: auto;
+}
+
+.swipe-pill {
+  flex: 1 1 0;
+  height: 100%;
+  min-height: 44px;
+  max-height: 76px;
+  border: none;
+  border-radius: 16px;
+  color: #FFFFFF;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  cursor: pointer;
+  padding: 0 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  box-shadow:
+    inset 0 1px 1px rgba(255, 255, 255, 0.35),
+    0 8px 20px rgba(0, 0, 0, 0.16);
+  transition: transform 180ms var(--spring);
+}
+
+.swipe-pill:active {
+  transform: scale(0.95);
+}
+
+.swipe-pill.swipe-armed {
+  transform: scale(1.04);
+}
+
+.swipe-blue {
+  background: linear-gradient(180deg, #0A84FF 0%, #0066D6 100%);
+}
+
+.swipe-indigo {
+  background: linear-gradient(180deg, #5E5CE6 0%, #4340C9 100%);
+}
+
+.swipe-amber {
+  background: linear-gradient(180deg, #FF9F0A 0%, #E08200 100%);
+}
+
+.swipe-red {
+  background: linear-gradient(180deg, #FF453A 0%, #D92D20 100%);
+}
+
+/* 5A. iOS Quick-Jump Scrubber (#01-#24) */
+.pref-scrubber {
+  position: fixed;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 66;
+  display: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.pref-scrubber.open {
+  display: block;
+}
+
+.scrubber-rail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  padding: 6px 4px;
+  border-radius: 9999px;
+  background: color-mix(in srgb, var(--surface) 74%, transparent);
+  backdrop-filter: saturate(180%) blur(14px);
+  -webkit-backdrop-filter: saturate(180%) blur(14px);
+  box-shadow:
+    0 6px 18px rgba(0, 0, 0, 0.10),
+    0 0 0 0.5px var(--separator);
+  touch-action: none;
+  cursor: ns-resize;
+  transition: transform 180ms var(--spring), background 180ms var(--ease-apple);
+}
+
+.scrubber-rail.scrubbing {
+  transform: scale(1.1);
+  background: var(--glass-strong);
+}
+
+.scrubber-tick {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-weight: 700;
+  line-height: 1.25;
+  color: var(--accent);
+  width: 16px;
+  text-align: center;
+}
+
+.scrubber-loupe {
+  position: absolute;
+  right: 34px;
+  transform: translateY(-50%) scale(0.88);
+  opacity: 0;
+  pointer-events: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  padding: 6px 12px;
+  border-radius: 9999px;
+  background: linear-gradient(180deg, rgba(28, 28, 34, 0.94), rgba(16, 16, 20, 0.96));
+  color: #FFFFFF;
+  font-size: 12px;
+  font-weight: 600;
+  box-shadow:
+    0 12px 28px rgba(0, 0, 0, 0.28),
+    inset 0 1px 1px rgba(255, 255, 255, 0.25);
+  transition: opacity 140ms var(--ease-apple), transform 180ms var(--spring);
+}
+
+.scrubber-loupe strong {
+  color: var(--accent);
+}
+
+.scrubber-loupe.visible {
+  opacity: 1;
+  transform: translateY(-50%) scale(1);
+}
+
+/* 5B. iOS Elastic Pull-to-Refresh Pill */
+.pull-refresh-pill {
+  position: fixed;
+  top: calc(14px + env(safe-area-inset-top, 0px));
+  left: 50%;
+  transform: translate(-50%, -70px);
+  z-index: 94;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  padding: 0 14px;
+  border-radius: 9999px;
+  background: var(--glass-strong);
+  backdrop-filter: saturate(200%) blur(22px);
+  -webkit-backdrop-filter: saturate(200%) blur(22px);
+  box-shadow:
+    0 12px 30px rgba(0, 0, 0, 0.16),
+    inset 0 1px 1px rgba(255, 255, 255, 0.85),
+    0 0 0 0.75px var(--separator);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 620;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 180ms var(--ease-apple);
+}
+
+.pull-refresh-pill.pulling {
+  opacity: 1;
+}
+
+.pull-refresh-pill.armed {
+  color: var(--accent);
+}
+
+@keyframes ptrSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.pull-refresh-pill.armed .ptr-spinner,
+.pull-refresh-pill.refreshing .ptr-spinner {
+  animation: ptrSpin 750ms linear infinite;
+}
+
+/* 3. iOS StandBy Fullscreen Study & Pomodoro Mode */
+.standby-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 280ms var(--ease-apple);
+}
+
+.standby-overlay.open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.standby-overlay[data-sb-theme="night"] {
+  background: radial-gradient(circle at 25% 20%, #24070B 0%, #090304 70%);
+  color: #FF5B5B;
+  --sb-accent: #FF453A;
+  --sb-card: rgba(255, 69, 58, 0.08);
+  --sb-border: rgba(255, 91, 91, 0.22);
+  --sb-sub: rgba(255, 130, 125, 0.72);
+}
+
+.standby-overlay[data-sb-theme="oled"] {
+  background: #000000;
+  color: #F5F5F7;
+  --sb-accent: #0A84FF;
+  --sb-card: rgba(255, 255, 255, 0.06);
+  --sb-border: rgba(255, 255, 255, 0.14);
+  --sb-sub: rgba(235, 235, 245, 0.62);
+}
+
+.standby-overlay[data-sb-theme="aurora"] {
+  background:
+    radial-gradient(60% 60% at 18% 20%, rgba(10, 132, 255, 0.36) 0%, transparent 65%),
+    radial-gradient(60% 60% at 84% 78%, rgba(175, 82, 222, 0.32) 0%, transparent 65%),
+    #0B0E17;
+  color: #FFFFFF;
+  --sb-accent: #38BDF8;
+  --sb-card: rgba(255, 255, 255, 0.09);
+  --sb-border: rgba(255, 255, 255, 0.20);
+  --sb-sub: rgba(255, 255, 255, 0.72);
+}
+
+.standby-host {
+  width: min(960px, 100%);
+  max-height: 100%;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.sb-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.sb-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.sb-live-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 9999px;
+  background: var(--sb-accent);
+  box-shadow: 0 0 12px var(--sb-accent);
+}
+
+.sb-wall-clock {
+  padding: 2px 9px;
+  border-radius: 9999px;
+  background: var(--sb-card);
+  border: 0.5px solid var(--sb-border);
+  font-size: 12.5px;
+}
+
+.sb-top-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.sb-theme-seg {
+  background: var(--sb-card) !important;
+  border: 0.5px solid var(--sb-border);
+}
+
+.sb-theme-seg .seg-btn {
+  color: var(--sb-sub);
+}
+
+.sb-theme-seg .seg-btn.active {
+  background: var(--sb-accent);
+  color: #FFFFFF;
+}
+
+.sb-exit-btn {
+  background: var(--sb-card) !important;
+  color: inherit !important;
+  border: 0.5px solid var(--sb-border) !important;
+}
+
+.sb-widgets {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.sb-widget {
+  padding: 24px;
+  border-radius: 30px;
+  background: var(--sb-card);
+  border: 1px solid var(--sb-border);
+  backdrop-filter: saturate(180%) blur(24px);
+  -webkit-backdrop-filter: saturate(180%) blur(24px);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 16px;
+}
+
+.sb-pomo-widget {
+  align-items: center;
+  text-align: center;
+}
+
+.sb-presets {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.sb-preset-btn {
+  height: 30px;
+  padding: 0 12px;
+  border-radius: 9999px;
+  border: 0.5px solid var(--sb-border);
+  background: transparent;
+  color: var(--sb-sub);
+  font-size: 12px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.sb-preset-btn.active {
+  background: var(--sb-accent);
+  border-color: var(--sb-accent);
+  color: #FFFFFF;
+}
+
+.sb-ring-stage {
+  position: relative;
+  width: 196px;
+  height: 196px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sb-ring-svg {
+  position: absolute;
+  inset: 0;
+}
+
+.sb-ring-center {
+  position: relative;
+  z-index: 2;
+  text-align: center;
+}
+
+.sb-timer-digits {
+  font-family: var(--font-display);
+  font-size: 46px;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  line-height: 1;
+}
+
+.sb-timer-sub {
+  margin-top: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--sb-sub);
+}
+
+.sb-pomo-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.sb-play-btn {
+  min-width: 124px;
+  background: var(--sb-accent) !important;
+  color: #FFFFFF !important;
+}
+
+.sb-reset-btn {
+  background: var(--sb-card) !important;
+  color: inherit !important;
+  border: 0.5px solid var(--sb-border) !important;
+}
+
+.sb-daily-stats {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  color: var(--sb-sub);
+}
+
+.sb-kicker {
+  display: block;
+  font-size: 10.5px;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+  color: var(--sb-sub);
+}
+
+.sb-cd-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.sb-cd-box {
+  padding: 14px 8px;
+  border-radius: 18px;
+  background: rgba(0, 0, 0, 0.22);
+  border: 0.5px solid var(--sb-border);
+  text-align: center;
+}
+
+.sb-cd-box strong {
+  display: block;
+  font-family: var(--font-display);
+  font-size: 30px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.05;
+}
+
+.sb-cd-box span {
+  display: block;
+  margin-top: 4px;
+  font-size: 9.5px;
+  font-weight: 750;
+  letter-spacing: 0.06em;
+  color: var(--sb-sub);
+}
+
+.sb-target-card {
+  padding: 16px;
+  border-radius: 22px;
+  background: rgba(0, 0, 0, 0.22);
+  border: 0.5px solid var(--sb-border);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.sb-target-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.sb-target-sq {
+  width: 46px;
+  height: 46px;
+  border-radius: 13px;
+  background: rgba(255, 255, 255, 0.94);
+  color: #0071E3;
+  font-weight: 800;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.sb-target-sq img {
+  width: 78%;
+  height: 78%;
+  object-fit: contain;
+}
+
+.sb-target-dept {
+  font-family: var(--font-display);
+  font-size: 16.5px;
+  font-weight: 750;
+  line-height: 1.2;
+  margin-top: 2px;
+}
+
+.sb-target-uni {
+  font-size: 12.5px;
+  color: var(--sb-sub);
+  margin-top: 2px;
+}
+
+.sb-target-gap {
+  font-size: 13px;
+  font-weight: 700;
+  padding: 8px 12px;
+  border-radius: 12px;
+  background: var(--sb-card);
+  border: 0.5px solid var(--sb-border);
+}
+
+/* 4. macOS Stage Manager / Mission Control 3D Scenario Deck */
+.stage-overlay {
+  backdrop-filter: saturate(200%) blur(26px);
+  -webkit-backdrop-filter: saturate(200%) blur(26px);
+}
+
+.stage-host {
+  width: min(980px, 100%);
+  max-height: 88dvh;
+  overflow-y: auto;
+  transform: scale(0.94) translateY(14px);
+  opacity: 0;
+  transition: transform 340ms var(--spring), opacity 220ms var(--ease-apple);
+}
+
+.stage-overlay.open .stage-host {
+  transform: scale(1) translateY(0);
+  opacity: 1;
+}
+
+.stage-shell {
+  padding: 20px;
+  border-radius: 28px;
+  background: var(--glass-strong);
+  box-shadow:
+    0 32px 72px -14px rgba(0, 0, 0, 0.28),
+    inset 0 1.5px 1px rgba(255, 255, 255, 0.85),
+    0 0 0 0.75px var(--separator);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.stage-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.stage-kicker {
+  display: block;
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+  color: var(--accent);
+}
+
+.stage-header h3 {
+  margin: 2px 0 0;
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 750;
+  letter-spacing: -0.025em;
+}
+
+.stage-deck {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 14px;
+  perspective: 1000px;
+}
+
+.stage-card {
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+  padding: 15px;
+  border-radius: 20px;
+  background: var(--surface);
+  border: 1px solid var(--separator-subtle);
+  box-shadow: var(--shadow-card);
+  cursor: pointer;
+  transform: rotateY(-3deg) translateZ(0);
+  transition:
+    transform 280ms var(--spring),
+    box-shadow 240ms var(--ease-apple),
+    border-color 200ms var(--ease-apple);
+}
+
+.stage-card:hover {
+  transform: rotateY(0deg) translateY(-4px) scale(1.015);
+  box-shadow: var(--shadow-card-hover);
+}
+
+.stage-card.is-active {
+  border-color: var(--accent);
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--accent) 28%, transparent),
+    var(--shadow-card-hover);
+  transform: rotateY(0deg);
+}
+
+.stage-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.stage-card-title {
+  font-family: var(--font-display);
+  font-size: 14.5px;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.stage-card-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px;
+  border-radius: 13px;
+  background: var(--fill-quaternary);
+}
+
+.stage-uni-sq {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: #FFFFFF;
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 750;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  flex-shrink: 0;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+}
+
+.stage-uni-sq img {
+  width: 78%;
+  height: 78%;
+  object-fit: contain;
+}
+
+.stage-top-dept {
+  font-size: 13px;
+  font-weight: 680;
+  line-height: 1.25;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.stage-top-uni {
+  font-size: 11.5px;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.stage-risk-bar {
+  display: flex;
+  gap: 2px;
+  height: 6px;
+  border-radius: 9999px;
+  overflow: hidden;
+  background: var(--fill-tertiary);
+}
+
+.stage-risk-bar i {
+  display: block;
+  height: 100%;
+}
+
+.stage-meta-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.stage-card-footer {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: auto;
+}
+
+.stage-card-footer .btn:first-child {
+  flex: 1;
+}
+
+.stage-add-card {
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  min-height: 170px;
+  border-style: dashed;
+  background: var(--fill-quaternary);
+  color: var(--text-secondary);
+}
+
+.stage-add-plus {
+  width: 38px;
+  height: 38px;
+  border-radius: 9999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 22px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.stage-add-card strong {
+  font-size: 14px;
+  color: var(--text);
+}
+
+.stage-add-card span {
+  font-size: 11.5px;
+}
+
+/* 6. iPadOS Split View Draggable Glass Divider Modal */
+.split-overlay {
+  backdrop-filter: saturate(200%) blur(24px);
+  -webkit-backdrop-filter: saturate(200%) blur(24px);
+}
+
+.split-host {
+  width: min(1120px, 100%);
+  max-height: 90dvh;
+  display: flex;
+  flex-direction: column;
+  transform: scale(0.95) translateY(12px);
+  opacity: 0;
+  transition: transform 320ms var(--spring), opacity 220ms var(--ease-apple);
+}
+
+.split-overlay.open .split-host {
+  transform: scale(1) translateY(0);
+  opacity: 1;
+}
+
+.split-modal-shell {
+  display: flex;
+  flex-direction: column;
+  max-height: 90dvh;
+  border-radius: 26px;
+  overflow: hidden;
+  background: var(--glass-strong);
+  box-shadow:
+    0 34px 80px -16px rgba(0, 0, 0, 0.34),
+    inset 0 1.5px 1px rgba(255, 255, 255, 0.85),
+    0 0 0 0.75px var(--separator);
+}
+
+.split-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 16px;
+  border-bottom: 0.5px solid var(--separator-subtle);
+}
+
+.split-hint {
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+
+.split-stage {
+  display: grid;
+  grid-template-columns: minmax(220px, var(--split-left, 50%)) 14px minmax(220px, 1fr);
+  min-height: 0;
+  flex: 1;
+  overflow: hidden;
+}
+
+.split-pane {
+  padding: 16px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 13px;
+  min-width: 0;
+}
+
+.split-select {
+  width: 100%;
+  max-width: 100%;
+}
+
+.split-pane-hero {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+}
+
+.split-dept {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 720;
+  line-height: 1.24;
+  letter-spacing: -0.018em;
+}
+
+.split-uni {
+  font-size: 12.5px;
+  color: var(--text-secondary);
+  margin-top: 2px;
+}
+
+.split-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.split-metric {
+  padding: 9px 11px;
+  border-radius: 13px;
+  background: var(--surface);
+  border: 0.5px solid var(--separator-subtle);
+}
+
+.split-metric span {
+  display: block;
+  font-size: 10.5px;
+  color: var(--text-tertiary);
+  font-weight: 600;
+}
+
+.split-metric strong {
+  display: block;
+  font-family: var(--font-display);
+  font-size: 14.5px;
+  font-weight: 720;
+  margin-top: 2px;
+  word-break: break-word;
+}
+
+.split-block {
+  padding: 11px 12px;
+  border-radius: 15px;
+  background: var(--surface);
+  border: 0.5px solid var(--separator-subtle);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.split-block-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.split-hist-list {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.split-net-pills {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.split-sub-nets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  font-size: 11.5px;
+  color: var(--text-secondary);
+}
+
+.split-note {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+}
+
+.split-divider {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: col-resize;
+  touch-action: none;
+  background: var(--fill-quaternary);
+  border-left: 0.5px solid var(--separator-subtle);
+  border-right: 0.5px solid var(--separator-subtle);
+  transition: background 160ms var(--ease-apple);
+}
+
+.split-divider:hover,
+.split-divider.dragging {
+  background: var(--accent-soft);
+}
+
+.split-divider-handle {
+  width: 4px;
+  height: 44px;
+  border-radius: 9999px;
+  background: var(--text-tertiary);
+  opacity: 0.55;
+  transition: background 160ms, height 180ms var(--spring), opacity 160ms;
+}
+
+.split-divider:hover .split-divider-handle,
+.split-divider.dragging .split-divider-handle {
+  background: var(--accent);
+  opacity: 1;
+  height: 62px;
+}
+
+/* Mobile Responsive Polish for v37 */
+@media (max-width: 760px) {
+  .fitness-rings-main {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    padding: 12px;
+  }
+
+  .fitness-rings-svg {
+    width: 58px;
+    height: 58px;
+  }
+
+  .fitness-rings-actions {
+    justify-content: space-between;
+  }
+
+  .fitness-rings-drawer {
+    grid-template-columns: 1fr;
+    padding: 10px 12px 12px;
+  }
+
+  .sb-widgets {
+    grid-template-columns: 1fr;
+  }
+
+  .sb-widget {
+    padding: 18px 14px;
+    border-radius: 22px;
+  }
+
+  .sb-cd-box strong {
+    font-size: 24px;
+  }
+
+  .split-hint {
+    display: none;
+  }
+
+  .split-stage {
+    grid-template-columns: 1fr;
+    overflow-y: auto;
+  }
+
+  .split-divider {
+    display: none;
+  }
+
+  .split-pane {
+    overflow: visible;
+    padding: 13px;
+  }
+
+  .split-pane + .split-divider + .split-pane {
+    border-top: 1px solid var(--separator);
+  }
+
+  .stage-shell {
+    padding: 14px;
+    border-radius: 22px;
+  }
+
+  .stage-card {
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fitness-ring-arc,
+  .stage-host,
+  .split-host,
+  .stage-card,
+  .scrubber-rail,
+  .scrubber-loupe {
+    transition: none !important;
+    animation: none !important;
+  }
+}

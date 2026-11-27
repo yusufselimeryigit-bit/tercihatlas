@@ -121,7 +121,7 @@ import {
   initWalletCard3DPhysics,
   exportWalletCardPng,
   bindJigglePointerReorder,
-} from './v35-features.js?v=36';
+} from './v35-features.js?v=37';
 import {
   isFocusModeEnabled,
   setFocusModeEnabled,
@@ -131,6 +131,18 @@ import {
   renderCompareDockHtml,
   initScrollEdgeFades,
 } from './apple-signature.js?v=36';
+import {
+  computeActivityRings,
+  renderActivityRingsCard,
+  createStandbyController,
+  renderStageManagerHtml,
+  renderSplitViewHtml,
+  bindSplitDivider,
+  renderAndBindScrubber,
+  initPullToRefresh,
+  bindSwipeActions,
+  closeActiveSwipe,
+} from './apple-os-suite.js?v=37';
 
 const STATE_KEY = 'tercihatlas_state_v1';
 const SYNC_KEY_STORAGE = 'tercihatlas_sync_key';
@@ -250,6 +262,9 @@ const ui = {
   jiggleMode: false,
   walletFinish: 'titanium',
   quickLookCode: null,
+  fitnessExpanded: false,
+  splitLeftCode: null,
+  splitRightCode: null,
   discover: {
     q: 'Bilgisayar',
     rank: null,
@@ -816,6 +831,144 @@ function renderCompareDock() {
   });
 }
 
+let standbyCtrl = null;
+
+function ensureStandbyController() {
+  if (!standbyCtrl) {
+    standbyCtrl = createStandbyController({
+      getState: () => state,
+      compareWithMyNets,
+      onToast: showToast,
+    });
+  }
+  return standbyCtrl;
+}
+
+function openStandbyMode() {
+  ensureStandbyController().open();
+}
+
+function closeStandbyMode() {
+  standbyCtrl?.close();
+}
+
+function openStageManager() {
+  const overlay = document.getElementById('stageManagerOverlay');
+  const host = document.getElementById('stageManagerHost');
+  if (!overlay || !host) return;
+  host.innerHTML = renderStageManagerHtml(state);
+  overlay.classList.add('open');
+  overlay.setAttribute('aria-hidden', 'false');
+  playHapticTick('step');
+
+  host.querySelector('#closeStageManagerBtn')?.addEventListener('click', closeStageManager);
+  host.querySelectorAll('[data-stage-switch]').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const id = btn.dataset.stageSwitch;
+      closeStageManager();
+      if (id !== state.activeScenarioId) {
+        switchScenario(id);
+        playHapticTick('commit');
+      }
+    });
+  });
+  host.querySelectorAll('[data-stage-pick]').forEach((card) => {
+    card.addEventListener('click', (e) => {
+      if (e.target.closest('button')) return;
+      const id = card.dataset.stagePick;
+      closeStageManager();
+      if (id !== state.activeScenarioId) {
+        switchScenario(id);
+        playHapticTick('commit');
+      }
+    });
+  });
+  host.querySelectorAll('[data-stage-dup]').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const id = btn.dataset.stageDup;
+      if (id !== state.activeScenarioId) switchScenario(id);
+      closeStageManager();
+      createScenario({ duplicateCurrent: true });
+    });
+  });
+  host.querySelector('#stageNewScenarioBtn')?.addEventListener('click', () => {
+    closeStageManager();
+    createScenario({ duplicateCurrent: false });
+  });
+}
+
+function closeStageManager() {
+  const overlay = document.getElementById('stageManagerOverlay');
+  if (!overlay) return;
+  overlay.classList.remove('open');
+  overlay.setAttribute('aria-hidden', 'true');
+}
+
+function openSplitView(leftCode = null, rightCode = null) {
+  if (state.programs.length < 2) {
+    showToast('Split View için listende en az 2 tercih olmalı.', 'info');
+    return;
+  }
+  const overlay = document.getElementById('splitViewOverlay');
+  const host = document.getElementById('splitViewHost');
+  if (!overlay || !host) return;
+
+  const first = leftCode || ui.splitLeftCode || state.compareCodes[0] || state.programs[0].code;
+  const second =
+    rightCode ||
+    (ui.splitRightCode && ui.splitRightCode !== first ? ui.splitRightCode : null) ||
+    state.compareCodes.find((c) => c !== first) ||
+    state.programs.find((p) => p.code !== first)?.code ||
+    state.programs[0].code;
+
+  ui.splitLeftCode = first;
+  ui.splitRightCode = second;
+
+  const renderSplit = () => {
+    host.innerHTML = renderSplitViewHtml(state.programs, ui.splitLeftCode, ui.splitRightCode, {
+      myNets: state.myNets,
+      compute2027Projection,
+      compareWithMyNets,
+    });
+    host.querySelector('#closeSplitViewBtn')?.addEventListener('click', closeSplitView);
+    host.querySelectorAll('[data-split-select]').forEach((sel) => {
+      sel.addEventListener('change', () => {
+        if (sel.dataset.splitSelect === 'left') ui.splitLeftCode = sel.value;
+        else ui.splitRightCode = sel.value;
+        playHapticTick('step');
+        renderSplit();
+      });
+    });
+    bindSplitDivider(host.querySelector('#splitViewStage'), host.querySelector('#splitViewDivider'));
+  };
+
+  renderSplit();
+  playHapticTick('commit');
+  overlay.classList.add('open');
+  overlay.setAttribute('aria-hidden', 'false');
+}
+
+function closeSplitView() {
+  const overlay = document.getElementById('splitViewOverlay');
+  if (!overlay) return;
+  overlay.classList.remove('open');
+  overlay.setAttribute('aria-hidden', 'true');
+}
+
+function cycleProgramRisk(code) {
+  const p = state.programs.find((item) => item.code === code);
+  if (!p) return;
+  const order = ['hayal', 'hedef', 'guvenli'];
+  const next = order[(order.indexOf(p.risk || 'hedef') + 1) % order.length];
+  p.risk = next;
+  saveState();
+  renderAll();
+  playHapticTick('step');
+  showToast(`${p.university} → ${RISK_META[next].label} olarak güncellendi.`, 'success');
+}
+
 let cleanupWalletPhysics = null;
 
 function openWalletCardModal() {
@@ -970,6 +1123,15 @@ function executeSpotlightCommand(cmdId) {
       showToast(next ? 'Odak Modu açıldı — sakin inceleme.' : 'Odak Modu kapatıldı.');
       break;
     }
+    case 'standby':
+      openStandbyMode();
+      break;
+    case 'stage-manager':
+      openStageManager();
+      break;
+    case 'split-view':
+      openSplitView();
+      break;
     case 'toggle-haptics': {
       const next = !isHapticsEnabled();
       setHapticsEnabled(next); syncHapticsUI();
@@ -2020,12 +2182,20 @@ function renderAll() {
       void root.offsetWidth;
       root.classList.add('view-enter');
     }
+    closeActiveSwipe();
     updateCollapsedBrandTitle();
     initSlidingSegmentedControls();
     enhanceLiquidGlassSliders(root);
     renderBatchActionBar();
     renderCompareDock();
     initScrollEdgeFades(root);
+    const showScrubber =
+      ui.region === 'TR' &&
+      ui.tab === 'preferences' &&
+      !ui.jiggleMode &&
+      !ui.selectMode &&
+      !document.body.classList.contains('presentation-mode');
+    renderAndBindScrubber(showScrubber ? getFilteredPrograms() : [], { visible: showScrubber });
   };
 
   if (ui.region === 'ABROAD') {
@@ -2066,6 +2236,7 @@ function renderScenarioBar() {
         </button>`,
       )
       .join('')}
+    <button class="scenario-pill" id="openStageManagerBtn" title="macOS Stage Manager — Tüm planları 3D kart destesi olarak gör">${SF.sparkles} Plan Destesi</button>
     <button class="scenario-pill" id="newScenarioBtn" title="Yeni boş senaryo oluştur">${SF.plus} Yeni Plan</button>
     <button class="scenario-pill" id="dupScenarioBtn" title="Aktif planı kopyala">${SF.copy} Kopyala</button>
     <button class="scenario-pill" id="renameScenarioBtn" title="Aktif planı yeniden adlandır">Adlandır</button>
@@ -2163,6 +2334,8 @@ function renderPreferencesView() {
           </button>
           <div class="actions-dropdown" id="prefActionsDropdown" role="menu">
             <button class="ctx-item" id="openCalcMenuBtn">${SF.chartBadge} Net & Sıralama Hesapla</button>
+            <button class="ctx-item" id="openStandbyMenuBtn">${SF.clock} StandBy Çalışma & Pomodoro</button>
+            <button class="ctx-item" id="openSplitMenuBtn">${SF.listBadge} iPadOS Split View İkili İnceleme</button>
             <button class="ctx-item" id="openWalletMenuBtn">${SF.sparkles} 3D Holografik Aday Kartı</button>
             <div class="ctx-sep"></div>
             ${!ui.readOnlyShare
@@ -2204,9 +2377,15 @@ function renderPreferencesView() {
 
   const scenarioHtml = renderScenarioBar();
   const kpiHtml = renderKpiStrip();
+  const ringsData = computeActivityRings(state, {
+    estimateYksRankFromNets,
+    compareWithMyNets,
+    auditPreferenceOrder,
+  });
+  const fitnessRingsHtml = renderActivityRingsCard(ringsData, { expanded: ui.fitnessExpanded });
 
   if (state.programs.length === 0) {
-    return `${headerHtml}${diffBannerHtml}${scenarioHtml}${kpiHtml}
+    return `${headerHtml}${diffBannerHtml}${scenarioHtml}${kpiHtml}${fitnessRingsHtml}
     <section class="apple-hero">
       <div class="apple-hero-content">
         <img src="icon-192.png?v=13" alt="TercihAtlas" class="apple-hero-icon" />
@@ -2322,7 +2501,7 @@ function renderPreferencesView() {
   </section>`;
 
   if (!filtered.length) {
-    return `${headerHtml}${diffBannerHtml}${scenarioHtml}${kpiHtml}${deadBannerHtml}${toolbarHtml}<div class="empty-state" style="padding:40px 24px;">
+    return `${headerHtml}${diffBannerHtml}${scenarioHtml}${kpiHtml}${fitnessRingsHtml}${deadBannerHtml}${toolbarHtml}<div class="empty-state" style="padding:40px 24px;">
       <h2>Eşleşen program bulunamadı</h2>
       <p>Arama kelimesini veya seçili filtreyi temizleyerek tüm tercihlerini görebilirsin.</p>
       <button class="btn" id="clearFiltersBtn">Filtreleri Temizle</button>
@@ -2341,7 +2520,7 @@ function renderPreferencesView() {
     ui.viewMode === 'table'
       ? renderTableView(filtered, { est, prefAudit })
       : renderCardsView(filtered, { est, prefAudit });
-  return `${headerHtml}${diffBannerHtml}${scenarioHtml}${kpiHtml}${deadBannerHtml}${toolbarHtml}${jiggleBannerHtml}${contentHtml}`;
+  return `${headerHtml}${diffBannerHtml}${scenarioHtml}${kpiHtml}${fitnessRingsHtml}${deadBannerHtml}${toolbarHtml}${jiggleBannerHtml}${contentHtml}`;
 }
 
 function renderCardsView(programs, cached = {}) {
@@ -2649,6 +2828,7 @@ function renderCompareView() {
             ${available.map((p) => `<option value="${escapeHtml(p.code)}">${escapeHtml(p.university)} — ${escapeHtml(p.department)}</option>`).join('')}
           </select>`
         : ''}
+      ${ui.compareMode === 'programs' && state.programs.length >= 2 ? `<button class="btn btn-soft btn-sm" id="cmpOpenSplitViewBtn" type="button">Split View</button>` : ''}
       ${ui.compareMode === 'programs' && selected.length ? `<button class="btn btn-sm" id="cmpClearBtn">Temizle</button>` : ''}
     </div>
   </div>`;
@@ -3749,6 +3929,7 @@ function renderDrawer({ animateSwap = false } = {}) {
             </div>`
           : ''}
         <a class="btn btn-sm" href="${escapeHtml(p.yokAtlasUrl)}" target="_blank" rel="noopener">YÖK Atlas ${SF.external}</a>
+        ${state.programs.length >= 2 ? `<button class="btn btn-sm" id="drawerSplitViewBtn" type="button" title="iPadOS Split View ile yan yana incele">Split View</button>` : ''}
         ${!ui.readOnlyShare ? `<button class="btn btn-sm" id="drawerRefreshBtn">${SF.refresh} Güncelle</button>` : ''}
         <button class="btn btn-sm ${state.compareCodes.includes(p.code) ? 'btn-soft' : ''}" id="drawerCompareBtn">
           ${state.compareCodes.includes(p.code) ? `${SF.check} Kıyasla` : `${SF.plus} Kıyasla`}
@@ -4210,6 +4391,10 @@ function bindDrawerEvents(p) {
     showToast(`Program kodu (${p.code}) kopyalandı.`, 'success');
   });
   document.getElementById('drawerRefreshBtn')?.addEventListener('click', () => refreshProgramLive(p.code));
+  document.getElementById('drawerSplitViewBtn')?.addEventListener('click', () => {
+    closeDrawer();
+    openSplitView(p.code);
+  });
   document.getElementById('drawerCompareBtn')?.addEventListener('click', () => {
     toggleCompare(p.code);
     renderDrawer();
@@ -5830,6 +6015,7 @@ function bindPreferencesEvents() {
   document.querySelectorAll('[data-switch-scenario]').forEach((btn) => {
     btn.addEventListener('click', () => switchScenario(btn.dataset.switchScenario));
   });
+  document.getElementById('openStageManagerBtn')?.addEventListener('click', openStageManager);
   document.getElementById('newScenarioBtn')?.addEventListener('click', () => createScenario({ duplicateCurrent: false }));
   document.getElementById('dupScenarioBtn')?.addEventListener('click', () => createScenario({ duplicateCurrent: true }));
   document.getElementById('renameScenarioBtn')?.addEventListener('click', renameActiveScenario);
@@ -5871,9 +6057,36 @@ function bindPreferencesEvents() {
     ui.analysisSubTab = 'calculator';
     renderAll();
   });
+  document.getElementById('openStandbyMenuBtn')?.addEventListener('click', () => {
+    prefDropdown?.classList.remove('open');
+    openStandbyMode();
+  });
+  document.getElementById('openSplitMenuBtn')?.addEventListener('click', () => {
+    prefDropdown?.classList.remove('open');
+    openSplitView();
+  });
   document.getElementById('openWalletMenuBtn')?.addEventListener('click', () => {
     prefDropdown?.classList.remove('open');
     openWalletCardModal();
+  });
+  document.getElementById('openStandbyQuickBtn')?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    openStandbyMode();
+  });
+  const ringsToggle = document.getElementById('fitnessRingsToggle');
+  ringsToggle?.addEventListener('click', (e) => {
+    if (e.target.closest('button')) return;
+    ui.fitnessExpanded = !ui.fitnessExpanded;
+    playHapticTick('step');
+    renderAll();
+  });
+  ringsToggle?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      ui.fitnessExpanded = !ui.fitnessExpanded;
+      playHapticTick('step');
+      renderAll();
+    }
   });
   document.getElementById('clearCalcFilterChip')?.addEventListener('click', () => {
     ui.filterCalcRank = null;
@@ -6079,6 +6292,15 @@ function bindPreferencesEvents() {
 
   if (ui.jiggleMode && !ui.readOnlyShare) {
     bindJigglePointerReorder(listEl, swapProgramsWithFlip);
+  } else {
+    bindSwipeActions(listEl, {
+      disabled: ui.selectMode || ui.readOnlyShare,
+      isCompared: (c) => state.compareCodes.includes(c),
+      onCompare: (c) => toggleCompare(c),
+      onMoveTop: (c) => moveProgramToTop(c),
+      onCycleRisk: (c) => cycleProgramRisk(c),
+      onDelete: (c) => removeProgram(c),
+    });
   }
 
   listEl.querySelectorAll('[data-code]').forEach((item) => {
@@ -6086,7 +6308,7 @@ function bindPreferencesEvents() {
     let suppressClickUntil = 0;
 
     item.addEventListener('click', () => {
-      if (Date.now() < suppressClickUntil || ui.jiggleMode) return;
+      if (Date.now() < suppressClickUntil || ui.jiggleMode || item.classList.contains('swiping-active')) return;
       if (ui.selectMode) {
         if (ui.selectedCodes.has(code)) ui.selectedCodes.delete(code);
         else ui.selectedCodes.add(code);
@@ -6106,19 +6328,11 @@ function bindPreferencesEvents() {
 
     if (ui.jiggleMode) return; // Jiggle Mode owns pointer/touch drag-to-reorder cleanly
 
-    // Feature #2 (iPadOS/iPhone Swipe Actions) + Feature #4 (520ms Long-Press Context Menu)
+    // 520ms Long-Press Context Menu on touch devices (horizontal swipe handled by bindSwipeActions)
     let touchStartX = 0;
     let touchStartY = 0;
-    let touchDx = 0;
-    let swipeLocked = false;
-    let swipeCancelled = false;
+    let longPressCancelled = false;
     let longPressTimer = null;
-    let swipeBadge = null;
-
-    const cleanupSwipeBadge = () => {
-      swipeBadge?.remove();
-      swipeBadge = null;
-    };
 
     item.addEventListener(
       'touchstart',
@@ -6127,14 +6341,12 @@ function bindPreferencesEvents() {
         const t = e.touches[0];
         touchStartX = t.clientX;
         touchStartY = t.clientY;
-        touchDx = 0;
-        swipeLocked = false;
-        swipeCancelled = false;
+        longPressCancelled = false;
 
         clearTimeout(longPressTimer);
         if (!ui.selectMode) {
           longPressTimer = setTimeout(() => {
-            if (!swipeLocked && !swipeCancelled) {
+            if (!longPressCancelled && !item.classList.contains('swiping-active')) {
               suppressClickUntil = Date.now() + 500;
               item.classList.add('long-press-armed');
               setTimeout(() => item.classList.remove('long-press-armed'), 220);
@@ -6152,47 +6364,9 @@ function bindPreferencesEvents() {
       (e) => {
         if (e.touches.length !== 1) return;
         const t = e.touches[0];
-        const dx = t.clientX - touchStartX;
-        const dy = t.clientY - touchStartY;
-
-        if (Math.abs(dx) > 10 || Math.abs(dy) > 10) {
+        if (Math.abs(t.clientX - touchStartX) > 10 || Math.abs(t.clientY - touchStartY) > 10) {
+          longPressCancelled = true;
           clearTimeout(longPressTimer);
-        }
-        if (ui.selectMode || swipeCancelled) return;
-
-        if (!swipeLocked) {
-          if (Math.abs(dy) > 16 && Math.abs(dy) > Math.abs(dx)) {
-            swipeCancelled = true;
-            return;
-          }
-          if (Math.abs(dx) > 16 && Math.abs(dx) > Math.abs(dy) * 1.2) {
-            swipeLocked = true;
-            item.classList.add('swiping');
-            item.classList.remove('swipe-snap');
-          }
-        }
-
-        if (swipeLocked) {
-          // Soft rubber-band resistance beyond 95px
-          const clamped = dx > 0 ? Math.min(110, dx * 0.85) : Math.max(-110, dx * 0.85);
-          touchDx = clamped;
-          item.style.transform = `translate3d(${clamped}px, 0, 0)`;
-
-          if (!swipeBadge) {
-            swipeBadge = document.createElement('span');
-            swipeBadge.className = 'swipe-hint-badge';
-            item.appendChild(swipeBadge);
-          }
-          if (clamped > 24) {
-            const isCmp = state.compareCodes.includes(code);
-            swipeBadge.className = `swipe-hint-badge right ${clamped > 62 ? 'visible' : ''}`;
-            swipeBadge.textContent = isCmp ? '✓ Kıyaslamadan Çıkar' : '+ Karşılaştır';
-          } else if (clamped < -24 && !ui.readOnlyShare) {
-            swipeBadge.className = `swipe-hint-badge left ${clamped < -62 ? 'visible' : ''}`;
-            swipeBadge.textContent = 'Listeden Kaldır';
-          } else {
-            swipeBadge.classList.remove('visible');
-          }
         }
       },
       { passive: true },
@@ -6200,26 +6374,6 @@ function bindPreferencesEvents() {
 
     const endTouch = () => {
       clearTimeout(longPressTimer);
-      if (!swipeLocked) return;
-      item.classList.remove('swiping');
-      item.classList.add('swipe-snap');
-      item.style.transform = 'translate3d(0, 0, 0)';
-      suppressClickUntil = Date.now() + 350;
-
-      const finalDx = touchDx;
-      cleanupSwipeBadge();
-      setTimeout(() => {
-        item.classList.remove('swipe-snap');
-        item.style.transform = '';
-      }, 330);
-
-      if (finalDx > 64) {
-        toggleCompare(code);
-      } else if (finalDx < -64 && !ui.readOnlyShare) {
-        removeProgram(code);
-      }
-      swipeLocked = false;
-      touchDx = 0;
     };
 
     item.addEventListener('touchend', endTouch, { passive: true });
@@ -6277,6 +6431,7 @@ function bindCompareEvents() {
   });
 
   document.getElementById('cmpOpenAddBtn')?.addEventListener('click', () => openAddModal());
+  document.getElementById('cmpOpenSplitViewBtn')?.addEventListener('click', () => openSplitView());
   document.getElementById('cmpClearBtn')?.addEventListener('click', () => {
     state.compareCodes = [];
     saveState();
@@ -7105,6 +7260,19 @@ async function init() {
     if (e.target.id === 'quickLookOverlay') closeQuickLook();
   });
 
+  document.getElementById('stageManagerOverlay')?.addEventListener('click', (e) => {
+    if (e.target.id === 'stageManagerOverlay') closeStageManager();
+  });
+
+  document.getElementById('splitViewOverlay')?.addEventListener('click', (e) => {
+    if (e.target.id === 'splitViewOverlay') closeSplitView();
+  });
+
+  initPullToRefresh({
+    canRefresh: () => ui.region === 'TR' && ui.tab === 'preferences' && !ui.readOnlyShare && !ui.refreshBusy && state.programs.length > 0,
+    onRefresh: () => refreshAllProgramsLive(),
+  });
+
   document.getElementById('closeWalletCardBtn')?.addEventListener('click', closeWalletCardModal);
   document.getElementById('walletCardModalOverlay')?.addEventListener('click', (e) => {
     if (e.target.id === 'walletCardModalOverlay') closeWalletCardModal();
@@ -7202,7 +7370,10 @@ async function init() {
 
   document.getElementById('drawerBackdrop')?.addEventListener('click', closeDrawer);
 
-  window.addEventListener('scroll', updateCollapsingHeader, { passive: true });
+  window.addEventListener('scroll', () => {
+    updateCollapsingHeader();
+    closeActiveSwipe();
+  }, { passive: true });
   let lastResizeW = window.innerWidth;
   let resizeRafId = 0;
   window.addEventListener('resize', () => {
@@ -7222,6 +7393,7 @@ async function init() {
     initSlidingSegmentedControls();
   });
   document.addEventListener('click', () => {
+    closeActiveSwipe();
     closeContextMenu();
     closeBkPopover();
     closeAppearancePopover();
@@ -7252,6 +7424,10 @@ async function init() {
         activeDialogClose();
         return;
       }
+      if (standbyCtrl?.isOpen()) {
+        closeStandbyMode();
+        return;
+      }
       if (ui.quickLookCode) {
         closeQuickLook();
         return;
@@ -7264,6 +7440,7 @@ async function init() {
         ui.selectedCodes.clear();
         renderAll();
       }
+      closeActiveSwipe();
       closeContextMenu();
       closeBkPopover();
       closeAppearancePopover();
@@ -7278,6 +7455,9 @@ async function init() {
       closeShortcutsModal();
       closeWalletCardModal();
       closeQuickLook();
+      closeStageManager();
+      closeSplitView();
+      closeStandbyMode();
       if (ui.jiggleMode) {
         ui.jiggleMode = false;
         renderAll();

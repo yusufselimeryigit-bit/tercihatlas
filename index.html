@@ -12,7 +12,7 @@
   <link rel="icon" type="image/png" sizes="64x64" href="favicon.png?v=26" />
   <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png?v=26" />
   <link rel="manifest" href="manifest.json?v=26" />
-  <link rel="stylesheet" href="css/styles.css?v=36" />
+  <link rel="stylesheet" href="css/styles.css?v=37" />
 </head>
 <body>
   <!-- macOS Tahoe / iPadOS Floating Liquid Glass Top Navigation -->
@@ -352,9 +352,38 @@
     <div class="quicklook-host" id="quickLookHost" role="dialog" aria-label="Hızlı Bakış"></div>
   </div>
 
+  <!-- iOS Elastic Pull-to-Refresh Glass Indicator -->
+  <div class="pull-refresh-pill" id="pullRefreshPill" aria-hidden="true">
+    <svg class="ptr-spinner" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round">
+      <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
+    </svg>
+    <span class="ptr-label">Yenilemek için çek</span>
+  </div>
+
+  <!-- iOS Swipe Actions Floating Glass HUD -->
+  <div class="swipe-action-hud" id="swipeActionHud" aria-hidden="true"></div>
+
+  <!-- iOS Quick-Jump Index Scrubber (#01-#24) -->
+  <div class="pref-scrubber" id="prefScrubber" role="navigation" aria-label="Hızlı sıra atlama" aria-hidden="true"></div>
+
+  <!-- macOS Stage Manager / Mission Control 3D Scenario Deck -->
+  <div class="modal-overlay stage-overlay" id="stageManagerOverlay" aria-hidden="true">
+    <div class="stage-host" id="stageManagerHost" role="dialog" aria-label="Senaryo Kart Destesi"></div>
+  </div>
+
+  <!-- iPadOS Split View Draggable Glass Divider Modal -->
+  <div class="modal-overlay split-overlay" id="splitViewOverlay" aria-hidden="true">
+    <div class="split-host" id="splitViewHost" role="dialog" aria-label="Split View İkili İnceleme"></div>
+  </div>
+
+  <!-- iOS StandBy Fullscreen YKS 2027 Study & Pomodoro Mode -->
+  <div class="standby-overlay" id="standbyOverlay" data-sb-theme="night" aria-hidden="true">
+    <div class="standby-host" id="standbyHost" role="dialog" aria-label="StandBy Çalışma Ekranı"></div>
+  </div>
+
   <!-- Floating Pill Toasts -->
   <div class="toast-container" id="toastContainer"></div>
 
-  <script type="module" src="js/app.js?v=36"></script>
+  <script type="module" src="js/app.js?v=37"></script>
 </body>
 </html>

@@ -166,6 +166,9 @@ const SPOTLIGHT_COMMANDS = [
   { id: 'open-osym', title: 'ÖSYM AİS Kopyalama & Paylaşım Linki', desc: 'Resmi 5 sütunlu PDF ve veritabanısız paylaşım linki', badge: 'Çıktı', keywords: ['pdf', 'yazdir', 'ais', 'osym', 'paylas', 'link kopyala'] },
   { id: 'toggle-live', title: 'Canlı Hedef Şeridini Aç / Kapat', desc: 'Üstteki YKS 2027 Live Activity çubuğunu değiştir', badge: 'Ayar', keywords: ['live activity', 'canli serit', 'hedef seridi'] },
   { id: 'toggle-focus', title: 'Odak Modunu Aç / Kapat (Focus)', desc: 'Sakin, dikkatsiz inceleme ve gece çalışma modu', badge: 'Odak', keywords: ['odak modu', 'focus mode', 'sakin mod', 'dikkat', 'gece calisma'] },
+  { id: 'standby', title: 'StandBy Çalışma & Pomodoro Ekranı', desc: 'iOS StandBy tam ekran etüt zamanlayıcı + canlı YKS 2027 sayacı', badge: 'StandBy', keywords: ['standby', 'pomodoro', 'etut', 'calisma modu', 'zamanlayici', 'masa saati'] },
+  { id: 'stage-manager', title: 'Stage Manager: 3D Plan Destesi', desc: 'Tüm tercih senaryolarını Mission Control kartları olarak gör', badge: 'Planlar', keywords: ['stage manager', 'mission control', 'plan destesi', 'senaryolar', 'plan degistir'] },
+  { id: 'split-view', title: 'iPadOS Split View İkili İnceleme', desc: 'İki bölümü sürüklenebilir cam ayırıcıyla yan yana incele', badge: 'Split', keywords: ['split view', 'yan yana', 'ikili inceleme', 'bolunmus ekran', 'iki bolum'] },
   { id: 'toggle-haptics', title: 'Dokunsal Sesi (Haptik) Aç / Kapat', desc: 'Liquid Glass mekanik tık sesini aç/kapat', badge: 'Ayar', keywords: ['haptik', 'ses', 'dokunsal', 'tik sesi', 'sessiz'] },
 ];
 
