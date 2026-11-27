@@ -171,6 +171,8 @@ const SPOTLIGHT_COMMANDS = [
   { id: 'split-view', title: 'iPadOS Split View İkili İnceleme', desc: 'İki bölümü sürüklenebilir cam ayırıcıyla yan yana incele', badge: 'Split', keywords: ['split view', 'yan yana', 'ikili inceleme', 'bolunmus ekran', 'iki bolum'] },
   { id: 'master-detail', title: 'macOS Bölünmüş Çalışma Alanı (Master-Detail)', desc: 'Sol listede gezerken sağda canlı detay grafiğini izle', badge: 'Düzen', keywords: ['master detail', 'bolunmus', 'iki sutun', 'notes gorunumu', 'calisma alani'] },
   { id: 'widget-studio', title: 'Ana Ekran Widget Stüdyosu', desc: 'Bento Kokpit, Tercih Doktoru ve canlı atmosferi özelleştir', badge: 'Stüdyo', keywords: ['widget', 'ozellestir', 'studyo', 'kokpit', 'bento', 'tercih doktoru'] },
+  { id: 'smart-wizard', title: 'Akıllı Tercih Sihirbazı (0 ms Liste Kur)', desc: '12.239 katalogdan dengeli Hayal/Hedef/Güvenli listesi oluştur', badge: 'Sihirbaz', keywords: ['sihirbaz', 'otomatik liste', 'liste kur', 'guvenli ekle', 'wizard', 'paket'] },
+  { id: 'tournament', title: 'Hangisi Üste Yazılmalı? (İkili Turnuva)', desc: 'İki bölüm arasında seçerek gerçek öncelik sıranı bul', badge: 'Turnuva', keywords: ['turnuva', 'hangisi', 'ikili secim', 'oncelik', 'kararsiz', 'pairwise'] },
   { id: 'toggle-haptics', title: 'Dokunsal Sesi (Haptik) Aç / Kapat', desc: 'Liquid Glass mekanik tık sesini aç/kapat', badge: 'Ayar', keywords: ['haptik', 'ses', 'dokunsal', 'tik sesi', 'sessiz'] },
 ];
 

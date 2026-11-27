@@ -87,7 +87,7 @@ import {
   buildCalcInputFromMyNets,
   renderYksCalculatorPanel,
   renderYksResultsBlockHtml,
-} from './yks-calculator.js?v=34';
+} from './yks-calculator.js?v=39';
 import {
   translateBkCondition,
   deriveProgramBkTags,
@@ -121,7 +121,7 @@ import {
   initWalletCard3DPhysics,
   exportWalletCardPng,
   bindJigglePointerReorder,
-} from './v35-features.js?v=38';
+} from './v35-features.js?v=39';
 import {
   isFocusModeEnabled,
   setFocusModeEnabled,
@@ -158,6 +158,20 @@ import {
   buildProgressionThresholds,
   renderThresholdUnlockStripHtml,
 } from './apple-redesign.js?v=38';
+import {
+  countActiveAdvancedFilters,
+  renderFilterPopoverHtml,
+  ANALYSIS_PILLARS,
+  renderGroupedAnalysisHeaderHtml,
+  computeExamDayStressTest,
+  renderExamDayStressTestHtml,
+  generateSmartWizardPlan,
+  renderWizardModalHtml,
+  createTournamentEngine,
+  renderTournamentModalHtml,
+  computeWeeklyPaceAndEta,
+  renderQuickExamBarHtml,
+} from './apple-v39.js?v=39';
 
 const STATE_KEY = 'tercihatlas_state_v1';
 const SYNC_KEY_STORAGE = 'tercihatlas_sync_key';
@@ -312,6 +326,13 @@ const ui = {
   filterQuotaUp: false,
   filterCalcRank: null, // { rank, scoreType, year }
   filterScoreType: 'all',
+  filterCity: 'all',
+  filterUniType: 'all',
+  filterLanguage: 'all',
+  filterMaxRank: null,
+  filterPopoverOpen: false,
+  wizardForm: { puanTuru: 'SAY', targetRank: 15000, query: 'Bilgisayar', uniTuru: '', city: '', mode: 'balanced' },
+  tournamentEngine: null,
   sortBy: 'manual',
   abroadFilter: 'ALL',
   editingAbroadId: null,
@@ -1063,6 +1084,187 @@ function closeWidgetStudio() {
   overlay.setAttribute('aria-hidden', 'true');
 }
 
+// Feature 3 (v39): Smart Preference Wizard (0ms Balanced List Builder)
+let wizardPreviewItems = null;
+function openWizardModal(presetMode = null) {
+  const overlay = document.getElementById('wizardModalOverlay');
+  const body = document.getElementById('wizardModalBody');
+  if (!overlay || !body) return;
+
+  ui.wizardForm = {
+    ...ui.wizardForm,
+    targetRank: state.targetRank || ui.wizardForm.targetRank || 15000,
+    puanTuru: state.programs[0]?.scoreType || ui.wizardForm.puanTuru || 'SAY',
+    mode: presetMode || ui.wizardForm.mode || 'balanced',
+  };
+  wizardPreviewItems = null;
+
+  const renderWizard = (busy = false) => {
+    body.innerHTML = renderWizardModalHtml(ui.wizardForm, wizardPreviewItems, busy);
+    initSlidingSegmentedControls();
+
+    body.querySelectorAll('[data-wiz-preset]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const q = btn.dataset.wizPreset;
+        ui.wizardForm.query = q;
+        if (q === 'Hukuk' || q === 'Ekonomi' || q === 'Psikoloji') ui.wizardForm.puanTuru = 'EA';
+        else ui.wizardForm.puanTuru = 'SAY';
+        renderWizard();
+      });
+    });
+
+    body.querySelectorAll('[data-wiz-mode]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        ui.wizardForm.mode = btn.dataset.wizMode;
+        wizardPreviewItems = null;
+        renderWizard();
+      });
+    });
+
+    body.querySelector('#smartWizardForm')?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      ui.wizardForm.puanTuru = body.querySelector('#wizPuan')?.value || 'SAY';
+      ui.wizardForm.targetRank = Number(body.querySelector('#wizRank')?.value) || 15000;
+      ui.wizardForm.uniTuru = body.querySelector('#wizUniType')?.value || '';
+      ui.wizardForm.city = body.querySelector('#wizCity')?.value.trim() || '';
+      ui.wizardForm.query = body.querySelector('#wizQuery')?.value.trim() || '';
+      renderWizard(true);
+      try {
+        wizardPreviewItems = await generateSmartWizardPlan(
+          {
+            ...ui.wizardForm,
+            excludeCodes: ui.wizardForm.mode === 'safety' ? state.programs.map((p) => p.code) : [],
+          },
+          { searchProgramsInCatalog },
+        );
+        playHapticTick('commit');
+      } catch {
+        wizardPreviewItems = [];
+      }
+      renderWizard(false);
+    });
+
+    body.querySelector('#wizApplyPlanBtn')?.addEventListener('click', () => {
+      if (!wizardPreviewItems?.length) return;
+      if (ui.wizardForm.mode === 'safety') {
+        pushUndoSnapshot('Sihirbaz güvenli ekleme', state);
+        for (const item of wizardPreviewItems) {
+          addProgramToState(item, 'guvenli');
+        }
+        saveState();
+        closeWizardModal();
+        ui.region = 'TR';
+        ui.tab = 'preferences';
+        renderAll();
+        showUndoToast(`${wizardPreviewItems.length} güvenli tercih aktif listene eklendi.`);
+      } else {
+        const newId = `wiz-${Date.now()}`;
+        const planName = `${ui.wizardForm.query || ui.wizardForm.puanTuru} (${formatRank(ui.wizardForm.targetRank)})`.slice(0, 30);
+        const programsClone = wizardPreviewItems.map((p) => ({
+          ...structuredClone(p),
+          rating: 0,
+          subRatings: {},
+          pros: [],
+          cons: [],
+          notes: '',
+          checklist: {},
+          links: [],
+          questions: [],
+          addedAt: new Date().toISOString(),
+        }));
+        state.scenarios.push({
+          id: newId,
+          name: planName,
+          targetRank: ui.wizardForm.targetRank,
+          programs: programsClone,
+          compareCodes: [],
+        });
+        state.activeScenarioId = newId;
+        state.targetRank = ui.wizardForm.targetRank;
+        state.programs = programsClone;
+        state.compareCodes = [];
+        saveState();
+        closeWizardModal();
+        ui.region = 'TR';
+        ui.tab = 'preferences';
+        renderAll();
+        playHapticTick('commit');
+        showToast(`"${planName}" dengeli planı oluşturuldu (${programsClone.length} bölüm)!`, 'success');
+      }
+    });
+  };
+
+  renderWizard();
+  overlay.classList.add('open');
+  overlay.setAttribute('aria-hidden', 'false');
+}
+
+function closeWizardModal() {
+  const overlay = document.getElementById('wizardModalOverlay');
+  if (!overlay) return;
+  overlay.classList.remove('open');
+  overlay.setAttribute('aria-hidden', 'true');
+}
+
+// Feature 5 (v39): Pairwise Tournament Ranker ("Hangisi Üste Yazılmalı?")
+function openTournamentModal() {
+  if (ui.readOnlyShare) return;
+  if (state.programs.length < 2) {
+    showToast('Turnuva sıralayıcı için listende en az 2 tercih olmalı.', 'info');
+    return;
+  }
+  const overlay = document.getElementById('tournamentModalOverlay');
+  const body = document.getElementById('tournamentModalBody');
+  if (!overlay || !body) return;
+
+  ui.tournamentEngine = createTournamentEngine(state.programs);
+
+  const renderTour = () => {
+    body.innerHTML = renderTournamentModalHtml(ui.tournamentEngine);
+    body.querySelectorAll('[data-tour-pick]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        playHapticTick('step');
+        ui.tournamentEngine.choose(btn.dataset.tourPick);
+        if (ui.tournamentEngine.done) playHapticTick('commit');
+        renderTour();
+      });
+    });
+    body.querySelector('#tourRestartBtn')?.addEventListener('click', () => {
+      ui.tournamentEngine = createTournamentEngine(state.programs);
+      renderTour();
+    });
+    body.querySelector('#tourApplyOrderBtn')?.addEventListener('click', () => {
+      const sorted = ui.tournamentEngine?.sorted || [];
+      if (!sorted.length) return;
+      pushUndoSnapshot('Turnuva Sıralaması', state);
+      const prevRects = captureProgramRects();
+      const map = new Map(state.programs.map((p) => [p.code, p]));
+      state.programs = sorted.map((it) => map.get(it.code)).filter(Boolean);
+      ui.sortBy = 'manual';
+      saveState();
+      closeTournamentModal();
+      ui.region = 'TR';
+      ui.tab = 'preferences';
+      renderAll();
+      animateProgramFlip(prevRects);
+      playHapticTick('commit');
+      showUndoToast('Turnuva öncelik sırası tercih listene uygulandı.');
+    });
+  };
+
+  renderTour();
+  overlay.classList.add('open');
+  overlay.setAttribute('aria-hidden', 'false');
+}
+
+function closeTournamentModal() {
+  ui.tournamentEngine = null;
+  const overlay = document.getElementById('tournamentModalOverlay');
+  if (!overlay) return;
+  overlay.classList.remove('open');
+  overlay.setAttribute('aria-hidden', 'true');
+}
+
 let cleanupWalletPhysics = null;
 
 function openWalletCardModal() {
@@ -1236,6 +1438,12 @@ function executeSpotlightCommand(cmdId) {
       break;
     case 'widget-studio':
       openWidgetStudio();
+      break;
+    case 'smart-wizard':
+      openWizardModal();
+      break;
+    case 'tournament':
+      openTournamentModal();
       break;
     case 'toggle-haptics': {
       const next = !isHapticsEnabled();
@@ -1472,6 +1680,20 @@ function getFilteredPrograms() {
 
   if (ui.filterRisk !== 'all') list = list.filter((p) => p.risk === ui.filterRisk);
   if (ui.filterScoreType !== 'all') list = list.filter((p) => p.scoreType === ui.filterScoreType);
+  if (ui.filterCity && ui.filterCity !== 'all') list = list.filter((p) => p.city === ui.filterCity);
+  if (ui.filterUniType && ui.filterUniType !== 'all') {
+    if (ui.filterUniType === 'DEVLET') list = list.filter((p) => /devlet/i.test(p.universityType || ''));
+    else if (ui.filterUniType === 'VAKIF') list = list.filter((p) => /vakıf|vakif|özel/i.test(p.universityType || ''));
+    else if (ui.filterUniType === 'BURSLU') list = list.filter((p) => /burslu|ücretsiz|devlet/i.test(`${p.scholarship || ''} ${p.universityType || ''}`));
+  }
+  if (ui.filterLanguage && ui.filterLanguage !== 'all') {
+    if (ui.filterLanguage === 'EN') list = list.filter((p) => /ingilizce|english/i.test(p.language || ''));
+    else if (ui.filterLanguage === 'TR') list = list.filter((p) => !/ingilizce|english|almanca|fransızca/i.test(p.language || ''));
+  }
+  if (ui.filterMaxRank && Number(ui.filterMaxRank) > 0) {
+    const cap = Number(ui.filterMaxRank);
+    list = list.filter((p) => p.latestRank && p.latestRank <= cap);
+  }
   if (ui.filterReachable) {
     const est = estimateYksRankFromNets(state.myNets);
     list = list.filter((p) => isProgramCurrentlyReachable(p, est));
@@ -2443,6 +2665,8 @@ function renderPreferencesView() {
               : `<svg class="sf-icon" width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg><span>İşlemler</span>`}
           </button>
           <div class="actions-dropdown" id="prefActionsDropdown" role="menu">
+            <button class="ctx-item" id="openWizardMenuBtn">${SF.sparkles} Akıllı Tercih Sihirbazı</button>
+            ${!ui.readOnlyShare && state.programs.length >= 2 ? `<button class="ctx-item" id="openTournamentMenuBtn">${SF.targetBadge} Hangisi Üste? (Turnuva)</button>` : ''}
             <button class="ctx-item" id="openCalcMenuBtn">${SF.chartBadge} Net & Sıralama Hesapla</button>
             <button class="ctx-item" id="openStandbyMenuBtn">${SF.clock} StandBy Çalışma & Pomodoro</button>
             <button class="ctx-item" id="openSplitMenuBtn">${SF.listBadge} iPadOS Split View İkili İnceleme</button>
@@ -2519,6 +2743,7 @@ function renderPreferencesView() {
           <input id="heroCodeInput" type="text" placeholder="Örn: İTÜ Bilgisayar veya 102210277..." autocomplete="off" />
           <button class="btn btn-primary btn-sm" type="submit">Ara / Getir</button>
         </form>
+        <button class="btn btn-soft btn-sm" type="button" id="heroOpenWizardBtn" style="margin-top:10px;">${SF.sparkles} Tek Tıkla Akıllı Liste Sihirbazı (0 ms)</button>
       </div>
       <div class="sample-tiles">
         <button class="sample-tile" data-quick-add="102210277">
@@ -2558,6 +2783,7 @@ function renderPreferencesView() {
         </div>`
       : '';
 
+  const advFilterCount = countActiveAdvancedFilters(ui);
   const toolbarHtml = `<section class="toolbar">
     <div class="toolbar-left">
       <div class="search-box">
@@ -2565,32 +2791,30 @@ function renderPreferencesView() {
         <input id="searchInput" class="input" type="search" value="${escapeHtml(ui.search)}" placeholder="Listemde ara..." />
       </div>
 
-      <div class="filter-pills">
+      <div class="toolbar-filter-cluster">
         <div class="segmented" role="tablist" aria-label="Risk filtresi">
           ${['all', 'hayal', 'hedef', 'guvenli']
             .map((rk) => {
               const label = rk === 'all' ? 'Tümü' : RISK_META[rk].label;
-              return `<button class="seg-btn seg-btn-sm ${ui.filterRisk === rk && !ui.filterReachable && !ui.filterNewOnly && !ui.filterQuotaUp ? 'active' : ''}" data-filter-risk="${rk}">${label}</button>`;
+              return `<button class="seg-btn seg-btn-sm ${ui.filterRisk === rk ? 'active' : ''}" data-filter-risk="${rk}">${label}</button>`;
             })
             .join('')}
         </div>
-        ${est
-          ? `<button class="filter-pill ${ui.filterReachable ? 'active' : ''}" data-filter-reachable="1" title="Mevcut netlerinle şu an girebildiğin bölümler">✓ Şu An Giriyorsun (${reachableCount})</button>`
-          : ''}
-        <button class="filter-pill ${ui.filterNewOnly ? 'active' : ''}" data-filter-new="1" title="Sadece yeni açılan bölümleri göster">Yeni Açılanlar${newCount ? ` (${newCount})` : ''}</button>
-        <button class="filter-pill ${ui.filterQuotaUp ? 'active' : ''}" data-filter-quota-up="1" title="Kontenjanı bir önceki yıla göre artan bölümler">Kontenjanı Artanlar${quotaUpCount ? ` (${quotaUpCount})` : ''}</button>
+
+        <div class="filter-popover-wrap">
+          <button class="btn btn-sm ${advFilterCount ? 'btn-soft' : ''}" id="filterPopoverBtn" type="button" aria-haspopup="dialog" aria-expanded="${ui.filterPopoverOpen ? 'true' : 'false'}">
+            <svg class="sf-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round"><path d="M4 6h16M7 12h10M10 18h4"/></svg>
+            <span>Filtrele${advFilterCount ? ` (${advFilterCount})` : ''}</span>
+          </button>
+          <div class="filter-popover ${ui.filterPopoverOpen ? 'open' : ''}" id="filterPopover" role="dialog" aria-label="Akıllı filtreler">
+            ${renderFilterPopoverHtml(ui, state.programs, { est, reachableCount, newCount, quotaUpCount, scoreTypes })}
+          </div>
+        </div>
+
         ${ui.filterCalcRank
           ? `<button class="filter-pill active" id="clearCalcFilterChip" type="button" title="Hesaplanan sıralama filtresini kaldır">
-               ${SF.targetBadge} ${escapeHtml(ui.filterCalcRank.scoreType)} #${formatRank(ui.filterCalcRank.rank)} (${ui.filterCalcRank.year}) · ✕
+               ${SF.targetBadge} ${escapeHtml(ui.filterCalcRank.scoreType)} #${formatRank(ui.filterCalcRank.rank)} · ✕
              </button>`
-          : ''}
-        ${scoreTypes.length > 1
-          ? scoreTypes
-              .map(
-                (st) =>
-                  `<button class="filter-pill ${ui.filterScoreType === st ? 'active' : ''}" data-filter-st="${escapeHtml(st)}">${escapeHtml(st)}</button>`,
-              )
-              .join('')
           : ''}
       </div>
     </div>
@@ -3163,7 +3387,11 @@ function renderSimulatorPanel() {
     </div>`;
   }
 
+  const stressResults = computeExamDayStressTest(state.programs, placementRank, simulateOsymPlacement);
+  const stressHtml = renderExamDayStressTestHtml(stressResults);
+
   return `
+    ${stressHtml}
     <!-- Feature 2: ÖSYM Placement Simulation -->
     <div class="panel panel-full">
       <div class="panel-title" style="flex-wrap:wrap;gap:10px;">
@@ -3435,6 +3663,7 @@ function renderProgressionPanel() {
           <button class="seg-btn seg-btn-sm ${ui.progressionType === 'AYT' ? 'active' : ''}" data-prog-type="AYT">AYT</button>
         </div>
       </div>
+      ${renderQuickExamBarHtml(ui.progressionType, computeWeeklyPaceAndEta(state.examHistory, ui.progressionType, targetNet))}
       ${hasPrs
         ? `<div class="pr-strip tabular" style="margin-bottom:12px;">
             <div class="pr-tile">
@@ -3740,35 +3969,7 @@ function renderDecisionScorePanel() {
 }
 
 function renderAnalysisView() {
-  const analysisTabs = [
-    ['overview', 'Sağlık & Özet', '<svg class="sf-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 21s-7-4.5-7-10.2A4.3 4.3 0 0 1 12 7.5a4.3 4.3 0 0 1 7 3.3C19 16.5 12 21 12 21z"/></svg>'],
-    ['calculator', 'Puan Hesapla', '<svg class="sf-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="3"/><path d="M8 7h8M8 12h2M14 12h2M8 16h2M14 16h2"/></svg>'],
-    ['progression', 'Gelişim', '<svg class="sf-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l6-6 4 4 7-8"/></svg>'],
-    ['discover', 'Keşfet', '<svg class="sf-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><polygon points="15.5 8.5 13.5 13.5 8.5 15.5 10.5 10.5 15.5 8.5"/></svg>'],
-    ['decision', 'Karar Skoru', '<svg class="sf-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/><circle cx="9" cy="7" r="2" fill="currentColor"/><circle cx="15" cy="12" r="2" fill="currentColor"/><circle cx="11" cy="17" r="2" fill="currentColor"/></svg>'],
-    ['map', 'Harita', '<svg class="sf-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 21s-6-5.5-6-10a6 6 0 1 1 12 0c0 4.5-6 10-6 10z"/><circle cx="12" cy="11" r="2"/></svg>'],
-    ['simulator', 'Simülatör', '<svg class="sf-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M13 2 3 14h8l-1 8 10-12h-8l1-8z"/></svg>'],
-    ['cost', 'Maliyet', '<svg class="sf-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="6" width="18" height="12" rx="2.5"/><circle cx="12" cy="12" r="2.5"/></svg>'],
-    ['timeline', 'Takvim', '<svg class="sf-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="5" width="18" height="16" rx="2.5"/><path d="M8 3v4M16 3v4M3 10h18"/></svg>'],
-  ];
-
-  const activeTabInfo = analysisTabs.find(([k]) => k === ui.analysisSubTab);
-  const headerHtml = `<div class="page-header">
-    <div>
-      <h1 class="page-title">Analiz</h1>
-      <p class="page-status tabular">${escapeHtml(activeTabInfo?.[1] || 'Genel')} · ${state.programs.length} tercih</p>
-    </div>
-    <div class="analysis-tabs-scroll">
-      <div class="segmented" role="tablist" aria-label="Analiz alt sekmeleri">
-        ${analysisTabs
-          .map(
-            ([k, lbl, icon]) =>
-              `<button class="seg-btn seg-btn-sm ${ui.analysisSubTab === k ? 'active' : ''}" data-analysis-sub="${k}">${icon}<span>${lbl}</span></button>`,
-          )
-          .join('')}
-      </div>
-    </div>
-  </div>`;
+  const headerHtml = renderGroupedAnalysisHeaderHtml(ui.analysisSubTab, state.programs.length);
 
   if (ui.analysisSubTab === 'calculator') {
     const hasMyNets = Boolean(estimateYksRankFromNets(state.myNets));
@@ -6195,6 +6396,15 @@ function bindPreferencesEvents() {
     prefMenuBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
   });
 
+  document.getElementById('openWizardMenuBtn')?.addEventListener('click', () => {
+    prefDropdown?.classList.remove('open');
+    openWizardModal();
+  });
+  document.getElementById('openTournamentMenuBtn')?.addEventListener('click', () => {
+    prefDropdown?.classList.remove('open');
+    openTournamentModal();
+  });
+  document.getElementById('heroOpenWizardBtn')?.addEventListener('click', () => openWizardModal('balanced'));
   document.getElementById('openCalcMenuBtn')?.addEventListener('click', () => {
     prefDropdown?.classList.remove('open');
     ui.region = 'TR';
@@ -6343,6 +6553,11 @@ function bindPreferencesEvents() {
     ui.filterNewOnly = false;
     ui.filterQuotaUp = false;
     ui.filterCalcRank = null;
+    ui.filterCity = 'all';
+    ui.filterUniType = 'all';
+    ui.filterLanguage = 'all';
+    ui.filterMaxRank = null;
+    ui.filterPopoverOpen = false;
     renderAll();
   });
 
@@ -6381,14 +6596,53 @@ function bindPreferencesEvents() {
     }
   });
 
+  document.getElementById('filterPopoverBtn')?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    ui.filterPopoverOpen = !ui.filterPopoverOpen;
+    const pop = document.getElementById('filterPopover');
+    pop?.classList.toggle('open', ui.filterPopoverOpen);
+    e.currentTarget.setAttribute('aria-expanded', ui.filterPopoverOpen ? 'true' : 'false');
+  });
+
+  document.getElementById('filterPopover')?.addEventListener('click', (e) => e.stopPropagation());
+
+  document.getElementById('fpResetAllBtn')?.addEventListener('click', () => {
+    ui.filterReachable = false;
+    ui.filterNewOnly = false;
+    ui.filterQuotaUp = false;
+    ui.filterScoreType = 'all';
+    ui.filterCity = 'all';
+    ui.filterUniType = 'all';
+    ui.filterLanguage = 'all';
+    ui.filterMaxRank = null;
+    ui.filterCalcRank = null;
+    renderAll();
+  });
+
+  document.getElementById('fpCitySelect')?.addEventListener('change', (e) => {
+    ui.filterCity = e.target.value;
+    renderAll();
+  });
+
+  document.getElementById('fpUniTypeSelect')?.addEventListener('change', (e) => {
+    ui.filterUniType = e.target.value;
+    renderAll();
+  });
+
+  document.getElementById('fpLangSelect')?.addEventListener('change', (e) => {
+    ui.filterLanguage = e.target.value;
+    renderAll();
+  });
+
+  document.getElementById('fpMaxRankInput')?.addEventListener('change', (e) => {
+    const v = Number(e.target.value);
+    ui.filterMaxRank = v > 0 ? v : null;
+    renderAll();
+  });
+
   document.querySelectorAll('[data-filter-risk]').forEach((btn) => {
     btn.addEventListener('click', () => {
       ui.filterRisk = btn.dataset.filterRisk;
-      ui.filterReachable = false;
-      if (ui.filterRisk === 'all') {
-        ui.filterNewOnly = false;
-        ui.filterQuotaUp = false;
-      }
       renderAll();
     });
   });
@@ -6714,11 +6968,44 @@ function bindCompareEvents() {
 }
 
 function bindAnalysisEvents() {
+  document.querySelectorAll('[data-analysis-pillar]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const pillar = ANALYSIS_PILLARS.find((p) => p.id === btn.dataset.analysisPillar);
+      if (pillar?.subs?.length) {
+        ui.analysisSubTab = pillar.subs[0].key;
+        renderAll();
+      }
+    });
+  });
+
   document.querySelectorAll('[data-analysis-sub]').forEach((btn) => {
     btn.addEventListener('click', () => {
       ui.analysisSubTab = btn.dataset.analysisSub;
       renderAll();
     });
+  });
+
+  document.getElementById('stressAddSafetyBtn')?.addEventListener('click', () => openWizardModal('safety'));
+
+  document.getElementById('quickExamAddForm')?.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const name = document.getElementById('qeNameInput')?.value.trim();
+    const total = Number(document.getElementById('qeNetInput')?.value);
+    const examDate = document.getElementById('qeDateInput')?.value.trim() || new Date().toLocaleDateString('tr-TR', { day: '2-digit', month: 'short' });
+    if (!name || !Number.isFinite(total)) return;
+    state.examHistory = state.examHistory || [];
+    state.examHistory.unshift({
+      id: `qe-${Date.now()}`,
+      examType: ui.progressionType,
+      examName: name,
+      examDate,
+      total: Number(total.toFixed(2)),
+      addedAt: new Date().toISOString(),
+    });
+    saveState();
+    renderAll();
+    playHapticTick('commit');
+    showToast(`${name} (${formatNet(total)} ${ui.progressionType} net) grafiğe eklendi!`, 'success');
   });
 
   document.getElementById('analysisAddBtn')?.addEventListener('click', () => openAddModal());
@@ -7237,6 +7524,77 @@ function bindYksCalculatorEvents() {
     showToast('Netlerim profilindeki veriler hesaplama robotuna aktarıldı.', 'success');
   });
 
+  // Save calculator nets as a new Exam History entry (Progression + PRs)
+  document.getElementById('calcSaveExamBtn')?.addEventListener('click', async () => {
+    const res = calculateYksResults(ensureCalcState());
+    const tytTot = Number(res.tytTotal || 0);
+    const aytTot = Number(
+      (res.ayt?.matematik?.net || 0) +
+        (res.ayt?.fizik?.net || 0) +
+        (res.ayt?.kimya?.net || 0) +
+        (res.ayt?.biyoloji?.net || 0) +
+        (res.ayt?.edebiyat?.net || 0) +
+        (res.ayt?.tarih1?.net || 0) +
+        (res.ayt?.cografya1?.net || 0) +
+        (res.ayt?.tarih2?.net || 0) +
+        (res.ayt?.cografya2?.net || 0) +
+        (res.ayt?.felsefe?.net || 0) +
+        (res.ayt?.din?.net || 0),
+    );
+    if (tytTot <= 0 && aytTot <= 0) {
+      showToast('Kaydetmek için önce en az bir ders neti gir.', 'error');
+      return;
+    }
+    const label = await applePrompt({
+      title: 'Deneme Geçmişine Kaydet',
+      message: 'Hesapladığın netler Gelişim grafiğine ve PR rekorlarına eklenecek.',
+      placeholder: 'Örn: 3D Türkiye Geneli 4',
+      defaultValue: `Deneme (${new Date().toLocaleDateString('tr-TR', { day: '2-digit', month: 'short' })})`,
+      confirmText: 'Kaydet',
+    });
+    if (!label) return;
+    const todayStr = new Date().toLocaleDateString('tr-TR', { day: '2-digit', month: 'short' });
+    state.examHistory = state.examHistory || [];
+    let added = 0;
+    if (tytTot > 0) {
+      state.examHistory.unshift({
+        id: `calc-tyt-${Date.now()}`,
+        examType: 'TYT',
+        examName: label,
+        examDate: todayStr,
+        total: Number(tytTot.toFixed(2)),
+        tyt: {
+          turkce: res.tyt.turkce.net,
+          sosyal: res.tyt.sosyal.net,
+          matematik: res.tyt.matematik.net,
+          fen: res.tyt.fen.net,
+        },
+        addedAt: new Date().toISOString(),
+      });
+      added += 1;
+    }
+    if (aytTot > 0) {
+      state.examHistory.unshift({
+        id: `calc-ayt-${Date.now() + 1}`,
+        examType: 'AYT',
+        examName: label,
+        examDate: todayStr,
+        total: Number(aytTot.toFixed(2)),
+        ayt: {
+          matematik: res.ayt.matematik.net,
+          fizik: res.ayt.fizik.net,
+          kimya: res.ayt.kimya.net,
+          biyoloji: res.ayt.biyoloji.net,
+        },
+        addedAt: new Date().toISOString(),
+      });
+      added += 1;
+    }
+    saveState();
+    playHapticTick('commit');
+    showToast(`"${label}" deneme geçmişine kaydedildi (${added} oturum).`, 'success');
+  });
+
   // Save calculator nets back to Netlerim profile
   document.getElementById('calcSyncToMyNetsBtn')?.addEventListener('click', () => {
     const res = calculateYksResults(ensureCalcState());
@@ -7478,6 +7836,16 @@ async function init() {
     if (e.target.id === 'widgetStudioModalOverlay') closeWidgetStudio();
   });
 
+  document.getElementById('closeWizardModalBtn')?.addEventListener('click', closeWizardModal);
+  document.getElementById('wizardModalOverlay')?.addEventListener('click', (e) => {
+    if (e.target.id === 'wizardModalOverlay') closeWizardModal();
+  });
+
+  document.getElementById('closeTournamentModalBtn')?.addEventListener('click', closeTournamentModal);
+  document.getElementById('tournamentModalOverlay')?.addEventListener('click', (e) => {
+    if (e.target.id === 'tournamentModalOverlay') closeTournamentModal();
+  });
+
   initPullToRefresh({
     canRefresh: () => ui.region === 'TR' && ui.tab === 'preferences' && !ui.readOnlyShare && !ui.refreshBusy && state.programs.length > 0,
     onRefresh: () => refreshAllProgramsLive(),
@@ -7608,6 +7976,10 @@ async function init() {
     closeBkPopover();
     closeAppearancePopover();
     document.getElementById('prefActionsDropdown')?.classList.remove('open');
+    if (ui.filterPopoverOpen) {
+      ui.filterPopoverOpen = false;
+      document.getElementById('filterPopover')?.classList.remove('open');
+    }
   });
 
   document.getElementById('bkPopover')?.addEventListener('click', (e) => e.stopPropagation());
@@ -7669,6 +8041,12 @@ async function init() {
       closeSplitView();
       closeStandbyMode();
       closeWidgetStudio();
+      closeWizardModal();
+      closeTournamentModal();
+      if (ui.filterPopoverOpen) {
+        ui.filterPopoverOpen = false;
+        document.getElementById('filterPopover')?.classList.remove('open');
+      }
       if (ui.jiggleMode) {
         ui.jiggleMode = false;
         renderAll();
@@ -7692,6 +8070,14 @@ async function init() {
         openDrawer(codeToOpen);
         return;
       }
+      return;
+    }
+
+    // Tournament keyboard picking (← / →)
+    if (ui.tournamentEngine && !ui.tournamentEngine.done && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
+      e.preventDefault();
+      const side = e.key === 'ArrowLeft' ? 'left' : 'right';
+      document.querySelector(`#tournamentModalBody [data-tour-pick="${side}"]`)?.click();
       return;
     }
 

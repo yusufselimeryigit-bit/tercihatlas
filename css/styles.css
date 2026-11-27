@@ -11653,3 +11653,598 @@ body.presentation-mode .ai-doctor-card {
     transition: none !important;
   }
 }
+
+/* ==========================================================================
+   v39 — Simplification & Decision Intelligence Suite
+   1. Smart Filter Popover (Decluttered Toolbar + Power Filters)
+   2. 4-Pillar Grouped Analysis Navigation
+   3. 3-Step Smart Preference Wizard
+   4. Exam Day 3-Scenario Stress Test
+   5. Pairwise Tournament Ranker ("Hangisi Üste Yazılmalı?")
+   6. 1-Row Quick Exam Entry + Weekly Pace & ETA
+   ========================================================================== */
+
+/* 1. Smart Filter Popover */
+.toolbar-filter-cluster {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.filter-popover-wrap {
+  position: relative;
+}
+
+.filter-popover {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  width: min(390px, calc(100vw - 28px));
+  z-index: 82;
+  padding: 14px;
+  border-radius: 22px;
+  background: var(--glass-strong);
+  backdrop-filter: saturate(210%) blur(28px);
+  -webkit-backdrop-filter: saturate(210%) blur(28px);
+  box-shadow:
+    0 24px 56px -12px rgba(0, 0, 0, 0.24),
+    inset 0 1.5px 1px rgba(255, 255, 255, 0.88),
+    0 0 0 0.75px var(--separator);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-6px) scale(0.97);
+  transform-origin: top left;
+  transition: opacity 180ms var(--ease-apple), transform 240ms var(--spring);
+}
+
+.filter-popover.open {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0) scale(1);
+}
+
+.fp-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.fp-header strong {
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-weight: 720;
+}
+
+.fp-clear-link {
+  border: none;
+  background: transparent;
+  color: var(--rose);
+  font-size: 12px;
+  font-weight: 650;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 8px;
+}
+
+.fp-clear-link:hover {
+  background: var(--rose-soft);
+}
+
+.fp-chips-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.fp-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+}
+
+.fp-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.fp-field > span {
+  font-size: 11px;
+  font-weight: 650;
+  color: var(--text-tertiary);
+}
+
+.fp-field .select,
+.fp-field .input {
+  height: 34px;
+  font-size: 12.5px;
+  padding: 0 10px;
+  border-radius: 11px;
+  width: 100%;
+}
+
+/* 2. 4-Pillar Grouped Analysis Navigation */
+.analysis-grouped-header {
+  align-items: flex-end;
+}
+
+.analysis-nav-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 7px;
+  max-width: 100%;
+}
+
+.analysis-sub-pills {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.analysis-sub-chip {
+  height: 28px;
+  padding: 0 11px;
+  border-radius: 9999px;
+  border: 0.5px solid var(--separator-subtle);
+  background: var(--surface);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 160ms, color 160ms, border-color 160ms, transform 160ms var(--spring);
+}
+
+.analysis-sub-chip:hover {
+  color: var(--text);
+  background: var(--fill-quaternary);
+}
+
+.analysis-sub-chip.active {
+  background: var(--accent-soft);
+  border-color: color-mix(in srgb, var(--accent) 34%, transparent);
+  color: var(--accent);
+  font-weight: 700;
+}
+
+/* 4. Exam Day 3-Scenario Stress Test */
+.stress-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 11px;
+}
+
+.stress-card {
+  padding: 13px 14px;
+  border-radius: 18px;
+  background: var(--fill-quaternary);
+  border: 1px solid var(--separator-subtle);
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  min-width: 0;
+}
+
+.stress-card.tone-green {
+  border-color: color-mix(in srgb, var(--green) 32%, transparent);
+  background: color-mix(in srgb, var(--green) 5%, var(--surface));
+}
+
+.stress-card.tone-accent {
+  border-color: color-mix(in srgb, var(--accent) 32%, transparent);
+  background: color-mix(in srgb, var(--accent) 5%, var(--surface));
+}
+
+.stress-card.tone-rose {
+  border-color: color-mix(in srgb, var(--rose) 35%, transparent);
+  background: color-mix(in srgb, var(--rose) 6%, var(--surface));
+}
+
+.stress-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.stress-card-top strong {
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-weight: 730;
+}
+
+.stress-rank {
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.05;
+}
+
+.stress-card.tone-green .stress-rank { color: var(--green); }
+.stress-card.tone-accent .stress-rank { color: var(--accent); }
+.stress-card.tone-rose .stress-rank { color: var(--rose); }
+
+.stress-outcome {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 9px;
+  border-radius: 13px;
+  background: var(--surface);
+  border: 0.5px solid var(--separator-subtle);
+}
+
+.stress-sq {
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  background: #FFFFFF;
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: 750;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  flex-shrink: 0;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+}
+
+.stress-sq img {
+  width: 78%;
+  height: 78%;
+  object-fit: contain;
+}
+
+.stress-dept {
+  font-size: 12.5px;
+  font-weight: 680;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.stress-uni {
+  font-size: 11px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.stress-unplaced {
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: var(--rose-soft);
+  color: var(--rose);
+  font-size: 11.5px;
+  line-height: 1.35;
+}
+
+.stress-unplaced strong {
+  display: block;
+  font-size: 12.5px;
+  margin-bottom: 2px;
+}
+
+/* 3. Smart Preference Wizard Modal */
+.wiz-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.wiz-intro {
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--text-secondary);
+}
+
+.wiz-form {
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+}
+
+.wiz-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+}
+
+.wiz-preset-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 6px;
+}
+
+.wiz-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding-top: 10px;
+  border-top: 0.5px solid var(--separator-subtle);
+}
+
+.wiz-preview-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 13px;
+}
+
+.wiz-preview-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 290px;
+  overflow-y: auto;
+}
+
+.wiz-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 10px;
+  border-radius: 13px;
+  background: var(--fill-quaternary);
+  border: 0.5px solid var(--separator-subtle);
+}
+
+.wiz-row strong {
+  display: block;
+  font-size: 12.5px;
+  font-weight: 660;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.wiz-row small {
+  display: block;
+  font-size: 11px;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 5. Pairwise Tournament Ranker ("Hangisi Üste Yazılmalı?") */
+.tour-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.tour-progress-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.tour-vs-stage {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  align-items: stretch;
+}
+
+.tour-vs-badge {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 34px;
+  height: 34px;
+  border-radius: 9999px;
+  background: var(--glass-strong);
+  border: 1px solid var(--separator);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.16);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--text-secondary);
+  z-index: 3;
+  pointer-events: none;
+}
+
+.tour-choice-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 8px;
+  padding: 20px 16px 16px;
+  border-radius: 22px;
+  background: var(--fill-quaternary);
+  border: 1px solid var(--separator-subtle);
+  color: var(--text);
+  cursor: pointer;
+  transition: transform 220ms var(--spring), border-color 180ms, box-shadow 220ms, background 180ms;
+}
+
+.tour-choice-card:hover {
+  transform: translateY(-4px) scale(1.015);
+  border-color: var(--accent);
+  background: var(--surface);
+  box-shadow: 0 16px 36px -10px color-mix(in srgb, var(--accent) 26%, transparent);
+}
+
+.tour-choice-card:active {
+  transform: scale(0.97);
+}
+
+.tour-key-hint {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--text-tertiary);
+}
+
+.tour-dept {
+  font-family: var(--font-display);
+  font-size: 15.5px;
+  font-weight: 740;
+  line-height: 1.24;
+  letter-spacing: -0.02em;
+}
+
+.tour-uni {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.tour-meta {
+  font-size: 11.5px;
+  color: var(--text-tertiary);
+}
+
+.tour-badges {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.tour-cta-pill {
+  margin-top: auto;
+  padding: 6px 14px;
+  border-radius: 9999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.tour-choice-card:hover .tour-cta-pill {
+  background: var(--accent);
+  color: #FFFFFF;
+}
+
+.tour-done-head h3 {
+  margin: 8px 0 4px;
+  font-family: var(--font-display);
+  font-size: 18px;
+}
+
+.tour-done-head p {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--text-secondary);
+}
+
+/* 6. 1-Row Quick Exam Entry + Weekly Pace */
+.quick-exam-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 13px;
+  padding: 11px 12px;
+  border-radius: 16px;
+  background: var(--fill-quaternary);
+  border: 0.5px solid var(--separator-subtle);
+}
+
+.quick-exam-form {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+
+.quick-exam-form #qeNameInput {
+  flex: 1 1 180px;
+  min-width: 140px;
+  height: 34px;
+  border-radius: 11px;
+  font-size: 13px;
+}
+
+.quick-exam-form #qeNetInput,
+.quick-exam-form #qeDateInput {
+  height: 34px;
+  border-radius: 11px;
+  font-size: 13px;
+}
+
+.quick-exam-pace {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+/* Mobile Responsive Polish for v39 */
+@media (max-width: 760px) {
+  .filter-popover {
+    position: fixed;
+    left: 12px;
+    right: 12px;
+    top: auto;
+    bottom: calc(82px + env(safe-area-inset-bottom, 0px));
+    width: auto;
+    transform-origin: bottom center;
+  }
+
+  .analysis-nav-stack,
+  .analysis-sub-pills {
+    align-items: stretch;
+    justify-content: flex-start;
+    width: 100%;
+  }
+
+  .analysis-nav-stack .segmented {
+    width: 100%;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .stress-cards-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .wiz-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .tour-vs-stage {
+    grid-template-columns: 1fr;
+  }
+
+  .tour-vs-badge {
+    position: static;
+    transform: none;
+    margin: -6px auto;
+  }
+
+  .tour-key-hint {
+    display: none;
+  }
+
+  .quick-exam-form #qeNetInput,
+  .quick-exam-form #qeDateInput,
+  .quick-exam-form .btn {
+    flex: 1 1 110px;
+    width: auto !important;
+  }
+}

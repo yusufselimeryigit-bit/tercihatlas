@@ -788,6 +788,7 @@ export function renderYksCalculatorPanel(calcInput, { hasMyNets = false } = {}) 
         </div>
         <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;">
           ${hasMyNets ? `<button class="btn btn-soft btn-sm" type="button" id="calcPullMyNetsBtn">Netlerimden Aktar</button>` : ''}
+          <button class="btn btn-sm" type="button" id="calcSaveExamBtn" title="Hesapladığın TYT/AYT netlerini Deneme Gelişimi grafiğine kaydet">+ Deneme Kaydet</button>
           <button class="btn btn-sm" type="button" id="calcSyncToMyNetsBtn" title="Buradaki 16 ders netini Netlerim profiline kaydet">Netlerime Kaydet</button>
           <button class="btn btn-ghost btn-sm" type="button" id="calcResetBtn">Temizle</button>
         </div>

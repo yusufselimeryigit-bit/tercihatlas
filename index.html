@@ -12,7 +12,7 @@
   <link rel="icon" type="image/png" sizes="64x64" href="favicon.png?v=26" />
   <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png?v=26" />
   <link rel="manifest" href="manifest.json?v=26" />
-  <link rel="stylesheet" href="css/styles.css?v=38" />
+  <link rel="stylesheet" href="css/styles.css?v=39" />
 </head>
 <body>
   <!-- macOS Tahoe / iPadOS Floating Liquid Glass Top Navigation -->
@@ -397,9 +397,35 @@
     </div>
   </div>
 
+  <!-- Smart Preference Wizard Modal (0ms Balanced List Builder) -->
+  <div class="modal-overlay" id="wizardModalOverlay" aria-hidden="true">
+    <div class="modal" style="width:min(640px, 100%);" role="dialog" aria-labelledby="wizardModalTitle">
+      <div class="modal-header">
+        <h3 id="wizardModalTitle">Akıllı Tercih Sihirbazı</h3>
+        <button class="btn btn-ghost btn-icon btn-sm" id="closeWizardModalBtn" aria-label="Kapat">
+          <svg class="sf-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <div class="modal-body" id="wizardModalBody"></div>
+    </div>
+  </div>
+
+  <!-- Pairwise Tournament Ranker Modal ("Hangisi Üste Yazılmalı?") -->
+  <div class="modal-overlay" id="tournamentModalOverlay" aria-hidden="true">
+    <div class="modal" style="width:min(680px, 100%);" role="dialog" aria-labelledby="tournamentModalTitle">
+      <div class="modal-header">
+        <h3 id="tournamentModalTitle">Tercih Turnuvası · Hangisi Üste?</h3>
+        <button class="btn btn-ghost btn-icon btn-sm" id="closeTournamentModalBtn" aria-label="Kapat">
+          <svg class="sf-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <div class="modal-body" id="tournamentModalBody"></div>
+    </div>
+  </div>
+
   <!-- Floating Pill Toasts -->
   <div class="toast-container" id="toastContainer"></div>
 
-  <script type="module" src="js/app.js?v=38"></script>
+  <script type="module" src="js/app.js?v=39"></script>
 </body>
 </html>
